@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Terminal Emulator</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="terminal-wrapper">
+    <canvas id="terminal-canvas"></canvas>
+    <div id="scanlines"></div>
+    <div id="overscan"></div>
+</div>
+<script src="terminal.js"></script>
+<script>
+(function() {
+    const canvas = document.getElementById('terminal-canvas');
+    const term = new Terminal(canvas, {
+        cols: 80,
+        rows: 25,
+    });
+
+    const shell = new DemoShell(term);
+    term.onData = (data) => shell.handleInput(data);
+    term.focus();
+
+    window.term = term;
+    window.shell = shell;
+})();
+</script>
+</body>
+</html>
