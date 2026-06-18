@@ -117,6 +117,7 @@ class DemoShell {
         this.term.write('\x1B[2J\x1B[H');
         this.term.write('\x1B[1;32mOpenCode Terminal v1.0.0\x1B[0m\n');
         this.term.write('Type \x1B[33mhelp\x1B[0m for available commands.\n\n');
+        this.term.write('\x1B[90m日本語テスト漢字常用字非常用擴充字\x1B[0m\n\n');
         this.showPrompt();
     }
 
