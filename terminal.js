@@ -746,10 +746,7 @@ class Terminal {
     }
 
     _backspace() {
-        if (this.curX <= 0) return;
-        const cell = this.buffer[this.curY]?.[this.curX - 1];
-        const step = (cell && (cell.width === 0 || cell.width === 2)) ? 2 : 1;
-        this.curX = Math.max(0, this.curX - step);
+        if (this.curX > 0) this.curX--;
     }
 
     _tab() {
