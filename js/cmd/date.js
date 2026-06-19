@@ -1,4 +1,4 @@
-class Date extends CmdBase {
+class DateCmd extends CmdBase {
     execute(args) {
         this.print(new Date().toString() + '\n');
     }

@@ -31,11 +31,29 @@ class StateStack {
     constructor(term) {
         this.term = term;
         this._stack = [];
+        this._restoreHooks = [];
+    }
+
+    addRestoreHook(fn) {
+        this._restoreHooks.push(fn);
+    }
+
+    removeRestoreHook(fn) {
+        const i = this._restoreHooks.indexOf(fn);
+        if (i >= 0) this._restoreHooks.splice(i, 1);
+    }
+
+    isCovered(row) {
+        for (const s of this._stack) {
+            if (row >= s.y && row < s.y + s.h) return true;
+        }
+        return false;
     }
 
     push(y, h) {
         this._stack.push({
             y,
+            h,
             saved: saveArea(this.term, y, h),
             cursor: saveCursor(this.term),
             cursorHidden: this.term._cursorHidden,
@@ -51,6 +69,7 @@ class StateStack {
         this.term.write(state.cursorHidden ? '\x1B[?25l' : '\x1B[?25h');
         restoreCursor(this.term, state.cursor);
         restoreArea(this.term, state.saved, state.y);
+        for (const fn of this._restoreHooks) fn();
     }
 
     get depth() {

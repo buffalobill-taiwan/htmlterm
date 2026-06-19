@@ -15,14 +15,15 @@ class DemoShell {
         this.menuItems = [];
         this._cmdList = [];
 
+        this.widgetManager = new ShellWidgetManager(this);
         this._registerCommands();
         this.start();
     }
 
     _registerCommands() {
         const classes = [
-            Help, Clear, Echo, Date, Uname, Neofetch,
-            Cowsay, Ascii, Fortune, Calc, Exit, Whoami, MenuCmd,
+            Help, Clear, Echo, DateCmd, Uname, Neofetch,
+            Cowsay, Ascii, Fortune, Calc, Exit, Whoami, MenuCmd, WidgetCmd,
         ];
         for (const Cls of classes) {
             const cmd = new Cls(this);
@@ -69,6 +70,8 @@ class DemoShell {
         }
 
         if (code < 0x100) return false;
+
+        if (code === 0x23F0 || code === 0x23F3) return true;
 
         if (code >= 0x2190 && code <= 0x21FF) return false;
         if (code >= 0x2300 && code <= 0x23FF) return false;
@@ -268,5 +271,58 @@ class DemoShell {
         this.activeDialog = menuDlg;
         this.menuDialog = menuDlg;
         menuDlg.open();
+    }
+}
+
+class ShellWidgetManager {
+    constructor(shell) {
+        this.shell = shell;
+        this.term = shell.term;
+        this._widgets = [];
+        this._hook = () => this.redrawAll();
+        shell.stateStack.addRestoreHook(this._hook);
+    }
+
+    add(widget) {
+        const n = this._widgets.length;
+        widget._row = n;
+        const total = n + 1;
+        this._setScrollTop(total);
+        widget.start();
+        this._widgets.push(widget);
+    }
+
+    remove(widget) {
+        const i = this._widgets.indexOf(widget);
+        if (i < 0) return;
+        widget.stop();
+        this._widgets.splice(i, 1);
+        for (let j = 0; j < this._widgets.length; j++) {
+            this._widgets[j]._row = j;
+        }
+        const total = this._widgets.length;
+        this._setScrollTop(total);
+        this.redrawAll();
+    }
+
+    redrawAll() {
+        for (const w of this._widgets) {
+            if (!this.shell.stateStack.isCovered(w._row)) {
+                w.draw();
+            }
+        }
+    }
+
+    _setScrollTop(n) {
+        this.term.scrollTop = n;
+        this.term.scrollBottom = this.term.rows - 1;
+        this.term._markAllDirty();
+    }
+
+    destroy() {
+        this.shell.stateStack.removeRestoreHook(this._hook);
+        for (const w of this._widgets) w.stop();
+        this._widgets = [];
+        this._setScrollTop(0);
     }
 }

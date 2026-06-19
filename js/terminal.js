@@ -126,6 +126,9 @@ class Terminal {
         // Basic Latin + Latin-1 Supplement are always narrow
         if (code < 0x100) return false;
 
+        // Emoji that are wide (exceptions before narrow-range checks)
+        if (code === 0x23F0 || code === 0x23F3) return true;
+
         // Arrows, Miscellaneous Technical are narrow
         if (code >= 0x2190 && code <= 0x21FF) return false;
         if (code >= 0x2300 && code <= 0x23FF) return false;
@@ -694,6 +697,18 @@ class Terminal {
             case 'h': this._setMode(params); break;
             case 'l': this._resetMode(params); break;
             case 'n': this._deviceStatusReport(p0); break;
+            case 'r': {
+                const top = Math.max(0, (params[0] || 1) - 1);
+                const bot = Math.min(this.rows - 1, (params[1] || this.rows) - 1);
+                if (top < bot) {
+                    this.scrollTop = top;
+                    this.scrollBottom = bot;
+                    this.curX = 0;
+                    this.curY = top;
+                    this._markAllDirty();
+                }
+                break;
+            }
             case 'q': break;
         }
     }
