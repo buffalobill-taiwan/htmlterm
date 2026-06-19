@@ -20,6 +20,55 @@ Pure HTML+CSS+JS 80×25 terminal emulator using Unifont monospace font, DOM `<sp
 - **256-color CSS classes** (`style.css` + `terminal.js`): Added `.q16`–`.q255` and `.b16`–`.b255` (480 CSS rules) for the xterm 256-color palette (6×6×6 cube + grayscale ramp). `_spanClass` now outputs `qN`/`bN` for N ≤ 255 instead of just 15; `XTERM_COLORS` expanded from 16 to 256 entries for cursor rendering.
 - **Directory restructure**: `style.css` → `css/`; `terminal.js`, `dialog.js`, `shell.js` → `js/`. All paths updated in `index.html` and font URLs in CSS.
 - **Help updated**: Added `menu` to the command list.
+- **Command extraction + CmdBase** (`js/cmd/`): All 13 inline command handlers extracted from `shell.js` into individual files under `js/cmd/`. New `CmdBase` abstract class with `execute(args)`, `print(text)`, and static metadata (`commandName`, `help`, `menu`). Shell exposes `_registerCommands()` which iterates a `classes` array — adding a new command = 1 file + 1 `<script>` tag + 1 entry in the array. `help` command dynamically iterates `_cmdList` instead of hardcoding text.
+
+### Command Architecture
+
+```
+js/cmd/
+├── CmdBase.js    # execute(args) | print(text) | static commandName/help/menu
+├── help.js       Help      — iterates shell._cmdList dynamically
+├── clear.js      Clear
+├── echo.js       Echo
+├── date.js       Date
+├── uname.js      Uname
+├── neofetch.js   Neofetch
+├── cowsay.js     Cowsay
+├── ascii.js      Ascii
+├── fortune.js    Fortune
+├── calc.js       Calc
+├── exit.js       Exit
+├── whoami.js     Whoami
+└── menu.js       MenuCmd   — execute delegates to shell._menuCmd()
+```
+
+**CmdBase contract:**
+
+| Member | Purpose |
+|---|---|
+| `constructor(shell)` | Receives DemoShell instance; `this.term` available |
+| `execute(args)` | Command logic, called with parsed arg array |
+| `print(text)` | Alias for `this.term.write(text)` |
+| `static get commandName()` | Command name string, e.g. `'fortune'` |
+| `static get help()` | Description shown in `help` output |
+| `static get menu()` | Menu description or `null` to hide from menu |
+
+**Registration flow:**
+
+```js
+// shell.js
+_registerCommands() {
+    const classes = [Help, Clear, Echo, ..., MenuCmd];
+    for (const Cls of classes) {
+        const cmd = new Cls(this);
+        this.commands[name] = cmd.execute.bind(cmd);
+        this._cmdList.push({ name, help });  // help iterates this
+        if (menu) this.menuItems.push({ name, desc: menu });  // menu dialog uses this
+    }
+}
+```
+
+Only `menu` command is special (invokes `shell._menuCmd()` dialog flow). `calc` command itself is stateless — the InputDialog → calc pipe is handled entirely by shell's dialog lifecycle and `_pendingAction`.
 
 ### Key Constraints
 - DOM rendering (not Canvas)

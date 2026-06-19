@@ -11,124 +11,28 @@ class DemoShell {
         this.activeDialog = null;
         this.menuDialog = null;
         this._pendingAction = null;
+        this.commands = {};
+        this.menuItems = [];
+        this._cmdList = [];
 
-        this.menuItems = [
-            { name: 'neofetch', desc: 'System Information' },
-            { name: 'fortune',  desc: 'Random Fortune' },
-            { name: 'date',     desc: 'Current Date/Time' },
-            { name: 'cowsay',   desc: 'Talking Cow' },
-            { name: 'whoami',   desc: 'Show User' },
-            { name: 'ascii',    desc: 'ANSI Color Chart' },
-            { name: 'uname',    desc: 'System Name' },
-            { name: 'clear',    desc: 'Clear Screen' },
-            { name: 'calc',     desc: 'Simple Calculator' },
-            { name: 'help',     desc: 'Available Commands' },
-        ];
-
-        this.commands = {
-            help: () => {
-                this.print('\x1B[1;33mAvailable commands:\x1B[0m\n');
-                this.print('  help       Show this help\n');
-                this.print('  menu       Open command menu\n');
-                this.print('  clear      Clear the screen\n');
-                this.print('  echo       Echo text\n');
-                this.print('  date       Show current date/time\n');
-                this.print('  uname      Show system info\n');
-                this.print('  neofetch   Show system information\n');
-                this.print('  cowsay     Let a cow speak\n');
-                this.print('  ascii      Show ANSI color chart\n');
-                this.print('  fortune    Show a fortune\n');
-                this.print('  calc       Simple calculator\n');
-                this.print('  exit       Exit (just for fun)\n');
-                this.print('  whoami     Show user\n');
-            },
-            clear: () => {
-                this.term.write('\x1B[2J\x1B[H');
-            },
-            echo: (args) => {
-                this.print(args.join(' ') + '\n');
-            },
-            date: () => {
-                this.print(new Date().toString() + '\n');
-            },
-            uname: () => {
-                this.print('OpenCode Terminal v1.0.0\n');
-            },
-            neofetch: () => {
-                this.print('\x1B[1;36m  OpenCodeTerm\x1B[0m\n');
-                this.print('\x1B[1;34m  -----------\x1B[0m\n');
-                this.print('  OS:     HTML5 + CSS3 + ES2024\n');
-                this.print('  Host:   Web Browser\n');
-                this.print('  Font:   Unifont 8x16\n');
-                this.print('  Shell:  DemoShell v1.0\n');
-                this.print('  Theme:  Green on Black\n');
-            },
-            cowsay: (args) => {
-                const text = args.join(' ') || 'Moo!';
-                const len = text.length;
-                const border = '\x1B[33m' + '='.repeat(len + 2) + '\x1B[0m';
-                const top = '  ' + border;
-                const mid = '\x1B[33m< \x1B[1;37m' + text + '\x1B[0m \x1B[33m>\x1B[0m';
-                const bot = '  ' + border;
-                const cow = '\x1B[32m        \\   \x1B[1;37m^__^\x1B[0m\x1B[32m\n' +
-                           '         \\  (\x1B[1;37moo\x1B[0m\x1B[32m)\\_______\n' +
-                           '            (__)\\       )\\/\\\n' +
-                           '                ||----\x1B[33mw\x1B[0m\x1B[32m |\n' +
-                           '                ||     ||\x1B[0m\n';
-                this.print(top + '\n' + mid + '\n' + bot + '\n' + cow);
-            },
-            ascii: () => {
-                this.print('\x1B[1mStandard 16 ANSI Colors:\x1B[0m\n');
-                for (let bg = 0; bg < 16; bg++) {
-                    this.print('\x1B[48;5;' + bg + 'm  \x1B[0m');
-                    if (bg % 8 === 7) this.print('\n');
-                }
-                this.print('\n\x1B[1mColor Cube (sample):\x1B[0m\n');
-                for (let g = 0; g < 6; g++) {
-                    for (let r = 0; r < 6; r++) {
-                        const c = 16 + r + g * 36;
-                        this.print('\x1B[48;5;' + c + 'm  \x1B[0m');
-                    }
-                    this.print('  ');
-                    for (let b = 0; b < 6; b++) {
-                        const c = 16 + b * 6 + g;
-                        this.print('\x1B[48;5;' + c + 'm  \x1B[0m');
-                    }
-                    this.print('\n');
-                }
-            },
-            fortune: () => {
-                const fortunes = [
-                    'A terminal emulator is never late, nor is it early.\nIt renders precisely when it means to.',
-                    '42 is the answer. But what was the question again?',
-                    'The Endless Loop: n.; see Loop, Endless.\nLoop, Endless: n.; see Endless Loop.',
-                    'In a world of GUIs, be a terminal.',
-                    'There is no place like ~',
-                    'Have you tried turning it off and on again?',
-                    '> make me a sandwich\n  What? I don\'t know how to make a sandwich.\n  > sudo make me a sandwich\n  Okay.',
-                    'A journey of a thousand miles begins with\na single step. Or a single keystroke.',
-                ];
-                this.print(fortunes[Math.floor(Math.random() * fortunes.length)] + '\n');
-            },
-            calc: (args) => {
-                try {
-                    const expr = args.join(' ');
-                    const result = Function('"use strict"; return (' + expr + ')')();
-                    this.print(String(result) + '\n');
-                } catch (e) {
-                    this.print('Error: invalid expression\n');
-                }
-            },
-            exit: () => {
-                this.print('Goodbye!\n');
-            },
-            whoami: () => {
-                this.print('user\n');
-            },
-            menu: () => this._menuCmd(),
-        };
-
+        this._registerCommands();
         this.start();
+    }
+
+    _registerCommands() {
+        const classes = [
+            Help, Clear, Echo, Date, Uname, Neofetch,
+            Cowsay, Ascii, Fortune, Calc, Exit, Whoami, MenuCmd,
+        ];
+        for (const Cls of classes) {
+            const cmd = new Cls(this);
+            const name = Cls.commandName;
+            const help = Cls.help;
+            const menu = Cls.menu;
+            this.commands[name] = cmd.execute.bind(cmd);
+            this._cmdList.push({ name, help });
+            if (menu) this.menuItems.push({ name, desc: menu });
+        }
     }
 
     start() {
