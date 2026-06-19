@@ -1,5 +1,7 @@
 # HTMLTerm
 
+[![Live Demo](https://img.shields.io/badge/demo-online-44cc11?style=flat-square)](https://buffalobill-taiwan.github.io/htmlterm/)
+
 A pure HTML+CSS+JS 80×25 terminal emulator inspired by [term.ptt.cc](https://term.ptt.cc/).
 
 Renders entirely via DOM `<span>` elements with CSS color classes — no Canvas.
@@ -44,7 +46,9 @@ Uses [Unifont](https://unifoundry.com/unifont/) bitmap font, subsetted into five
 
 ## Usage
 
-Open `index.html` in a modern browser.
+Open `index.html` in a modern browser, or visit the live demo:
+
+<https://buffalobill-taiwan.github.io/htmlterm/>
 
 ### Commands
 
