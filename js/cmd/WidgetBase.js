@@ -1,4 +1,4 @@
-import { saveArea, restoreArea } from '../dialog.js';
+import { saveArea } from '../dialog.js';
 
 export class WidgetBase {
     constructor(shell) {
@@ -22,6 +22,13 @@ export class WidgetBase {
     }
 
     _restoreBacking() {
-        if (this._saved) restoreArea(this.term, this._saved, this._row);
+        if (!this._saved) return;
+        for (let r = 0; r < this._saved.length && this._row + r < this.term.rows; r++) {
+            if (this._saved[r]) {
+                const fresh = this._saved[r].map(c => ({ ...c }));
+                this.term.setRow(this._row + r, fresh);
+            }
+        }
+        this.term.markAllDirty();
     }
 }
