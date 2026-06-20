@@ -9,7 +9,7 @@ import { StateStack, MenuDialog, InputDialog, ClockDialog, ShowDialog } from './
 import { formatTime } from './time.js';
 import {
     Help, Clear, Echo, DateCmd, Uname, Neofetch, Cowsay, Ascii,
-    Fortune, Calc, Exit, Whoami, MenuCmd, ClockCmd, WidgetCmd,
+    Fortune, Calc, Exit, Whoami, MenuCmd, ClockCmd, WidgetCmd, Quiz,
 } from './cmd/index.js';
 
 export class DemoShell {
@@ -38,7 +38,7 @@ export class DemoShell {
     _registerCommands() {
         const classes = [
             Ascii, Calc, Clear, ClockCmd, Cowsay, DateCmd, Echo,
-            Exit, Fortune, Help, MenuCmd, Neofetch, Uname, Whoami, WidgetCmd,
+            Exit, Fortune, Help, MenuCmd, Neofetch, Quiz, Uname, Whoami, WidgetCmd,
         ];
         for (const Cls of classes) {
             const cmd = new Cls(this);
@@ -68,6 +68,11 @@ export class DemoShell {
         this.promptShown = true;
         this.line = '';
         this.historyPos = -1;
+    }
+
+    readLine(callback) {
+        this._readLinePending = callback;
+        this._readLineBuffer = '';
     }
 
     /**
@@ -118,6 +123,41 @@ export class DemoShell {
             return;
         }
 
+        if (this._readLinePending) {
+            for (let i = 0; i < data.length; i++) {
+                const ch = data[i];
+                const code = ch.charCodeAt ? ch.charCodeAt(0) : ch;
+                if (code === 0x0D || code === 0x0A) {
+                    const cb = this._readLinePending;
+                    this._readLinePending = null;
+                    this.term.write('\r\n');
+                    cb(this._readLineBuffer.trim());
+                    this._readLineBuffer = '';
+                    this.showPrompt();
+                    return;
+                }
+                if (code === 0x03) {
+                    this._readLinePending = null;
+                    this._readLineBuffer = '';
+                    this.term.write('^C\n');
+                    this.showPrompt();
+                    return;
+                }
+                if (code === 0x7F || code === 0x08) {
+                    if (this._readLineBuffer.length > 0) {
+                        const last = this._readLineBuffer[this._readLineBuffer.length - 1];
+                        const w = this.term.isWide(last) ? 2 : 1;
+                        this._readLineBuffer = this._readLineBuffer.slice(0, -1);
+                        this.term.write('\b'.repeat(w) + ' '.repeat(w) + '\b'.repeat(w));
+                    }
+                    continue;
+                }
+                this._readLineBuffer += ch;
+                this.term.write(ch);
+            }
+            return;
+        }
+
         for (let i = 0; i < data.length; i++) {
             const ch = data[i];
             const code = ch.charCodeAt ? ch.charCodeAt(0) : ch;
@@ -145,7 +185,8 @@ export class DemoShell {
             if (code === 0x0D || code === 0x0A) {
                 this.term.write('\r\n');
                 this.execute(this.line);
-            if (!this.activeDialog && !this._clockCleanup) this.showPrompt();
+                this.line = '';
+                if (!this.activeDialog && !this._clockCleanup && !this._readLinePending) this.showPrompt();
                 continue;
             }
 
@@ -291,6 +332,41 @@ export class DemoShell {
         inputDlg.open();
     }
 
+    _openQuizDialog(menuDlg) {
+        const a = Math.floor(Math.random() * 9) + 1;
+        let b = Math.floor(Math.random() * 9) + 1;
+        const ops = ['+', '-', '\u00D7'];
+        const op = ops[Math.floor(Math.random() * 3)];
+        if (op === '-' && a < b) b = [a, a = b][0];
+        const answer = op === '+' ? a + b : op === '-' ? a - b : a * b;
+
+        const inputDlg = new InputDialog(this.term, {
+            title: 'Quiz',
+            prompt: `${a} ${op} ${b} = ?`,
+            footer: 'Enter Answer  ESC Back',
+            stack: this.stateStack,
+            onConfirm: (expr) => {
+                if (!expr.trim()) {
+                    if (menuDlg) this.activeDialog = menuDlg;
+                    return;
+                }
+                const userAns = parseInt(expr.trim(), 10);
+                let msg;
+                if (userAns === answer) {
+                    msg = '\x1B[1;32m\u2713 Correct!\x1B[0m';
+                } else {
+                    msg = `\x1B[1;31m\u2717 Wrong!\x1B[0m  Answer: \x1B[1;37m${answer}\x1B[0m`;
+                }
+                this._pendingAction = { type: 'show-calc-result', message: msg };
+            },
+            onCancel: () => {
+                if (menuDlg) this.activeDialog = menuDlg;
+            }
+        });
+        this.activeDialog = inputDlg;
+        inputDlg.open();
+    }
+
     _openClockDialog() {
         const clockDlg = new ClockDialog(this.term, {
             stack: this.stateStack,
@@ -312,6 +388,10 @@ export class DemoShell {
             onSelect: (item) => {
                 if (item.name === 'calc') {
                     this._openCalcDialog(menuDlg);
+                    return;
+                }
+                if (item.name === 'quiz') {
+                    this._openQuizDialog(menuDlg);
                     return;
                 }
                 if (item.name === 'clock') {

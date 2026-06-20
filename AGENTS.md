@@ -18,6 +18,7 @@ Pure HTML+CSS+JS 80×25 terminal emulator using Unifont monospace font, DOM `<sp
 - **StateStack for nested dialog state** (`dialog.js` + `shell.js`): New `StateStack` class saves buffer area + cursor position + cursor visibility in one push; nested dialogs (menu → input) properly restore cursor-hidden when returning to parent. ESC from InputDialog no longer shows blinking cursor on the menu.
 - **InputDialog blinking cursor** (`dialog.js`): `_showCursor()` positions the terminal cursor at the input field end after every render. Replaces the hidden-cursor default of dialogs.
 - **256-color CSS classes** (`style.css` + `terminal.js`): Added `.q16`–`.q255` and `.b16`–`.b255` (480 CSS rules) for the xterm 256-color palette (6×6×6 cube + grayscale ramp). `_spanClass` now outputs `qN`/`bN` for N ≤ 255 instead of just 15; `XTERM_COLORS` expanded from 16 to 256 entries for cursor rendering.
+- **`_bufWidth` CSI escape fix** (`dialog.js`): CSI introducer `[` (0x5B) was treated as escape terminator (it falls in 0x40–0x7E), causing param bytes to be counted as visible chars. All dialog content centering (title, footer, items, messages) was off by the length of embedded SGR sequences. Fixed by detecting `0x5B` and keeping escape state active until the real final byte.
 - **Directory restructure**: `style.css` → `css/`; `terminal.js`, `dialog.js`, `shell.js` → `js/`. All paths updated in `index.html` and font URLs in CSS.
 - **Help updated**: Added `menu` to the command list.
 - **Command extraction + CmdBase** (`js/cmd/`): All 13 inline command handlers extracted from `shell.js` into individual files under `js/cmd/`. New `CmdBase` abstract class with `execute(args)`, `print(text)`, and static metadata (`commandName`, `help`, `menu`). Shell exposes `_registerCommands()` which iterates a `classes` array — adding a new command = 1 file + 1 `<script>` tag + 1 entry in the array. `help` command dynamically iterates `_cmdList` instead of hardcoding text.
@@ -49,6 +50,7 @@ js/cmd/
 | `constructor(shell)` | Receives DemoShell instance; `this.term` available |
 | `execute(args)` | Command logic, called with parsed arg array |
 | `print(text)` | Alias for `this.term.write(text)` |
+| `readLine(callback)` | Request next line of input; callback receives trimmed string |
 | `static get commandName()` | Command name string, e.g. `'fortune'` |
 | `static get help()` | Description shown in `help` output |
 | `static get menu()` | Menu description or `null` to hide from menu |
@@ -69,6 +71,32 @@ _registerCommands() {
 ```
 
 Only `menu` command is special (invokes `shell._menuCmd()` dialog flow). `calc` command itself is stateless — the InputDialog → calc pipe is handled entirely by shell's dialog lifecycle and `_pendingAction`.
+
+### readLine — Interactive Input for Commands
+
+Commands that need multi-line interaction (e.g. `quiz`) use `readLine` instead of hacking into shell state:
+
+```
+CmdBase.readLine(callback)
+  → shell.readLine(callback)    // sets this._readLinePending + this._readLineBuffer = ''
+  → handleInput checks _readLinePending BEFORE normal editing loop
+  → characters accumulated in _readLineBuffer (NOT this.line)
+  → Enter: callback(_readLineBuffer.trim()), then showPrompt()
+  → Ctrl+C: cancel, showPrompt()
+```
+
+**Processing order in `handleInput`:**
+
+```
+1. clockCleanup mode
+2. activeDialog mode
+3. readLine pending → _readLineBuffer (independent)
+4. normal shell editing → this.line
+```
+
+**Critical rule:** `_readLineBuffer` is completely independent from `this.line`. A cmd using `readLine` must NOT access `this.line` or `this.shell.line` — the input arrives only through the callback parameter.
+
+**Why separate buffer?** The shell's normal editing loop accumulates command text in `this.line`. After `execute()` returns, `this.line` still holds the original command text (e.g. `"quiz"`). If `readLine` shared `this.line`, the next keystrokes would append to the old command text, producing `"quiz40"` instead of `"40"`. The independent `_readLineBuffer` avoids this entirely.
 
 ### Key Constraints
 - DOM rendering (not Canvas)
@@ -119,3 +147,5 @@ line = '│' + padLeft + '\x1B[7m' + itemStr + '\x1B[0m' + padRight + '│';
 ```
 
 **CJK safety:** All string padding calculations use `_bufWidth(str)` instead of `str.length` when content may contain fullwidth chars, since CJK characters occupy 2 cells each. (`_bufWidth` sums `_isWide(ch) ? 2 : 1` per char.)
+
+**`_bufWidth` ANSI skip:** `_bufWidth` also skips ANSI escape sequences (`\x1B` + params + final byte). A bug caused CSI introducer `[` (0x5B) to be treated as the sequence terminator (it falls in the final-byte range 0x40–0x7E), making parameter bytes like `1`, `;`, `3`, `2`, `m` in `\x1B[1;32m` counted as visible chars. Fixed by detecting CSI with `code === 0x5B` and keeping the escape flag active until the real final byte (`m`, `H`, etc.).

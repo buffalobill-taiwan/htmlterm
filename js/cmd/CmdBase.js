@@ -14,6 +14,7 @@ export class CmdBase {
     }
     execute(args) {}
     print(text) { this.term.write(text); }
+    readLine(callback) { this.shell.readLine(callback); }
     static get commandName() { return ''; }
     static get help() { return ''; }
     static get menu() { return null; }

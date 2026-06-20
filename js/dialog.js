@@ -156,6 +156,7 @@ export class Dialog {
             const code = ch.charCodeAt(0);
             if (code === 0x1B) { inEsc = true; continue; }
             if (inEsc) {
+                if (code === 0x5B) continue;
                 if (code >= 0x40 && code <= 0x7E) inEsc = false;
                 continue;
             }
