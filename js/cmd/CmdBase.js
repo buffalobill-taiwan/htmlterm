@@ -13,7 +13,7 @@ export class CmdBase {
         this.term = shell.term;
     }
     execute(args) {}
-    print(text) { this.term.write(text); }
+    print(text) { this.shell.print(text); }
     readLine(callback) { this.shell.readLine(callback); }
     static get commandName() { return ''; }
     static get help() { return ''; }

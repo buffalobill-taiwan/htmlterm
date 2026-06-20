@@ -6,6 +6,7 @@
  */
 
 import { StateStack, MenuDialog, InputDialog, ClockDialog, ShowDialog } from './dialog.js';
+import { Typewriter } from './typewriter.js';
 import { formatTime } from './time.js';
 import {
     Help, Clear, Echo, DateCmd, Uname, Neofetch, Cowsay, Ascii,
@@ -30,6 +31,14 @@ export class DemoShell {
         this.cmdList = [];
 
         this._clockCleanup = null;
+        this.typewriter = new Typewriter(this.term);
+        this._pendingPrompt = false;
+        this.typewriter.onDrain(() => {
+            if (this._pendingPrompt) {
+                this._pendingPrompt = false;
+                this.showPrompt();
+            }
+        });
         this.widgetManager = new ShellWidgetManager(this);
         this._registerCommands();
         this.start();
@@ -97,6 +106,23 @@ export class DemoShell {
             return;
         }
 
+        if (this.typewriter.isActive()) {
+            for (let i = 0; i < data.length; i++) {
+                const ch = data[i];
+                const code = ch.charCodeAt ? ch.charCodeAt(0) : ch;
+                if (code === 0x03) {
+                    this._pendingPrompt = false;
+                    this._readLinePending = null;
+                    this._readLineBuffer = '';
+                    this.typewriter.abort();
+                    this.term.write('^C\n');
+                    this.showPrompt();
+                    return;
+                }
+            }
+            return;
+        }
+
         if (this.activeDialog && !this.activeDialog.closed) {
             this.activeDialog.handleKey(data);
             if (this.activeDialog && this.activeDialog.closed) {
@@ -119,7 +145,7 @@ export class DemoShell {
                     this.commands[a.cmd](a.args);
                 }
             }
-            if (!this.activeDialog) this.showPrompt();
+            if (!this.activeDialog) this._checkTypewriterDrain();
             return;
         }
 
@@ -133,7 +159,7 @@ export class DemoShell {
                     this.term.write('\r\n');
                     cb(this._readLineBuffer.trim());
                     this._readLineBuffer = '';
-                    this.showPrompt();
+                    this._checkTypewriterDrain();
                     return;
                 }
                 if (code === 0x03) {
@@ -191,7 +217,7 @@ export class DemoShell {
                 this.term.write('\r\n');
                 this.execute(this.line);
                 this.line = '';
-                if (!this.activeDialog && !this._clockCleanup && !this._readLinePending) this.showPrompt();
+                if (!this.activeDialog && !this._clockCleanup && !this._readLinePending) this._checkTypewriterDrain();
                 continue;
             }
 
@@ -286,7 +312,15 @@ export class DemoShell {
     }
 
     print(text) {
-        this.term.write(text);
+        this.typewriter.enqueue(text);
+    }
+
+    _checkTypewriterDrain() {
+        if (this.typewriter.isActive()) {
+            this._pendingPrompt = true;
+        } else {
+            this.showPrompt();
+        }
     }
 
     clockMode() {

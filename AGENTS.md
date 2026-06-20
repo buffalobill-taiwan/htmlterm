@@ -149,3 +149,14 @@ line = '│' + padLeft + '\x1B[7m' + itemStr + '\x1B[0m' + padRight + '│';
 **CJK safety:** All string padding calculations use `_bufWidth(str)` instead of `str.length` when content may contain fullwidth chars, since CJK characters occupy 2 cells each. (`_bufWidth` sums `_isWide(ch) ? 2 : 1` per char.)
 
 **`_bufWidth` ANSI skip:** `_bufWidth` also skips ANSI escape sequences (`\x1B` + params + final byte). A bug caused CSI introducer `[` (0x5B) to be treated as the sequence terminator (it falls in the final-byte range 0x40–0x7E), making parameter bytes like `1`, `;`, `3`, `2`, `m` in `\x1B[1;32m` counted as visible chars. Fixed by detecting CSI with `code === 0x5B` and keeping the escape flag active until the real final byte (`m`, `H`, etc.).
+
+### Done This Session
+- **Typewriter effect** (`js/typewriter.js` + `shell.js` + `CmdBase.js`): New `Typewriter` class buffers text output and releases one character per tick (wide/CJK = 100ms, half-width = 50ms). Escape sequences pass through instantly. All command output via `print()` is now animated. `Ctrl+C` during output aborts and shows prompt instantly. Dialog rendering and the shell prompt itself bypass the typewriter.
+
+  **Architecture:**
+  - `Typewriter.enqueue(text)` tokenizes input (visible chars, escape seqs, newlines), processes queue via `setTimeout`
+  - `CmdBase.print()` → `shell.print()` → `typewriter.enqueue()` (was `this.term.write()`)
+  - Shell defers `showPrompt()` until typewriter drain via `_checkTypewriterDrain()` / `_pendingPrompt`
+  - `handleInput` checks `typewriter.isActive()` before dialog/readLine/editing — only `Ctrl+C` passes through
+  - `clear.js` and `quiz.js` changed from `this.term.write()` to `this.print()` for consistency
+
