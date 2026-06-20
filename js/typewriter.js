@@ -13,18 +13,31 @@ export class Typewriter {
     enqueue(text) {
         if (!text) return;
         const tokens = this._tokenize(text);
-        for (const t of tokens) {
-            if (t.type === 'seq') {
-                this._queue.push(t);
+
+        const merged = [];
+        for (let i = 0; i < tokens.length; i++) {
+            const t = tokens[i];
+            if (t.type === 'seq' && i + 1 < tokens.length && tokens[i + 1].type === 'text') {
+                const next = tokens[i + 1];
+                let totalDelay = 0;
+                for (const ch of next.text) {
+                    totalDelay += this.term.isWide(ch) ? this._speed.wide : this._speed.half;
+                }
+                merged.push({ type: 'seqtext', seq: t.text, text: next.text, delay: totalDelay });
+                i++;
             } else if (t.type === 'nl') {
-                this._queue.push({ type: 'char', ch: '\n', wide: false });
+                merged.push({ type: 'char', ch: '\n', wide: false });
             } else if (t.type === 'text') {
                 for (const ch of t.text) {
                     const wide = this.term.isWide(ch);
-                    this._queue.push({ type: 'char', ch, wide });
+                    merged.push({ type: 'char', ch, wide });
                 }
+            } else {
+                merged.push(t);
             }
         }
+
+        this._queue.push(...merged);
         this._start();
     }
 
@@ -35,7 +48,9 @@ export class Typewriter {
         }
         let out = '';
         for (const item of this._queue) {
-            out += item.type === 'seq' ? item.text : item.ch;
+            if (item.type === 'seq') out += item.text;
+            else if (item.type === 'seqtext') out += item.seq + item.text;
+            else out += item.ch;
         }
         this._queue = [];
         this._active = false;
@@ -131,9 +146,17 @@ export class Typewriter {
         }
 
         const item = this._queue.shift();
-        this.term.write(item.type === 'seq' ? item.text : item.ch);
+        if (item.type === 'seqtext') {
+            this.term.write(item.seq + item.text);
+        } else if (item.type === 'seq') {
+            this.term.write(item.text);
+        } else {
+            this.term.write(item.ch);
+        }
 
-        const delay = item.type === 'seq' ? 0 : (item.wide ? this._speed.wide : this._speed.half);
+        const delay = item.type === 'seq' ? 0
+            : item.type === 'seqtext' ? item.delay
+            : (item.wide ? this._speed.wide : this._speed.half);
         this._timerId = setTimeout(() => this._tick(), delay);
     }
 
