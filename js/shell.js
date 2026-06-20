@@ -254,7 +254,7 @@ export class DemoShell {
     }
 
     _openQuizDialog(menuDlg) {
-        const a = Math.floor(Math.random() * 9) + 1;
+        let a = Math.floor(Math.random() * 9) + 1;
         let b = Math.floor(Math.random() * 9) + 1;
         const ops = ['+', '-', '\u00D7'];
         const op = ops[Math.floor(Math.random() * 3)];

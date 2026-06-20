@@ -438,7 +438,7 @@ export class InputDialog extends Dialog {
         const bufW = this._bufWidth(this.inputText);
         const cx = 4 + bufW;
         const cy = 4;
-        const ch = this.inputText.length > 0 ? this.inputText[this.inputText.length - 1] : ' ';
+        const ch = ' ';
         const attr = { fg: 0, bg: 7, bold: false, dim: false, italic: false, underline: false, blink: false, inverse: true, conceal: false, crossedOut: false };
         if (cx < this.width) {
             this._buffer[cy][cx] = _makeCell(ch, attr);
