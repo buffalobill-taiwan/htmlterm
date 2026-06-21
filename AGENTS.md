@@ -17,7 +17,7 @@ Renderer._blendOverlays(Y):
          for c in [ov.x, ov.x+ov.w):
            cell = ov.getCell(relY, relC)
            if cell != null → blended[c] = cell
-  3. _rowToHTML(blended) → innerHTML
+  3. per-cell: span.textContent / span.className / span.style.cssText
 ```
 
 | Layer | Z | Buffer owner | Writes via |
@@ -37,7 +37,7 @@ independent; the main buffer is never touched by overlays.
 |---|---|---|
 | `Screen.js` | Cell buffer, cursor, scroll + SGR state, dirty tracking | pure data |
 | `Parser.js` | VT100 escape state machine → delegates to Screen | no DOM |
-| `Renderer.js` | DOM rows, cursor element, render loop, overlay blend | DOM only |
+| `Renderer.js` | Per-cell DOM grid (`cellEls[][]`), cursor element, render loop, overlay blend | DOM only |
 | `terminal.js` | Thin coordinator (~100 lines) composing the three | event wiring |
 
 `Terminal` delegates public props/methods to `screen` and `renderer`:
@@ -45,6 +45,48 @@ independent; the main buffer is never touched by overlays.
 get curX() { return this.screen.curX; }
 set curX(v) { this.screen.curX = v; }
 markRowDirty(r) { this.screen.markRowDirty(r); }
+```
+
+### Per-cell DOM grid
+
+`Renderer` pre-creates 80×25 `<span>` elements at init (`cellEls[row][col]`).
+Each render cycle updates only `.textContent`, `.className`, and `.style.cssText`
+on individual spans — no innerHTML string building, no node create/destroy.
+
+```
+_renderRow(rowIdx):
+  1. dataRow = _getDataRow(rowIdx)
+  2. blended = _blendOverlays(rowIdx, dataRow)
+  3. for c in [0, cols):
+       cell = blended[c]
+       if cell.width === 0 → empty span, skip
+       span.textContent = cell.ch
+       span.className    = _spanClass(fg, bg, italic, ...)
+       span.style.cssText = '' or clip-CSS
+```
+
+**Clip CSS** (when overlay covers half of a wide-char pair):
+
+| Flag | Style |
+|---|---|
+| `_clipRight` | `display:inline-block;width:8px;overflow:hidden;vertical-align:top` |
+| `_clipLeft` | `display:inline-block;width:8px;overflow:hidden;text-indent:-8px;vertical-align:top` |
+
+`_setScale()` sets `charWidth`/`charHeight`; render uses dynamic values for clip sizes.
+
+## Mouse event routing
+
+`terminal.js` fires `onMouse(type, {btn, col, row, deltaY})` on mouse
+down/up/move/wheel. If the callback returns `true`, no escape sequence is sent.
+
+```
+Mouse event
+  → terminal._onMouseDown/Up/Move/Wheel
+    → this.onMouse(type, info)
+      → shell.handleMouse(type, info)
+        → activeDialog.handleMouse(type, info)
+          → Dialog._onMouse(type, info) — returns false by default
+            → MenuDialog._onMouse: hover/click/wheel on item rows
 ```
 
 ### LineEditor extracted
@@ -99,6 +141,11 @@ Dialog.close():
 - **WidgetBase buffer rewrite** (`js/cmd/WidgetBase.js`): Now owns `_buffer`, `putc()`, and overlay lifecycle (`_overlay`). `start()`/`stop()` register/unregister overlay on the terminal. No more `_saveBacking`/`_restoreBacking`.
 - **Dialog buffer rewrite** (`js/dialog.js`): All rendering now fills `_buffer` via `_writeStr()` (inline SGR→cell attrs) instead of `term.write()` with CSI sequences. `open()`/`close()` manage overlay registration. StateStack simplified to cursor-only (no buffer save/restore).
 - **ShellWidgetManager simplified** (`js/shell.js`): No `_setScrollTop()`, no scrollTop/scrollBottom management. Widgets register overlays independently via WidgetBase.
+- **Per-cell DOM grid** (`js/Renderer.js`): Pre-creates 80×25 `<span>` elements at init (`cellEls[row][col]`). Each render cycle updates only `.textContent`/`.className`/`.style.cssText` on individual spans — no innerHTML string building, no node create/destroy. `_rowToHTML()` removed.
+- **DVD bouncing logo widget** (`js/cmd/widgets/DVDWidget.js`): 7×3 color background block with black "D V D" text, 120ms interval bounce, color change on edge hit. Uses solid fill (bg = color, fg = black for letters) instead of box-drawing border.
+- **Mouse routing for dialogs** (`terminal.js`/`shell.js`/`dialog.js`): `onMouse` callback on Terminal → `shell.handleMouse` → `dialog.handleMouse` → `MenuDialog._onMouse`. Supports hover (update selection), click (select item), wheel (scroll). If callback returns `true`, no escape sequence is sent.
+- **Startup text** changed to `AEIOUÀÈÌÒÙ金木水火土鑫森淼焱垚あいうえおアイウエオ`
+- **Quiz dialog fixes**: `const a` → `let a` (Assignment to constant variable); InputDialog cursor shows inverse space instead of duplicating last character.
 
 ### Removed
 - `saveArea()`, `restoreArea()`, `saveCursor()`, `restoreCursor()` — no longer needed
@@ -108,6 +155,7 @@ Dialog.close():
 - `StateStack.isCovered()` — render order is the only visual layering mechanism
 - `formatTime` import from `shell.js` and `dialog.js` — no longer used
 - `isCovered` check from `ShellWidgetManager.redrawAll()` and `ClockWidget` interval
+- `Renderer._rowToHTML()` — replaced by per-cell span rendering
 
 ## Command Architecture
 
@@ -130,8 +178,10 @@ js/cmd/
 ├── widget.js     WidgetCmd — toggle TSR clock
 ├── clock.js      ClockCmd
 ├── quiz.js       Quiz
+├── dvd.js        DvdCmd   — toggle bouncing DVD logo
 └── widgets/
-    └── ClockWidget.js
+    ├── ClockWidget.js
+    └── DVDWidget.js
 ```
 
 **CmdBase contract:**
@@ -205,7 +255,6 @@ input arrives only through the callback parameter.
 ## Key Constraints
 - DOM rendering (not Canvas)
 - 80×25 viewport, auto-scaled
-- inline-block span width fix would be needed for any span mixing 32-unit and 64-unit glyphs
 
 ## Critical Font Metrics
 - core font (eascii-core): all glyphs have advance=32 units = 8px at 16px font-size
@@ -284,7 +333,7 @@ draw() {
 
 - `js/Screen.js`: Cell buffer, cursor, scroll/SGR state, dirty tracking, overlays[]
 - `js/Parser.js`: VT100 escape state machine
-- `js/Renderer.js`: DOM rows, cursor, render loop, `_blendOverlays()`
+- `js/Renderer.js`: Per-cell DOM grid (`cellEls[][]`), cursor element, render loop, overlay blend
 - `js/terminal.js`: Thin coordinator composing Screen/Parser/Renderer
 - `js/LineEditor.js`: Line editing, history, tab completion
 - `js/shell.js`: DemoShell orchestrates editor/typewriter/stateStack/dialogs/widgets
@@ -292,3 +341,4 @@ draw() {
 - `js/typewriter.js`: Animated text output
 - `js/cmd/WidgetBase.js`: Overlay lifecycle, `_buffer`, `putc()`
 - `js/cmd/widgets/ClockWidget.js`: TSR clock using `putc()`
+- `js/cmd/widgets/DVDWidget.js`: Bouncing DVD logo — 7×3 color block, 120ms interval

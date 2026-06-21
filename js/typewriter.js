@@ -2,10 +2,12 @@ export class Typewriter {
     constructor(term) {
         this.term = term;
         this._queue = [];
-        this._timerId = null;
+        this._rafId = null;
         this._drainCallbacks = [];
         this._active = false;
         this._speed = { wide: 8, half: 4 };
+        this._lastFrameTime = 0;
+        this._accumulator = 0;
     }
 
     isActive() { return this._active; }
@@ -42,9 +44,9 @@ export class Typewriter {
     }
 
     abort() {
-        if (this._timerId) {
-            clearTimeout(this._timerId);
-            this._timerId = null;
+        if (this._rafId) {
+            cancelAnimationFrame(this._rafId);
+            this._rafId = null;
         }
         let out = '';
         for (const item of this._queue) {
@@ -63,7 +65,7 @@ export class Typewriter {
     }
 
     dispose() {
-        if (this._timerId) clearTimeout(this._timerId);
+        if (this._rafId) cancelAnimationFrame(this._rafId);
         this._queue = [];
         this._active = false;
     }
@@ -133,31 +135,42 @@ export class Typewriter {
     _start() {
         if (this._active || this._queue.length === 0) return;
         this._active = true;
+        this._lastFrameTime = performance.now();
+        this._accumulator = 0;
         this.term.write('\x1B[?25l');
-        this._tick();
+        this._rafId = requestAnimationFrame(t => this._tick(t));
     }
 
-    _tick() {
-        if (this._queue.length === 0) {
-            this._active = false;
-            this._timerId = null;
-            this._flushDrain();
-            return;
+    _tick(timestamp) {
+        const elapsed = timestamp - this._lastFrameTime;
+        this._lastFrameTime = timestamp;
+        this._accumulator += elapsed;
+
+        let out = '';
+        while (this._accumulator >= 0 && this._queue.length) {
+            const item = this._queue[0];
+            const delay = item.type === 'seq' ? 0
+                : item.type === 'seqtext' ? item.delay
+                : (item.wide ? this._speed.wide : this._speed.half);
+
+            if (delay > this._accumulator) break;
+
+            this._accumulator -= delay;
+            this._queue.shift();
+            if (item.type === 'seqtext') out += item.seq + item.text;
+            else if (item.type === 'seq') out += item.text;
+            else out += item.ch;
         }
 
-        const item = this._queue.shift();
-        if (item.type === 'seqtext') {
-            this.term.write(item.seq + item.text);
-        } else if (item.type === 'seq') {
-            this.term.write(item.text);
+        if (out) this.term.write(out);
+
+        if (this._queue.length) {
+            this._rafId = requestAnimationFrame(t => this._tick(t));
         } else {
-            this.term.write(item.ch);
+            this._active = false;
+            this._rafId = null;
+            this._flushDrain();
         }
-
-        const delay = item.type === 'seq' ? 0
-            : item.type === 'seqtext' ? item.delay
-            : (item.wide ? this._speed.wide : this._speed.half);
-        this._timerId = setTimeout(() => this._tick(), delay);
     }
 
     _flushDrain() {
