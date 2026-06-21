@@ -5,7 +5,23 @@
  * Reads Screen data to produce DOM output.
  */
 
-import { XTERM_COLORS } from './Screen.js';
+function colToHex(i) {
+    if (typeof i !== 'number' || i < 0 || i > 255) return null;
+    if (i < 16) {
+        const C = ['#000000','#CD0000','#00CD00','#CDCD00','#0000EE','#CD00CD','#00CDCD','#E5E5E5','#7F7F7F','#FF0000','#00FF00','#FFFF00','#5C5CFF','#FF00FF','#00FFFF','#FFFFFF'];
+        return C[i];
+    }
+    if (i < 232) {
+        i -= 16;
+        const cube = [0x00, 0x5F, 0x87, 0xAF, 0xD7, 0xFF];
+        const r = cube[Math.floor(i / 36) % 6];
+        const g = cube[Math.floor(i / 6) % 6];
+        const b = cube[i % 6];
+        return '#' + [r, g, b].map(v => v.toString(16).padStart(2, '0')).join('');
+    }
+    const g = (8 + (i - 232) * 10).toString(16).padStart(2, '0');
+    return '#' + g + g + g;
+}
 
 export class Renderer {
     constructor(container, screen, opts = {}) {
@@ -249,8 +265,8 @@ export class Renderer {
         this.cursorEl.style.height = this.charHeight + 'px';
         this.cursorEl.style.fontSize = this.charHeight + 'px';
         this.cursorEl.style.lineHeight = this.charHeight + 'px';
-        this.cursorEl.style.backgroundColor = (typeof fg === 'number' && fg <= 255) ? XTERM_COLORS[fg] : (typeof fg === 'string' ? fg : '#C0C0C0');
-        this.cursorEl.style.color = (typeof bg === 'number' && bg <= 255) ? XTERM_COLORS[bg] : (typeof bg === 'string' ? bg : '#000000');
+        this.cursorEl.style.backgroundColor = colToHex(fg) || (typeof fg === 'string' ? fg : '#C0C0C0');
+        this.cursorEl.style.color = colToHex(bg) || (typeof bg === 'string' ? bg : '#000000');
     }
 
     _setScale(scale) {

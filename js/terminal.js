@@ -8,11 +8,9 @@
  * Callbacks: onData(data), onResize(cols, rows).
  */
 
-import { Screen, XTERM_COLORS } from './Screen.js';
+import { Screen } from './Screen.js';
 import { Parser } from './Parser.js';
 import { Renderer } from './Renderer.js';
-
-export { XTERM_COLORS };
 
 export class Terminal {
     constructor(container, opts = {}) {
