@@ -91,6 +91,8 @@ html, body {
     pointer-events: none;
     animation: cursor-blink 1s step-end infinite;
     white-space: pre;
+    text-align: center;
+    font-family: UnifontTerm, monospace;
 }
 
 #cursor.hidden {
@@ -673,8 +675,17 @@ html, body {
 .u { text-decoration: underline; }
 .s { text-decoration: line-through; }
 .scroll-indicator {
-    color: #666;
+    position: absolute;
+    bottom: 4px;
+    right: 4px;
+    color: #888;
     background: #000;
     padding: 0 4px;
     font-size: 12px;
+    pointer-events: none;
+    z-index: 1000;
+    display: none;
+}
+.scroll-indicator.visible {
+    display: block;
 }

@@ -30,7 +30,6 @@ export class Renderer {
         this._scrollIndicatorEl = document.createElement('div');
         this._scrollIndicatorEl.className = 'scroll-indicator';
         this._scrollIndicatorEl.textContent = ' (MORE)';
-        this._scrollIndicatorEl.style.cssText = 'position:absolute;bottom:4px;right:4px;font-size:12px;color:#888;display:none;pointer-events:none;z-index:1000;background:#000;padding:0 4px;';
         this.container.appendChild(this._scrollIndicatorEl);
     }
 
@@ -38,9 +37,6 @@ export class Renderer {
         const cols = this.screen.cols;
         const rows = this.screen.rows;
 
-        this.container.style.position = 'absolute';
-        this.container.style.top = '0';
-        this.container.style.left = '0';
 
         this.cursorEl = document.createElement('div');
         this.cursorEl.id = 'cursor';
@@ -90,7 +86,7 @@ export class Renderer {
     _updateScrollIndicator() {
         const el = this._scrollIndicatorEl;
         if (!el) return;
-        el.style.display = this.screen.viewOffset > 0 ? 'block' : 'none';
+        el.classList.toggle('visible', this.screen.viewOffset > 0);
     }
 
     _renderRows() {
@@ -253,10 +249,8 @@ export class Renderer {
         this.cursorEl.style.height = this.charHeight + 'px';
         this.cursorEl.style.fontSize = this.charHeight + 'px';
         this.cursorEl.style.lineHeight = this.charHeight + 'px';
-        this.cursorEl.style.textAlign = 'center';
         this.cursorEl.style.backgroundColor = (typeof fg === 'number' && fg <= 255) ? XTERM_COLORS[fg] : (typeof fg === 'string' ? fg : '#C0C0C0');
         this.cursorEl.style.color = (typeof bg === 'number' && bg <= 255) ? XTERM_COLORS[bg] : (typeof bg === 'string' ? bg : '#000000');
-        this.cursorEl.style.fontFamily = 'UnifontTerm, monospace';
     }
 
     _setScale(scale) {

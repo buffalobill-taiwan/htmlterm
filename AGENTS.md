@@ -146,8 +146,29 @@ Dialog.close():
 - **Mouse routing for dialogs** (`terminal.js`/`shell.js`/`dialog.js`): `onMouse` callback on Terminal → `shell.handleMouse` → `dialog.handleMouse` → `MenuDialog._onMouse`. Supports hover (update selection), click (select item), wheel (scroll). If callback returns `true`, no escape sequence is sent.
 - **Startup text** changed to `AEIOUÀÈÌÒÙ金木水火土鑫森淼焱垚あいうえおアイウエオ`
 - **Quiz dialog fixes**: `const a` → `let a` (Assignment to constant variable); InputDialog cursor shows inverse space instead of duplicating last character.
+- **Shared SGR module** (`js/sgr.js`): Extracted `defaultAttr()`, `applySGR()`, `makeCell()` from Screen/dialog/WidgetBase into shared file. `Screen.setSGR` loop index bug fixed (extended color params no longer corrupt attr state).
+- **Terminal.dispose()**: Unregisters 11 event listeners + resize handler; stops render loop.
+- **Key handler split**: `_onKeyDown` split into `_handleCopyPaste`, `_handleCtrlLetter`, `_handleFunctionKeys` (main method 121→45 lines).
+- **Encapsulation**: WidgetBase `setPosition(x,y)`/`getPosition()`; drag guards (`_dragOffX === undefined`); dialog drag guards; `WidgetBase.stop()` marks rows dirty before overlay removal.
+- **Clock position preserved**: `ShellWidgetManager.add()` uses `setPosition` preserving `widget._x`; DVDWidget uses `setPosition` in `_tick`.
+- **LineEditor prompText**: Returns `this._prompt` instead of hardcoded `'$ '`.
+- **`readLine` guard**: Warns on duplicate call before overwriting.
+- **rAF resize debounce**: Replaced `setTimeout(80ms)` with `requestAnimationFrame` debounce.
+- **Scrollback indicator**: ` (MORE)` overlay via `.scroll-indicator` CSS class, toggled when `viewOffset > 0`.
+- **Inline styles → CSS classes**: Moved redundant `container.position/top/left` (already in `#screen` CSS); scroll indicator static props moved to `.scroll-indicator` CSS, `display` toggle uses `classList.toggle('visible')`; cursor `text-align` and `font-family` moved to `#cursor` CSS. Reduced inline style assignments from 30 to 23.
 
 ### Removed
+- `saveArea()`, `restoreArea()`, `saveCursor()`, `restoreCursor()` — no longer needed
+- `WidgetBase._saveBacking()`, `_restoreBacking()`
+- `ShellWidgetManager._setScrollTop()`
+- `shell.clockMode()` — replaced by ClockWidget-based ClockCmd.execute()
+- `StateStack.isCovered()` — render order is the only visual layering mechanism
+- `formatTime` import from `shell.js` and `dialog.js` — no longer used
+- `isCovered` check from `ShellWidgetManager.redrawAll()` and `ClockWidget` interval
+- `Renderer._rowToHTML()` — replaced by per-cell span rendering
+- `Renderer.js` redundant `container.style.position/top/left` — already in `#screen` CSS
+- `Renderer.js` scroll-indicator `style.cssText` — replaced by `.scroll-indicator` CSS class
+- `Renderer.js` cursor `textAlign`/`fontFamily` inline — moved to `#cursor` CSS
 - `saveArea()`, `restoreArea()`, `saveCursor()`, `restoreCursor()` — no longer needed
 - `WidgetBase._saveBacking()`, `_restoreBacking()`
 - `ShellWidgetManager._setScrollTop()`
@@ -332,6 +353,7 @@ draw() {
 ## relevant Files
 
 - `js/Screen.js`: Cell buffer, cursor, scroll/SGR state, dirty tracking, overlays[]
+- `js/sgr.js`: Shared SGR helpers (`defaultAttr`, `applySGR`, `makeCell`)
 - `js/Parser.js`: VT100 escape state machine
 - `js/Renderer.js`: Per-cell DOM grid (`cellEls[][]`), cursor element, render loop, overlay blend
 - `js/terminal.js`: Thin coordinator composing Screen/Parser/Renderer
