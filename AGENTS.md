@@ -271,6 +271,13 @@ input arrives only through the callback parameter.
 - DOM rendering (not Canvas)
 - 80×25 viewport, auto-scaled
 
+## Design Decisions
+
+- **CSS color classes stay static**: `.q0`-`.q255` / `.b0`-`.b255` in `style.css` are
+  hand-maintained and will NOT be generated from JS at runtime. They are independent
+  from the `colToHex()` algorithmic palette in Renderer.js. Do not propose generating
+  these classes dynamically.
+
 ## Critical Font Metrics
 - core font (eascii-core): all glyphs have advance=32 units = 8px at 16px font-size
 - ext font (eascii-ext): glyphs like ⏎, ✓, ✖ have advance=64 units = 16px at 16px font-size
