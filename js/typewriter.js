@@ -5,7 +5,7 @@ export class Typewriter {
         this._rafId = null;
         this._drainCallbacks = [];
         this._active = false;
-        this._speed = { wide: 8, half: 4 };
+        this._speed = { wide: 2, half: 1 };
         this._lastFrameTime = 0;
         this._accumulator = 0;
     }
