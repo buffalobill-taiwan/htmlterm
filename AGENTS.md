@@ -156,6 +156,7 @@ Dialog.close():
 - **rAF resize debounce**: Replaced `setTimeout(80ms)` with `requestAnimationFrame` debounce.
 - **Scrollback indicator**: ` (MORE)` overlay via `.scroll-indicator` CSS class, toggled when `viewOffset > 0`.
 - **Inline styles → CSS classes**: Moved redundant `container.position/top/left` (already in `#screen` CSS); scroll indicator static props moved to `.scroll-indicator` CSS, `display` toggle uses `classList.toggle('visible')`; cursor `text-align` and `font-family` moved to `#cursor` CSS. Reduced inline style assignments from 30 to 23.
+- **XTERM_COLORS removed**: Replaced 46-line array with algorithmic `colToHex()` in Renderer.js using the 256-color xterm palette (16 fixed + 6×6×6 cube + 24-gray ramp). All normal cell colors go through CSS classes `.q<N>`/`.b<N>`; cursor colors computed on-the-fly from the palette algorithm. No color hex lookup table in JS anymore.
 
 ### Removed
 - `saveArea()`, `restoreArea()`, `saveCursor()`, `restoreCursor()` — no longer needed
@@ -169,14 +170,7 @@ Dialog.close():
 - `Renderer.js` redundant `container.style.position/top/left` — already in `#screen` CSS
 - `Renderer.js` scroll-indicator `style.cssText` — replaced by `.scroll-indicator` CSS class
 - `Renderer.js` cursor `textAlign`/`fontFamily` inline — moved to `#cursor` CSS
-- `saveArea()`, `restoreArea()`, `saveCursor()`, `restoreCursor()` — no longer needed
-- `WidgetBase._saveBacking()`, `_restoreBacking()`
-- `ShellWidgetManager._setScrollTop()`
-- `shell.clockMode()` — replaced by ClockWidget-based ClockCmd.execute()
-- `StateStack.isCovered()` — render order is the only visual layering mechanism
-- `formatTime` import from `shell.js` and `dialog.js` — no longer used
-- `isCovered` check from `ShellWidgetManager.redrawAll()` and `ClockWidget` interval
-- `Renderer._rowToHTML()` — replaced by per-cell span rendering
+- `XTERM_COLORS` array from `Screen.js` — replaced by `colToHex()` algorithmic function in `Renderer.js`
 
 ## Command Architecture
 
@@ -355,7 +349,7 @@ draw() {
 - `js/Screen.js`: Cell buffer, cursor, scroll/SGR state, dirty tracking, overlays[]
 - `js/sgr.js`: Shared SGR helpers (`defaultAttr`, `applySGR`, `makeCell`)
 - `js/Parser.js`: VT100 escape state machine
-- `js/Renderer.js`: Per-cell DOM grid (`cellEls[][]`), cursor element, render loop, overlay blend
+- `js/Renderer.js`: Per-cell DOM grid (`cellEls[][]`), cursor element, render loop, overlay blend, `colToHex()` color palette
 - `js/terminal.js`: Thin coordinator composing Screen/Parser/Renderer
 - `js/LineEditor.js`: Line editing, history, tab completion
 - `js/shell.js`: DemoShell orchestrates editor/typewriter/stateStack/dialogs/widgets
