@@ -48,6 +48,7 @@ export class DemoShell {
         this._registerCommands();
 
         this.editor.setCommands(Object.keys(this.commands));
+        this._queuedInput = [];
         this._dragTarget = null;
         this._savedPositions = {};
 
@@ -85,6 +86,19 @@ export class DemoShell {
         this.term.write(this.prompt);
         this.promptShown = true;
         this.editor.reset();
+        this._flushQueuedInput();
+    }
+
+    _flushQueuedInput() {
+        const batch = this._queuedInput;
+        this._queuedInput = [];
+        for (let i = 0; i < batch.length; i++) {
+            if (this.typewriter.isActive()) {
+                this._queuedInput.push(...batch.slice(i));
+                return;
+            }
+            this.handleInput(batch[i]);
+        }
     }
 
     readLine(callback) {
@@ -103,6 +117,7 @@ export class DemoShell {
                 const ch = data[i];
                 const code = ch.charCodeAt ? ch.charCodeAt(0) : ch;
                 if (code === 0x03) {
+                    this._queuedInput = [];
                     this._pendingPrompt = false;
                     this._readLinePending = null;
                     this._readLineBuffer = '';
@@ -112,6 +127,7 @@ export class DemoShell {
                     return;
                 }
             }
+            this._queuedInput.push(data);
             return;
         }
 
