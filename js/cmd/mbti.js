@@ -103,7 +103,7 @@ export class MbtiCmd extends CmdBase {
                 {
                     text: '去不熟悉的地方旅行前：',
                     aText: '事先排好詳細景點行程',
-                    bText: '大概決定方向隨心探索',
+                    bText: '大概決定方���隨心探索',
                     dim: 'J/P'
                 },
                 {
@@ -128,8 +128,8 @@ export class MbtiCmd extends CmdBase {
         this.closed = false;
         this.inHandleKey = false;
         this.currentIndex = 0;
-        this.selectedOption = 'A'; // 'A' or 'B'
-        this.answers = [];
+        this.selectedOption = 'left'; // 'left' or 'right'
+        this.answers = []; // Track which option was selected ('A' or 'B')
         this.isTyping = true;
 
         if (!this.typewriter) {
@@ -168,6 +168,12 @@ export class MbtiCmd extends CmdBase {
         this.isTyping = true;
         this.typewriter._drainCallbacks = [];
         const q = this.questions[this.currentIndex];
+        
+        // Shuffle options for this question: 50% chance to swap A and B
+        this.currentQuestionShuffled = Math.random() < 0.5;
+        // currentQuestionShuffled = true means: left=B, right=A
+        // currentQuestionShuffled = false means: left=A, right=B
+        
         this.typewriter.enqueue(bold(cyan(`[問題 ${this.currentIndex + 1}/8] `)) + bold(white(q.text)) + '\r\n');
         this.typewriter.onDrain(() => {
             this.typewriter._drainCallbacks = [];
@@ -178,15 +184,32 @@ export class MbtiCmd extends CmdBase {
 
     drawOptions() {
         const q = this.questions[this.currentIndex];
-        const optA = this.selectedOption === 'A' 
-            ? bold(green('▶ A. ' + q.aText)) 
-            : '  A. ' + q.aText;
-        const optB = this.selectedOption === 'B' 
-            ? bold(green('▶ B. ' + q.bText)) 
-            : '  B. ' + q.bText;
+        
+        // Determine which text goes left and right
+        let leftText, rightText, leftAnswer, rightAnswer;
+        if (this.currentQuestionShuffled) {
+            // left=B, right=A
+            leftText = q.bText;
+            rightText = q.aText;
+            leftAnswer = 'B';
+            rightAnswer = 'A';
+        } else {
+            // left=A, right=B
+            leftText = q.aText;
+            rightText = q.bText;
+            leftAnswer = 'A';
+            rightAnswer = 'B';
+        }
+        
+        const optLeft = this.selectedOption === 'left' 
+            ? bold(green('▶ ' + leftText)) 
+            : '  ' + leftText;
+        const optRight = this.selectedOption === 'right' 
+            ? bold(green('▶ ' + rightText)) 
+            : '  ' + rightText;
 
         // Carriage return + Erase line, then draw options side-by-side
-        this.term.write('\r\x1B[K  ' + optA + '      ' + optB);
+        this.term.write('\r\x1B[K  ' + optLeft + '      ' + optRight);
     }
 
     handleKey(data) {
@@ -220,15 +243,15 @@ export class MbtiCmd extends CmdBase {
 
         // Arrow keys
         if (data === '\x1B[D') { // Left arrow
-            if (this.selectedOption !== 'A') {
-                this.selectedOption = 'A';
+            if (this.selectedOption !== 'left') {
+                this.selectedOption = 'left';
                 this.drawOptions();
             }
             return;
         }
         if (data === '\x1B[C') { // Right arrow
-            if (this.selectedOption !== 'B') {
-                this.selectedOption = 'B';
+            if (this.selectedOption !== 'right') {
+                this.selectedOption = 'right';
                 this.drawOptions();
             }
             return;
@@ -237,12 +260,22 @@ export class MbtiCmd extends CmdBase {
         // Enter key
         const code = data.charCodeAt(0);
         if (code === 0x0D || code === 0x0A) {
-            this.answers.push(this.selectedOption);
+            // Map left/right selection to actual A/B answer
+            let answerValue;
+            if (this.currentQuestionShuffled) {
+                // left=B, right=A
+                answerValue = this.selectedOption === 'left' ? 'B' : 'A';
+            } else {
+                // left=A, right=B
+                answerValue = this.selectedOption === 'left' ? 'A' : 'B';
+            }
+            this.answers.push(answerValue);
+            
             this.term.write('\r\n\r\n'); // Move past options and leave spacing
 
             this.currentIndex++;
             if (this.currentIndex < this.questions.length) {
-                this.selectedOption = 'A';
+                this.selectedOption = 'left';
                 this.drawQuestion();
             } else {
                 this.showResults();
