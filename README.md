@@ -57,7 +57,9 @@ Open `index.html` in a modern browser, or visit the live demo:
 | Command | Description |
 |---------|-------------|
 | `ascii` | Show ANSI color chart (16 color + 256 color cube) |
+| `blink` | Flash the screen N times (default 1) |
 | `calc` | Evaluate arithmetic expression |
+| `smallblink` | Flash terminal border N times (default 1) |
 | `clear` | Clear screen |
 | `clock` | Toggle TSR clock widget (replaces old `widget` command) |
 | `cowsay` | Let a cow speak |

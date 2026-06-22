@@ -18,3 +18,5 @@ export { ClockWidget } from './widgets/ClockWidget.js';
 export { Quiz } from './quiz.js';
 export { DvdCmd } from './dvd.js';
 export { DVDWidget } from './widgets/DVDWidget.js';
+export { Blink } from './blink.js';
+export { SmallBlink } from './smallblink.js';

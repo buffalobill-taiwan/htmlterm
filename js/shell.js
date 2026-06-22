@@ -47,6 +47,7 @@ export class DemoShell {
 
         this.editor.setCommands(Object.keys(this.commands));
         this._queuedInput = [];
+        this._busy = false;
         this._dragTarget = null;
         this._savedPositions = {};
 
@@ -256,7 +257,7 @@ export class DemoShell {
     }
 
     _checkTypewriterDrain() {
-        if (this.typewriter.isActive()) {
+        if (this._busy || this.typewriter.isActive()) {
             this._pendingPrompt = true;
         } else {
             this.showPrompt();
