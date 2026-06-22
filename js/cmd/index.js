@@ -20,3 +20,5 @@ export { DvdCmd } from './dvd.js';
 export { DVDWidget } from './widgets/DVDWidget.js';
 export { Blink } from './blink.js';
 export { SmallBlink } from './smallblink.js';
+export { MbtiCmd } from './mbti.js';
+

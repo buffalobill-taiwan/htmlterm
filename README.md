@@ -70,6 +70,7 @@ Open `index.html` in a modern browser, or visit the live demo:
 | `fortune` | Display a random fortune |
 | `help` | List available commands |
 | `menu` | Open command menu dialog |
+| `mbti` | MBTI personality test (interactive) |
 | `neofetch` | Display system info |
 | `quiz` | Math quiz challenge |
 | `uname` | Print system information |
