@@ -103,7 +103,7 @@ export class MbtiCmd extends CmdBase {
                 {
                     text: '去不熟悉的地方旅行前：',
                     aText: '事先排好詳細景點行程',
-                    bText: '大概決定方���隨心探索',
+                    bText: '大概決定方向隨心探索',
                     dim: 'J/P'
                 },
                 {
