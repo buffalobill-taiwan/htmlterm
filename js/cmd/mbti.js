@@ -360,7 +360,7 @@ export class MbtiCmd extends CmdBase {
             if (this.shell.activeDialog === this) {
                 this.shell.activeDialog = null;
             }
-            this.shell._checkTypewriterDrain();
+            this.shell._schedulePrompt();
         }
     }
 

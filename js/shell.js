@@ -20,25 +20,18 @@ export class DemoShell {
         this.stateStack = new StateStack(this.term);
         this.activeDialog = null;
         this.menuDialog = null;
-        this._pendingAction = null;
         this.commands = {};
         this.menuItems = [];
         this.cmdList = [];
 
         this.typewriter = new Typewriter(this.term);
-        this._pendingPrompt = false;
-        this.typewriter.onDrain(() => {
-            if (this._pendingPrompt) {
-                this._pendingPrompt = false;
-                this.showPrompt();
-            }
-        });
+        this.typewriter.onDrain(() => this._schedulePrompt());
         this.editor = new LineEditor(this.term, {
             onExecute: (line) => {
                 this.execute(line);
-                if (!this.activeDialog && !this._readLinePending) this._checkTypewriterDrain();
+                this._schedulePrompt();
             },
-            onShowPrompt: () => this._checkTypewriterDrain(),
+            onShowPrompt: () => this._schedulePrompt(),
         });
         this.editor.setPrompt(this.prompt);
 
@@ -114,7 +107,6 @@ export class DemoShell {
                 const code = ch.charCodeAt ? ch.charCodeAt(0) : ch;
                 if (code === 0x03) {
                     this._queuedInput = [];
-                    this._pendingPrompt = false;
                     this._readLinePending = null;
                     this._readLineBuffer = '';
                     this.typewriter.abort();
@@ -132,28 +124,7 @@ export class DemoShell {
             if (this.activeDialog && this.activeDialog.closed) {
                 this.activeDialog = null;
             }
-            if (this._pendingAction) {
-                const a = this._pendingAction;
-                this._pendingAction = null;
-                if (a.type === 'show-calc-result') {
-                    const pos = this._savedPositions['show'] || {};
-                    const showDlg = new ShowDialog(this.term, {
-                        message: a.message,
-                        stack: this.stateStack,
-                        x: pos.x,
-                        y: pos.y,
-                        savePos: (x, y) => { this._savedPositions['show'] = { x, y }; },
-                        onExit: () => { this.activeDialog = this.menuDialog; },
-                    });
-                    this.activeDialog = showDlg;
-                    showDlg.open();
-                    return;
-                } else if (a.type === 'exec') {
-                    this.menuDialog = null;
-                    this.commands[a.cmd](a.args);
-                }
-            }
-            if (!this.activeDialog) this._checkTypewriterDrain();
+            if (!this.activeDialog) this._schedulePrompt();
             return;
         }
 
@@ -167,7 +138,7 @@ export class DemoShell {
                     this.term.write('\r\n');
                     cb(this._readLineBuffer.trim());
                     this._readLineBuffer = '';
-                    this._checkTypewriterDrain();
+                    this._schedulePrompt();
                     return;
                 }
                 if (code === 0x03) {
@@ -256,12 +227,9 @@ export class DemoShell {
         this.typewriter.enqueue(text);
     }
 
-    _checkTypewriterDrain() {
-        if (this._busy || this.typewriter.isActive()) {
-            this._pendingPrompt = true;
-        } else {
-            this.showPrompt();
-        }
+    _schedulePrompt() {
+        if (this._busy || this.activeDialog || this._readLinePending || this.typewriter.isActive()) return;
+        this.showPrompt();
     }
 
     _openCalcDialog(menuDlg) {
@@ -286,7 +254,24 @@ export class DemoShell {
                 } catch (e) {
                     msg = red('Error:') + ' ' + e.message;
                 }
-                this._pendingAction = { type: 'show-calc-result', message: msg };
+                const showPos = this._savedPositions['show'] || {};
+                const showDlg = new ShowDialog(this.term, {
+                    message: msg,
+                    stack: this.stateStack,
+                    x: showPos.x,
+                    y: showPos.y,
+                    savePos: (x, y) => { this._savedPositions['show'] = { x, y }; },
+                    onExit: () => {
+                        if (menuDlg && !menuDlg.closed) {
+                            this.activeDialog = menuDlg;
+                        } else {
+                            this.activeDialog = null;
+                            this._schedulePrompt();
+                        }
+                    },
+                });
+                this.activeDialog = showDlg;
+                showDlg.open();
             },
             onCancel: () => {
                 this.activeDialog = menuDlg;
@@ -325,7 +310,24 @@ export class DemoShell {
                 } else {
                     msg = bold(red('\u2717 Wrong!')) + '  Answer: ' + bold(white('' + answer));
                 }
-                this._pendingAction = { type: 'show-calc-result', message: msg };
+                const showPos = this._savedPositions['show'] || {};
+                const showDlg = new ShowDialog(this.term, {
+                    message: msg,
+                    stack: this.stateStack,
+                    x: showPos.x,
+                    y: showPos.y,
+                    savePos: (x, y) => { this._savedPositions['show'] = { x, y }; },
+                    onExit: () => {
+                        if (menuDlg && !menuDlg.closed) {
+                            this.activeDialog = menuDlg;
+                        } else {
+                            this.activeDialog = null;
+                            this._schedulePrompt();
+                        }
+                    },
+                });
+                this.activeDialog = showDlg;
+                showDlg.open();
             },
             onCancel: () => {
                 if (menuDlg) this.activeDialog = menuDlg;
@@ -355,12 +357,12 @@ export class DemoShell {
                     this._openQuizDialog(menuDlg);
                     return;
                 }
-                this._pendingAction = { type: 'exec', cmd: item.name, args: [] };
+                this.menuDialog = null;
+                this.commands[item.name]([]);
+                this._schedulePrompt();
                 return 'close';
             },
-            onCancel: () => {
-                this._pendingAction = null;
-            }
+            onCancel: () => {} 
         });
         this.activeDialog = menuDlg;
         this.menuDialog = menuDlg;

@@ -37,7 +37,7 @@ export class SmallBlink extends CmdBase {
                 setTimeout(() => this._flash(el, remaining - 1), 100);
             } else {
                 this.shell._busy = false;
-                this.shell._checkTypewriterDrain();
+                this.shell._schedulePrompt();
             }
         }, 60);
     }
