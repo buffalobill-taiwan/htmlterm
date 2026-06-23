@@ -244,7 +244,7 @@ unaddressed:
 - **Screen/Parser/Renderer split** (`js/terminal.js` → `Screen.js` + `Parser.js` + `Renderer.js`): Terminal data model, escape parser, and DOM renderer separated into independent files. Terminal stays as thin coordinator (~100 lines).
 - **LineEditor extraction** (`js/LineEditor.js`): Shell line editing (history, tab completion, key dispatch) extracted from `shell.js` into its own class.
 - **WidgetBase buffer rewrite** (`js/cmd/WidgetBase.js`): Now owns `_buffer`, `putc()`, and overlay lifecycle (`_overlay`). `start()`/`stop()` register/unregister overlay on the terminal. No more `_saveBacking`/`_restoreBacking`.
-- **Dialog buffer rewrite** (`js/dialog/Dialog.js`): All rendering now fills `_buffer` via `_writeStr()` (inline SGR→cell attrs) instead of `term.write()` with CSI sequences. `open()`/`close()` manage overlay registration. StateStack simplified to cursor-only (no buffer save/restore).
+- **Dialog buffer rewrite** (`js/dialog.js`): All rendering now fills `_buffer` via `_writeStr()` (inline SGR→cell attrs) instead of `term.write()` with CSI sequences. `open()`/`close()` manage overlay registration. StateStack simplified to cursor-only (no buffer save/restore).
 - **ShellWidgetManager simplified** (`js/shell.js`): No `_setScrollTop()`, no scrollTop/scrollBottom management. Widgets register overlays independently via WidgetBase.
 - **Per-cell DOM grid** (`js/Renderer.js`): Pre-creates 80×25 `<span>` elements at init (`cellEls[row][col]`). Each render cycle updates only `.textContent`/`.className`/`.style.cssText` on individual spans — no innerHTML string building, no node create/destroy. `_rowToHTML()` removed.
 - **DVD bouncing logo widget** (`js/cmd/widgets/DVDWidget.js`): 7×3 color background block with black "D V D" text, 120ms interval bounce, color change on edge hit. Uses solid fill (bg = color, fg = black for letters) instead of box-drawing border.
@@ -512,12 +512,7 @@ draw() {
 - `js/terminal.js`: Thin coordinator composing Screen/Parser/Renderer
 - `js/LineEditor.js`: Line editing, history, tab completion
 - `js/shell.js`: DemoShell orchestrates editor/typewriter/stateStack/dialogs/widgets
-- `js/dialog/index.js`: Barrel export
-- `js/dialog/Dialog.js`: Dialog base class, `_writeStr`
-- `js/dialog/StateStack.js`: StateStack (nested cursor/state management)
-- `js/dialog/MenuDialog.js`: Menu dialog
-- `js/dialog/InputDialog.js`: Input dialog
-- `js/dialog/ShowDialog.js`: Show message dialog
+- `js/dialog.js`: Dialog base + Menu/Input/Clock/ShowDialog, `_writeStr`, StateStack
 - `js/typewriter.js`: Animated text output
 - `js/cmd/WidgetBase.js`: Overlay lifecycle, `_buffer`, `putc()`
 - `js/cmd/widgets/ClockWidget.js`: TSR clock using `putc()`

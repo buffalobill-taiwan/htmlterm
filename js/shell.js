@@ -5,7 +5,7 @@
  * ShellWidgetManager — manages TSR widget lifecycle with scroll region.
  */
 
-import { StateStack, MenuDialog, InputDialog, ShowDialog } from './dialog/index.js';
+import { StateStack, MenuDialog, InputDialog, ShowDialog } from './dialog.js';
 import { Typewriter } from './typewriter.js';
 import { LineEditor } from './LineEditor.js';
 import * as cmdModule from './cmd/index.js';
