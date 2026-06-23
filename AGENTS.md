@@ -263,9 +263,15 @@ unaddressed:
 - **Screen.getCellAt**: Encapsulated overlay/buffer cell lookup in Screen. `_renderCursor` now calls `screen.getCellAt(curX, curY)` instead of directly accessing `screen.overlays` and `screen.buffer`.
 - **Inline styles → CSS classes**: Moved redundant `container.position/top/left` (already in `#screen` CSS); scroll indicator static props moved to `.scroll-indicator` CSS, `display` toggle uses `classList.toggle('visible')`; cursor `text-align` and `font-family` moved to `#cursor` CSS; copy textarea uses `.clip-helper` class. Reduced inline style assignments from 30 to 23.
 - **XTERM_COLORS removed**: Replaced 46-line array with CSS classes `.b<N>`/`.q<N>` directly — cursor colors set via `className = 'b' + fg + ' q' + bg`. No color hex lookup table or algorithmic function in JS anymore.
+- **`select()` 2D options**: `select()` accepts 2D `options[row][col]` array, default `_defaultGridMove` (↑↓←→ no wrap, auto clamp col) and `_defaultGridRender` (column-aligned `▶` + green bold). `move`/`render` optional overrides. `onPick(row, col, value)`. `ask()` removed.
+- **MbtiCmd/AstrologyCmd simplified**: Both use default move/render from `select()`. MbtiCmd passes `[[aText, bText]]`, AstrologyCmd passes `3×4` grid. Custom render/move removed.
+- **AstrologyCmd registered**: 12-zodiac 4×3 grid selection via `select()`, seed-based fortune generation (mulberry32, dayOfYear + signIdx), 5 categories × 5 score levels × 3 descriptions.
+- **Removed neofetch, uname, whoami**: Three fileless commands removed — no filesystem dependency to justify them, and their output was trivial.
 
 ### Removed
 - `saveArea()`, `restoreArea()`, `saveCursor()`, `restoreCursor()` — no longer needed
+- `ask()` — unused dead code, removed
+- `neofetch`, `uname`, `whoami` — three fileless commands removed
 - `WidgetBase._saveBacking()`, `_restoreBacking()`
 - `ShellWidgetManager._setScrollTop()`
 - `shell.clockMode()` — replaced by ClockWidget-based ClockCmd.execute()
@@ -285,24 +291,24 @@ unaddressed:
 
 ```
 js/cmd/
-├── CmdBase.js    # execute(args) | print(text) | readLine(cb) | static commandName/help/menu
-├── help.js       Help      — iterates shell._cmdList dynamically
-├── clear.js      Clear
-├── echo.js       Echo
-├── date.js       Date
-├── uname.js      Uname
-├── neofetch.js   Neofetch
-├── cowsay.js     Cowsay
-├── ascii.js      Ascii
-├── fortune.js    Fortune
-├── calc.js       Calc
-├── exit.js       Exit
-├── whoami.js     Whoami
-├── menu.js       MenuCmd   — execute delegates to shell._menuCmd()
-├── widget.js     WidgetCmd — toggle TSR clock
-├── clock.js      ClockCmd
-├── quiz.js       Quiz
-├── dvd.js        DvdCmd   — toggle bouncing DVD logo
+├── CmdBase.js         # execute(args) | print(text) | readLine(cb) | static commandName/help/menu
+├── InteractiveCmd.js  # Base class for interactive commands: select(), prompt()
+├── help.js            Help      — iterates shell._cmdList dynamically
+├── clear.js           Clear
+├── echo.js            Echo
+├── date.js            Date
+├── cowsay.js          Cowsay
+├── ascii.js           Ascii
+├── fortune.js         Fortune
+├── calc.js            Calc
+├── exit.js            Exit
+├── menu.js            MenuCmd   — execute delegates to shell._menuCmd()
+├── mbti.js            MbtiCmd   — MBTI personality test (interactive)
+├── astrology.js       AstrologyCmd — daily horoscope with zodiac grid selection
+├── widget.js          WidgetCmd — toggle TSR clock
+├── clock.js           ClockCmd
+├── quiz.js            Quiz      — uses prompt() for math challenge
+├── dvd.js             DvdCmd    — toggle bouncing DVD logo
 └── widgets/
     ├── ClockWidget.js
     └── DVDWidget.js
@@ -319,6 +325,44 @@ js/cmd/
 | `static get commandName()` | Command name string, e.g. `'fortune'` |
 | `static get help()` | Description shown in `help` output |
 | `static get menu()` | Menu description or `null` to hide from menu |
+
+### InteractiveCmd.select() — 2D grid selection
+
+`InteractiveCmd` extends `CmdBase` for commands that need interactive
+keyboard-driven selection (MbtiCmd, AstrologyCmd).
+
+```js
+select({
+    text: 'Pick one:\n',           // printed via Typewriter before grid
+    options: [                     // 2D array: options[row][col]
+        ['A', 'B', 'C'],
+        ['D', 'E'],
+    ],
+    move: customMove,              // optional, default = _defaultGridMove
+    render: customRender,          // optional, default = _defaultGridRender
+    onPick: (row, col, value) => { /* called on Enter */ },
+    onCancel: () => {},            // optional, default = this.close()
+});
+```
+
+**Default move (`_defaultGridMove`):**
+
+| Key | Behavior |
+|---|---|
+| `↑` | `row > 0` → prev row, `col = min(current, prev.len-1)`; else no-op |
+| `↓` | `row < rows-1` → next row, `col = min(current, next.len-1)`; else no-op |
+| `←` | `col > 0` → col-1; else no-op |
+| `→` | `col < cur.len-1` → col+1; else no-op |
+
+No wrap-around, no cross-dimension movement.
+
+**Default render (`_defaultGridRender`):**
+- Column-aligned grid with `▶` + green bold for selected, `  ` for unselected
+- CJK-aware column width calculation
+- Re-render positions cursor via `\x1B[N-1 A` (N = row count)
+
+**Custom move signature:** `(data, row, col, options)` → `{row, col}`
+**Custom render signature:** `(selRow, selCol, options, term)` → (writes to term)
 
 **Registration flow:**
 
