@@ -165,7 +165,15 @@ export class Renderer {
                 for (let c = x0; c < x0 + w && c < blended.length; c++) {
                     const ovCell = ov.getCell(relRow, c - x0);
                     if (!ovCell) continue;
+                    if (ovCell.width === 0) continue;
                     const prev = blended[c];
+                    if (ovCell.width === 2) {
+                        blended[c] = { ...ovCell, width: 1, _clipRight: true };
+                        if (c + 1 < blended.length) {
+                            blended[c + 1] = { ...ovCell, width: 1, _clipLeft: true };
+                        }
+                        continue;
+                    }
                     blended[c] = ovCell;
                     if (c > 0 && blended[c - 1] && blended[c - 1].width === 2) {
                         blended[c - 1] = { ...blended[c - 1], width: 1, _clipRight: true };

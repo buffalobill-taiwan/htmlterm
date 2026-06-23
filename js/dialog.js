@@ -10,6 +10,23 @@
 
 import { defaultAttr, applySGR, makeCell } from './sgr.js';
 
+function _isWide(ch) {
+    const code = ch.charCodeAt(0);
+    if (code >= 0x1100) {
+        if (code <= 0x11FF) return true;
+        if (code >= 0x2E80 && code <= 0x9FFF) return true;
+        if (code >= 0xAC00 && code <= 0xD7AF) return true;
+        if (code >= 0xF900 && code <= 0xFAFF) return true;
+        if (code >= 0xFE10 && code <= 0xFE19) return true;
+        if (code >= 0xFE30 && code <= 0xFE6F) return true;
+        if (code >= 0xFF01 && code <= 0xFF60) return true;
+        if (code >= 0xFFE0 && code <= 0xFFE6) return true;
+        if (code >= 0x20000 && code <= 0x2FFFF) return true;
+        if (code >= 0x30000 && code <= 0x3FFFF) return true;
+    }
+    return false;
+}
+
 function _writeStr(buf, y, x, str, maxX) {
     let attr = defaultAttr();
     let cx = x;
@@ -36,8 +53,13 @@ function _writeStr(buf, y, x, str, maxX) {
             continue;
         }
         if (cx >= (maxX || buf[y].length)) break;
-        buf[y][cx] = makeCell(str[i], attr);
-        cx++;
+        const w = _isWide(str[i]) ? 2 : 1;
+        if (cx + w > (maxX || buf[y].length)) break;
+        buf[y][cx] = makeCell(str[i], attr, w);
+        if (w === 2 && cx + 1 < (maxX || buf[y].length)) {
+            buf[y][cx + 1] = { width: 0 };
+        }
+        cx += w;
         i++;
     }
 }
