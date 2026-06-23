@@ -1,5 +1,5 @@
 import { InteractiveCmd } from './InteractiveCmd.js';
-import { cyan, bold, green, yellow, white, red, magenta } from '../sgr.js';
+import { cyan, bold, yellow, white, red, magenta } from '../sgr.js';
 
 export class MbtiCmd extends InteractiveCmd {
     constructor(shell) {
@@ -142,22 +142,13 @@ export class MbtiCmd extends InteractiveCmd {
     _askNext() {
         const q = this.questions[this.currentIndex];
         const shuffled = Math.random() < 0.5;
-        const opts = shuffled ? [q.bText, q.aText] : [q.aText, q.bText];
+        const rowOpts = shuffled ? [q.bText, q.aText] : [q.aText, q.bText];
 
         this.select({
             text: bold(cyan(`[問題 ${this.currentIndex + 1}/8] `)) + bold(white(q.text)) + '\r\n',
-            options: opts,
-            move: (data, cur) => {
-                if (data === '\x1B[D') return 0;
-                if (data === '\x1B[C') return 1;
-                return cur;
-            },
-            render: (sel, opts, term) => {
-                term.write('\r\x1B[K  ' +
-                    opts.map((o, i) => i === sel ? bold(green('▶ ' + o)) : '  ' + o).join('      '));
-            },
-            onPick: (idx) => {
-                const answer = shuffled ? (idx === 0 ? 'B' : 'A') : (idx === 0 ? 'A' : 'B');
+            options: [rowOpts],
+            onPick: (row, col, value) => {
+                const answer = shuffled ? (col === 0 ? 'B' : 'A') : (col === 0 ? 'A' : 'B');
                 this.answers.push(answer);
                 this.term.write('\r\n\r\n');
                 this.currentIndex++;

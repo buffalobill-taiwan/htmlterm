@@ -83,39 +83,14 @@ export class AstrologyCmd extends InteractiveCmd {
     _pickSign() {
         this.select({
             text: yellow('請選擇你的星座（方向鍵移動，Enter 確認，Esc 取消）') + '\r\n',
-            options: ZODIAC,
-            move: (data, cur) => {
-                if (data === '\x1B[A') return Math.max(0, cur - 4);
-                if (data === '\x1B[B') return Math.min(11, cur + 4);
-                if (data === '\x1B[D') return Math.max(0, cur - 1);
-                if (data === '\x1B[C') return Math.min(11, cur + 1);
-                return cur;
-            },
-            render: (sel, opts, term) => {
-                let s = '';
-                if (this._gridRendered) s += '\x1B[2A';
-                for (let r = 0; r < 3; r++) {
-                    if (r > 0) s += '\r\n';
-                    s += '\r  ';
-                    for (let c = 0; c < 4; c++) {
-                        const i = r * 4 + c;
-                        if (i >= opts.length) break;
-                        const name = opts[i];
-                        if (i === sel) {
-                            s += bold(green('▶ ' + name));
-                        } else {
-                            s += '  ' + name;
-                        }
-                        if (c < 3) s += '     ';
-                    }
-                }
-                this._gridRendered = true;
-                term.write(s);
-            },
-            onPick: (idx) => {
+            options: [
+                ['牡羊座', '金牛座', '雙子座', '巨蟹座'],
+                ['獅子座', '處女座', '天秤座', '天蠍座'],
+                ['射手座', '摩羯座', '水瓶座', '雙魚座'],
+            ],
+            onPick: (row, col, value) => {
                 this.term.write('\r\n\r\n');
-                this._gridRendered = false;
-                this.showFortune(idx);
+                this.showFortune(row * 4 + col);
             },
         });
     }

@@ -1,5 +1,5 @@
 import { CmdBase } from './CmdBase.js';
-import { red } from '../sgr.js';
+import { green, bold } from '../sgr.js';
 
 export class InteractiveCmd extends CmdBase {
     constructor(shell) {
@@ -78,20 +78,56 @@ export class InteractiveCmd extends CmdBase {
     _onKey(data) {}
 
     select(opts) {
+        let rendered = false;
+        const defaultRender = (r, c, options, term) => {
+            const rows = options.length;
+            let s = '';
+            if (rendered && rows > 1) {
+                s += '\x1B[' + (rows - 1) + 'A';
+            }
+            const numCols = Math.max(...options.map(row => row.length));
+            const colWidths = [];
+            for (let ci = 0; ci < numCols; ci++) {
+                let maxW = 0;
+                for (const row of options) {
+                    if (ci < row.length) {
+                        maxW = Math.max(maxW, _displayWidth(row[ci]));
+                    }
+                }
+                colWidths.push(maxW);
+            }
+            for (let ri = 0; ri < rows; ri++) {
+                if (ri > 0) s += '\r\n';
+                s += '\r\x1B[K';
+                for (let ci = 0; ci < options[ri].length; ci++) {
+                    const name = options[ri][ci];
+                    const isSel = ri === r && ci === c;
+                    const prefix = isSel ? bold(green('▶ ')) : '  ';
+                    const padded = name + ' '.repeat(colWidths[ci] - _displayWidth(name) + 2);
+                    s += prefix + padded;
+                }
+            }
+            term.write(s);
+        };
+
         this._selectState = {
             options: opts.options,
-            render: opts.render,
-            move: opts.move,
+            move: opts.move || _defaultGridMove,
+            render: opts.render || defaultRender,
             onPick: opts.onPick,
             onCancel: opts.onCancel || null,
             term: this.term,
-            selected: 0,
+            selRow: 0,
+            selCol: 0,
         };
+
         this.isTyping = true;
         this.printThen(opts.text || '', () => {
             this.isTyping = false;
             this.term.write('\x1B[?25l');
-            opts.render(0, opts.options, this.term);
+            const ss = this._selectState;
+            ss.render(ss.selRow, ss.selCol, ss.options, ss.term);
+            rendered = true;
         });
     }
 
@@ -105,42 +141,16 @@ export class InteractiveCmd extends CmdBase {
         const code = data.charCodeAt(0);
         if (code === 0x0D || code === 0x0A) {
             this._selectState = null;
-            ss.onPick(ss.selected);
+            const value = ss.options[ss.selRow][ss.selCol];
+            ss.onPick(ss.selRow, ss.selCol, value);
             return;
         }
-        const newIdx = ss.move(data, ss.selected, ss.options.length);
-        if (newIdx !== ss.selected) {
-            ss.selected = Math.max(0, Math.min(ss.options.length - 1, newIdx));
-            ss.render(ss.selected, ss.options, ss.term);
+        const result = ss.move(data, ss.selRow, ss.selCol, ss.options);
+        if (result.row !== ss.selRow || result.col !== ss.selCol) {
+            ss.selRow = result.row;
+            ss.selCol = result.col;
+            ss.render(ss.selRow, ss.selCol, ss.options, ss.term);
         }
-    }
-
-    ask(text, options, render, onPick) {
-        if (typeof render === 'function' && !onPick) {
-            onPick = render;
-            render = null;
-        }
-        const r = render || defaultOptionRender;
-        let scrollOffset = 0;
-        this.select({
-            text,
-            options,
-            render: (sel, opts, term) => r(sel, opts, scrollOffset, term),
-            move: (data, cur, len) => {
-                if (data === '\x1B[A') {
-                    const newSel = Math.max(0, cur - 1);
-                    if (newSel < scrollOffset) scrollOffset = newSel;
-                    return newSel;
-                }
-                if (data === '\x1B[B') {
-                    const newSel = Math.min(len - 1, cur + 1);
-                    if (newSel >= scrollOffset + 5) scrollOffset = newSel - 4;
-                    return newSel;
-                }
-                return cur;
-            },
-            onPick,
-        });
     }
 
     prompt(text, onInput) {
@@ -152,13 +162,33 @@ export class InteractiveCmd extends CmdBase {
     }
 }
 
-function defaultOptionRender(selected, options, scrollOffset, term) {
-    const h = 5;
-    const start = Math.max(0, Math.min(scrollOffset, options.length - h));
-    const end = Math.min(start + h, options.length);
-    for (let i = start; i < end; i++) {
-        const prefix = i === selected ? '\x1B[7m ▶ ' : '   ';
-        const suffix = i === selected ? '\x1B[0m' : '';
-        term.write('\r\n' + prefix + options[i] + suffix);
+function _defaultGridMove(data, row, col, options) {
+    if (data === '\x1B[A') {
+        if (row === 0) return { row, col };
+        const prev = options[row - 1];
+        return { row: row - 1, col: Math.min(col, prev.length - 1) };
     }
+    if (data === '\x1B[B') {
+        if (row === options.length - 1) return { row, col };
+        const next = options[row + 1];
+        return { row: row + 1, col: Math.min(col, next.length - 1) };
+    }
+    if (data === '\x1B[D') {
+        if (col === 0) return { row, col };
+        return { row, col: col - 1 };
+    }
+    if (data === '\x1B[C') {
+        const cur = options[row];
+        if (col === cur.length - 1) return { row, col };
+        return { row, col: col + 1 };
+    }
+    return { row, col };
+}
+
+function _displayWidth(s) {
+    let w = 0;
+    for (const ch of s) {
+        w += ch.codePointAt(0) > 0x2E7F ? 2 : 1;
+    }
+    return w;
 }
