@@ -283,16 +283,25 @@ export class DemoShell {
         this.showPrompt();
     }
 
-    _openCalcDialog(menuDlg) {
-        const pos = this._savedPositions['calc'] || {};
-        const inputDlg = new InputDialog(this.term, {
-            title: '\u8ACB\u8F38\u5165\u7B97\u5F0F',
-            prompt: '\u7B97\u5F0F\uFF1A',
-            footer: 'Enter Confirm  ESC Back',
+    _createDialog(DialogClass, key, opts, ...ctorArgs) {
+        const pos = this._savedPositions[key] || {};
+        const dlg = new DialogClass(this.term, ...ctorArgs, {
+            ...opts,
             stack: this.stateStack,
             x: pos.x,
             y: pos.y,
-            savePos: (x, y) => { this._savedPositions['calc'] = { x, y }; },
+            savePos: (x, y) => { this._savedPositions[key] = { x, y }; },
+        });
+        this.activeDialog = dlg;
+        dlg.open();
+        return dlg;
+    }
+
+    _openCalcDialog(menuDlg) {
+        this._createDialog(InputDialog, 'calc', {
+            title: '請輸入算式',
+            prompt: '算式：',
+            footer: 'Enter Confirm  ESC Back',
             onConfirm: (expr) => {
                 if (!expr.trim()) {
                     this.activeDialog = menuDlg;
@@ -305,13 +314,8 @@ export class DemoShell {
                 } catch (e) {
                     msg = red('Error:') + ' ' + e.message;
                 }
-                const showPos = this._savedPositions['show'] || {};
-                const showDlg = new ShowDialog(this.term, {
+                this._createDialog(ShowDialog, 'show', {
                     message: msg,
-                    stack: this.stateStack,
-                    x: showPos.x,
-                    y: showPos.y,
-                    savePos: (x, y) => { this._savedPositions['show'] = { x, y }; },
                     onExit: () => {
                         if (menuDlg && !menuDlg.closed) {
                             this.activeDialog = menuDlg;
@@ -321,15 +325,11 @@ export class DemoShell {
                         }
                     },
                 });
-                this.activeDialog = showDlg;
-                showDlg.open();
             },
             onCancel: () => {
                 this.activeDialog = menuDlg;
-            }
+            },
         });
-        this.activeDialog = inputDlg;
-        inputDlg.open();
     }
 
     _openQuizDialog(menuDlg) {
@@ -340,15 +340,10 @@ export class DemoShell {
         if (op === '-' && a < b) b = [a, a = b][0];
         const answer = op === '+' ? a + b : op === '-' ? a - b : a * b;
 
-        const pos = this._savedPositions['quiz'] || {};
-        const inputDlg = new InputDialog(this.term, {
+        this._createDialog(InputDialog, 'quiz', {
             title: 'Quiz',
             prompt: `${a} ${op} ${b} = ?`,
             footer: 'Enter Answer  ESC Back',
-            stack: this.stateStack,
-            x: pos.x,
-            y: pos.y,
-            savePos: (x, y) => { this._savedPositions['quiz'] = { x, y }; },
             onConfirm: (expr) => {
                 if (!expr.trim()) {
                     if (menuDlg) this.activeDialog = menuDlg;
@@ -361,13 +356,8 @@ export class DemoShell {
                 } else {
                     msg = bold(red('\u2717 Wrong!')) + '  Answer: ' + bold(white('' + answer));
                 }
-                const showPos = this._savedPositions['show'] || {};
-                const showDlg = new ShowDialog(this.term, {
+                this._createDialog(ShowDialog, 'show', {
                     message: msg,
-                    stack: this.stateStack,
-                    x: showPos.x,
-                    y: showPos.y,
-                    savePos: (x, y) => { this._savedPositions['show'] = { x, y }; },
                     onExit: () => {
                         if (menuDlg && !menuDlg.closed) {
                             this.activeDialog = menuDlg;
@@ -377,28 +367,20 @@ export class DemoShell {
                         }
                     },
                 });
-                this.activeDialog = showDlg;
-                showDlg.open();
             },
             onCancel: () => {
                 if (menuDlg) this.activeDialog = menuDlg;
-            }
+            },
         });
-        this.activeDialog = inputDlg;
-        inputDlg.open();
     }
 
     menuCmd() {
-        const pos = this._savedPositions['menu'] || {};
-        const menuDlg = new MenuDialog(this.term, this.menuItems, {
+        this.menuDialog = null;
+        const menuDlg = this._createDialog(MenuDialog, 'menu', {
             width: 44,
             title: 'Command Menu',
             footer: '\u2191\u2193 Navigate  \u21A9 Execute  ESC Quit',
             visibleCount: 5,
-            stack: this.stateStack,
-            x: pos.x,
-            y: pos.y,
-            savePos: (x, y) => { this._savedPositions['menu'] = { x, y }; },
             onSelect: (item) => {
                 if (item.name === 'calc') {
                     this._openCalcDialog(menuDlg);
@@ -413,11 +395,9 @@ export class DemoShell {
                 this._schedulePrompt();
                 return 'close';
             },
-            onCancel: () => {} 
-        });
-        this.activeDialog = menuDlg;
+            onCancel: () => {}
+        }, this.menuItems);
         this.menuDialog = menuDlg;
-        menuDlg.open();
     }
 }
 
