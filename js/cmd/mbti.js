@@ -1,12 +1,9 @@
-import { CmdBase } from './CmdBase.js';
+import { InteractiveCmd } from './InteractiveCmd.js';
 import { cyan, bold, green, yellow, white, red, magenta } from '../sgr.js';
 
-export class MbtiCmd extends CmdBase {
+export class MbtiCmd extends InteractiveCmd {
     constructor(shell) {
         super(shell);
-        this.closed = true;
-        this._session = 0;
-        this.isTyping = false;
         this.pools = {
             EI: [
                 {
@@ -123,27 +120,12 @@ export class MbtiCmd extends CmdBase {
         return array;
     }
 
-    _onDrain(cb) {
-        this.shell.typewriter.onDrain(cb);
-    }
-
-    _removeDrain(cb) {
-        this.shell.typewriter.removeOnDrain(cb);
-    }
-
     execute(args) {
-        this._session++;
-        const session = this._session;
-        this.closed = false;
-        this.inHandleKey = false;
+        this.open();
         this.currentIndex = 0;
         this.selectedOption = 'left';
         this.answers = [];
         this.isTyping = true;
-
-        this.shell.activeDialog = this;
-
-        this.term.write('\x1B[?25l');
 
         this.print('\r\n' + bold(cyan('=== MBTI 職業性格測驗 (互動版) ===')) + '\r\n');
         this.print(yellow('使用 [左/右方向鍵] 切換選項，按 [Enter] 確認選擇，[Ctrl+C] 中斷退出。') + '\r\n\r\n');
@@ -156,46 +138,31 @@ export class MbtiCmd extends CmdBase {
         ];
 
         this.questions = this._shuffle(selected);
-
-        const cb = () => {
-            this._removeDrain(cb);
-            if (this.closed || session !== this._session) return;
-            this.drawQuestion();
-        };
-        this._onDrain(cb);
+        this.printThen('', () => this.drawQuestion());
     }
 
     drawQuestion() {
         this.isTyping = true;
-        const session = this._session;
         const q = this.questions[this.currentIndex];
 
         this.currentQuestionShuffled = Math.random() < 0.5;
 
-        this.print(bold(cyan(`[問題 ${this.currentIndex + 1}/8] `)) + bold(white(q.text)) + '\r\n');
-        const cb = () => {
-            this._removeDrain(cb);
-            if (this.closed || session !== this._session) return;
+        this.printThen(bold(cyan(`[問題 ${this.currentIndex + 1}/8] `)) + bold(white(q.text)) + '\r\n', () => {
             this.isTyping = false;
             this.drawOptions();
-        };
-        this._onDrain(cb);
+        });
     }
 
     drawOptions() {
         const q = this.questions[this.currentIndex];
 
-        let leftText, rightText, leftAnswer, rightAnswer;
+        let leftText, rightText;
         if (this.currentQuestionShuffled) {
             leftText = q.bText;
             rightText = q.aText;
-            leftAnswer = 'B';
-            rightAnswer = 'A';
         } else {
             leftText = q.aText;
             rightText = q.bText;
-            leftAnswer = 'A';
-            rightAnswer = 'B';
         }
 
         const optLeft = this.selectedOption === 'left'
@@ -208,33 +175,7 @@ export class MbtiCmd extends CmdBase {
         this.term.write('\r\x1B[K  ' + optLeft + '      ' + optRight);
     }
 
-    handleKey(data) {
-        if (this.closed) return;
-        this.inHandleKey = true;
-        try {
-            this._handleKeyInternal(data);
-        } finally {
-            this.inHandleKey = false;
-        }
-    }
-
-    _handleKeyInternal(data) {
-        if (data.charCodeAt(0) === 0x03) {
-            if (this.shell.typewriter.isActive()) {
-                this.shell.typewriter.dispose();
-            }
-            this.term.write('\r\n' + red('^C 測驗已中斷') + '\r\n');
-            this.cleanup();
-            return;
-        }
-
-        if (this.isTyping) {
-            if (this.shell.typewriter.isActive()) {
-                this.shell.typewriter.abort();
-            }
-            return;
-        }
-
+    _onKey(data) {
         if (data === '\x1B[D') {
             if (this.selectedOption !== 'left') {
                 this.selectedOption = 'left';
@@ -270,6 +211,11 @@ export class MbtiCmd extends CmdBase {
                 this.showResults();
             }
         }
+    }
+
+    onCancel() {
+        this.term.write('\r\n' + red('^C 測驗已中斷') + '\r\n');
+        this.close();
     }
 
     showResults() {
@@ -316,7 +262,6 @@ export class MbtiCmd extends CmdBase {
         const profile = profiles[mbti] || { title: '未知類型', desc: '無法取得對應的 MBTI 描述。' };
 
         this.isTyping = true;
-        const session = this._session;
 
         this.print(bold(yellow('==================================================')) + '\r\n');
         this.print(bold(cyan('              MBTI 職業性格測試結果')) + '\r\n');
@@ -326,25 +271,10 @@ export class MbtiCmd extends CmdBase {
         this.print(`  ${profile.desc}\r\n`);
         this.print(bold(yellow('==================================================')) + '\r\n\r\n');
 
-        const cb = () => {
-            this._removeDrain(cb);
-            if (this.closed || session !== this._session) return;
+        this.printThen('', () => {
             this.isTyping = false;
-            this.cleanup();
-        };
-        this._onDrain(cb);
-    }
-
-    cleanup() {
-        this.closed = true;
-        this.term.write('\x1B[?25h');
-
-        if (!this.inHandleKey) {
-            if (this.shell.activeDialog === this) {
-                this.shell.activeDialog = null;
-            }
-            this.shell._schedulePrompt();
-        }
+            this.close();
+        });
     }
 
     static get commandName() { return 'mbti'; }

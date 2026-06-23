@@ -23,6 +23,10 @@ export class CmdBase {
     execute(args) {}
     print(text) { this.shell.print(text); }
     readLine(callback) { this.shell.readLine(callback); }
+    _afterDrain(callback) {
+        const cb = () => { this.shell.typewriter.removeOnDrain(cb); callback(); };
+        this.shell.typewriter.onDrain(cb);
+    }
     static get commandName() { return ''; }
     static get help() { return ''; }
     static get menu() { return null; }

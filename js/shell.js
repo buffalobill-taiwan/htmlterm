@@ -11,6 +11,57 @@ import { LineEditor } from './LineEditor.js';
 import * as cmdModule from './cmd/index.js';
 import { bold, green, yellow, gray, red, white } from './sgr.js';
 
+function tokenize(str) {
+    const args = [];
+    let i = 0;
+    while (i < str.length) {
+        while (i < str.length && str[i] === ' ') i++;
+        if (i >= str.length) break;
+
+        let arg = '';
+        while (i < str.length && str[i] !== ' ') {
+            const ch = str[i];
+            if (ch === '\\') {
+                i++;
+                if (i < str.length) arg += str[i];
+                i++;
+            } else if (ch === '\'') {
+                i++;
+                while (i < str.length && str[i] !== '\'') {
+                    arg += str[i];
+                    i++;
+                }
+                if (i < str.length) i++;
+            } else if (ch === '"') {
+                i++;
+                while (i < str.length && str[i] !== '"') {
+                    if (str[i] === '\\') {
+                        i++;
+                        if (i < str.length) {
+                            const next = str[i];
+                            if (next === '"' || next === '\\' || next === '$' || next === '`') {
+                                arg += next;
+                            } else {
+                                arg += '\\' + next;
+                            }
+                            i++;
+                        }
+                    } else {
+                        arg += str[i];
+                        i++;
+                    }
+                }
+                if (i < str.length) i++;
+            } else {
+                arg += ch;
+                i++;
+            }
+        }
+        args.push(arg);
+    }
+    return args;
+}
+
 export class DemoShell {
     constructor(term) {
         this.term = term;
@@ -210,9 +261,9 @@ export class DemoShell {
         this.editor.history.push(trimmed);
         if (this.editor.history.length > 100) this.editor.history.shift();
 
-        const parts = trimmed.match(/(?:[^\s"]+|"[^"]*")+/g) || [];
-        const cmd = parts[0] ? parts[0].toLowerCase() : '';
-        const args = parts.slice(1).map(a => a.replace(/^"(.*)"$/, '$1'));
+        const tokens = tokenize(trimmed);
+        const cmd = tokens[0] ? tokens[0].toLowerCase() : '';
+        const args = tokens.slice(1);
 
         const handler = this.commands[cmd];
         if (handler) {

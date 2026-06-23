@@ -96,8 +96,8 @@ Mouse event
 ```
 User input
   → terminal.js _onKeyDown → handleInput(data)
-    → 1. Typewriter active? → queue or Ctrl+C abort
-    → 2. activeDialog? → dialog.handleKey(data)
+    → 1. activeDialog? → dialog.handleKey(data)
+    → 2. Typewriter active? → queue or Ctrl+C abort
     → 3. _readLinePending? → accumulate _readLineBuffer
     → 4. Normal editing → LineEditor.handleKey(data)
       → Enter: onExecute(line) → execute(line) → handler(args)
@@ -111,8 +111,8 @@ User input
 
 | Priority | Condition | Handler |
 |---|---|---|
-| 1 | `typewriter.isActive()` | Ctrl+C aborts + `showPrompt()`; else queue |
-| 2 | `activeDialog && !closed` | `dialog.handleKey(data)` |
+| 1 | `activeDialog && !closed` | `dialog.handleKey(data)` |
+| 2 | `typewriter.isActive()` | Ctrl+C aborts + `showPrompt()`; else queue |
 | 3 | `_readLinePending` | `_readLineBuffer` accumulation |
 | 4 | (normal) | `editor.handleKey(data)` |
 
@@ -203,6 +203,35 @@ Dialog.close():
 - `\x1B[36m` → `cell.fg = 6`
 - `\x1B[0m` → reset to defaults
 - Non-SGR chars become `_makeCell(ch, attr)` entries in `buf[y]`
+
+## POSIX Compliance Scope
+
+`DemoShell` is a demo shell for a web-based 80×25 terminal emulator, not a
+POSIX-compliant shell. The following documents which POSIX features are
+intentionally excluded.
+
+### Excluded — requires filesystem
+
+| Feature | Reason |
+|---|---|
+| Redirections `>`/`<`/`>>`/`2>` | ❌ No file I/O |
+| Globbing `*`/`?` | ❌ No directory listing |
+| Script execution (`source`, `sh file.sh`) | ❌ No file reading |
+| File-reading commands (`cat`, `less`) | ❌ No filesystem |
+| `PATH` external binary resolution | ❌ All commands are registered JS classes |
+| fork/exec process model / job control | ❌ Web context |
+
+### Deferred — no filesystem dependency, but low priority or architectural conflict
+
+| Feature | Status |
+|---|---|
+| Pipe (`\|`) | Architectural conflict with Typewriter animation |
+| `eval` builtin | Security concern (already covered by `calc`) |
+
+### Current limitations (not ruled out)
+
+These are recognised gaps with no filesystem dependency that remain
+unaddressed:
 
 ## Changes Made This Session
 
@@ -348,6 +377,13 @@ input arrives only through the callback parameter.
   hand-maintained and will NOT be generated from JS at runtime. They are independent
   from the `colToHex()` algorithmic palette in Renderer.js. Do not propose generating
   these classes dynamically.
+
+- **No filesystem**: This project is a stateless demo terminal. There is no
+  virtual filesystem, no file I/O, no script execution from disk. Features
+  requiring a real or virtual filesystem (redirections `>`/`<`/`>>`, globbing
+  `*`/`?`, script execution, `cat`, `PATH` for external binaries) will NOT
+  be implemented. `cd`/`pwd` may still be added as purely virtual path state
+  (CWD string only) for prompt/UX purposes.
 
 ## Critical Font Metrics
 - core font (eascii-core): all glyphs have advance=32 units = 8px at 16px font-size
