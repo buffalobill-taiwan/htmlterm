@@ -107,6 +107,28 @@ export const bgWhite = _sgrStyle([47]);
 export function sgr(...params) { return _sgrStyle(params); }
 export const reset = '\x1B[0m';
 
+export function isWide(ch) {
+    const code = ch.charCodeAt ? ch.charCodeAt(0) : ch;
+    if (code >= 0x1100) {
+        if (code <= 0x11FF) return true;
+        if (code >= 0x2E80 && code <= 0x9FFF) return true;
+        if (code >= 0xAC00 && code <= 0xD7AF) return true;
+        if (code >= 0xF900 && code <= 0xFAFF) return true;
+        if (code >= 0xFE10 && code <= 0xFE19) return true;
+        if (code >= 0xFE30 && code <= 0xFE6F) return true;
+        if (code >= 0xFF01 && code <= 0xFF60) return true;
+        if (code >= 0xFFE0 && code <= 0xFFE6) return true;
+        if (code >= 0x20000 && code <= 0x2FFFF) return true;
+        if (code >= 0x30000 && code <= 0x3FFFF) return true;
+    }
+    if (code < 0x100) return false;
+    if (code === 0x23F0 || code === 0x23F3) return true;
+    if (code >= 0x2190 && code <= 0x21FF) return false;
+    if (code >= 0x2300 && code <= 0x23FF) return false;
+    if (code >= 0x2500 && code <= 0x25FF) return false;
+    return false;
+}
+
 export function makeCell(ch, attr, width) {
     return {
         ch: ch || ' ',
