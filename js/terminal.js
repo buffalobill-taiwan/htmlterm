@@ -408,9 +408,6 @@ export class Terminal {
             btn,
             col: Math.floor(x / this.renderer.charWidth),
             row: Math.floor(y / this.renderer.charHeight),
-            shiftKey: e.shiftKey,
-            altKey: e.altKey,
-            ctrlKey: e.ctrlKey,
         };
     }
 

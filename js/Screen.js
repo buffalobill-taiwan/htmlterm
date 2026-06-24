@@ -187,7 +187,6 @@ export class Screen {
 
     resize(newCols, newRows) {
         const oldCols = this.cols;
-        const oldRows = this.rows;
         this.cols = newCols;
         this.rows = newRows;
         this.scrollBottom = newRows - 1;

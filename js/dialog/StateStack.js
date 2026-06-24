@@ -33,8 +33,4 @@ export class StateStack {
         this.term.curY = state.cursor.y;
         for (const fn of this._restoreHooks) fn();
     }
-
-    get depth() {
-        return this._stack.length;
-    }
 }

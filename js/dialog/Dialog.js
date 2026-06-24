@@ -1,4 +1,5 @@
 import { defaultAttr, applySGR, makeCell, isWide } from '../sgr.js';
+import { startDrag, moveDrag, endDrag, markDirtyRows } from '../drag.js';
 
 export function _writeStr(buf, y, x, str, maxX) {
     let attr = defaultAttr();
@@ -110,35 +111,20 @@ export class Dialog {
     }
 
     startDrag(col, row) {
-        this._dragOffX = col - this.x;
-        this._dragOffY = row - this.y;
+        startDrag(this, col, row, this.x, this.y);
     }
 
     moveDrag(col, row) {
-        if (this._dragOffX === undefined) return;
-        const cols = this.term.cols;
-        const rows = this.term.rows;
-        const newX = Math.max(0, Math.min(cols - this.width, col - this._dragOffX));
-        const newY = Math.max(0, Math.min(rows - this.h, row - this._dragOffY));
-        if (newX !== this.x || newY !== this.y) {
-            this._markDirty();
-            this.x = newX;
-            this.y = newY;
-            this._overlay.x = newX;
-            this._overlay.y = newY;
-            this._markDirty();
-        }
+        moveDrag(this, this.term, col, row, this.x, this.y, this.width, this.h,
+            (nx, ny) => { this.x = nx; this.y = ny; });
     }
 
     endDrag() {
-        this._dragOffX = undefined;
-        this._dragOffY = undefined;
+        endDrag(this);
     }
 
     _markDirty() {
-        for (let r = 0; r < this.h; r++) {
-            this.term.markRowDirty(this.y + r);
-        }
+        markDirtyRows(this.term, this.y, this.h);
     }
 
     _bufWidth(str) {

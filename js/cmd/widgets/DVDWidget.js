@@ -19,6 +19,7 @@ export class DVDWidget extends WidgetBase {
         this._dy = 1;
         this._color = 1;
         this._intervalId = null;
+        this._managedPos = false;
     }
 
     start() {

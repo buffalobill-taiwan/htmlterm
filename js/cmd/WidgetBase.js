@@ -1,4 +1,5 @@
 import { makeCell } from '../sgr.js';
+import { startDrag, moveDrag, endDrag, markDirtyRows } from '../drag.js';
 
 export class WidgetBase {
     constructor(shell) {
@@ -10,6 +11,7 @@ export class WidgetBase {
         this._h = 0;
         this._buffer = null;
         this._overlay = null;
+        this._managedPos = true;
     }
 
     start() {
@@ -58,33 +60,20 @@ export class WidgetBase {
     }
 
     startDrag(col, row) {
-        this._dragOffX = col - this._x;
-        this._dragOffY = row - this._y;
+        startDrag(this, col, row, this._x, this._y);
     }
 
     moveDrag(col, row) {
-        if (this._dragOffX === undefined) return;
-        const cols = this.term.cols;
-        const rows = this.term.rows;
-        const newX = Math.max(0, Math.min(cols - this._w, col - this._dragOffX));
-        const newY = Math.max(0, Math.min(rows - this._h, row - this._dragOffY));
-        if (newX !== this._x || newY !== this._y) {
-            this._markDirty();
-            this._x = newX;
-            this._y = newY;
-            this._overlay.x = newX;
-            this._overlay.y = newY;
-            this._markDirty();
-        }
+        moveDrag(this, this.term, col, row, this._x, this._y, this._w, this._h,
+            (nx, ny) => { this._x = nx; this._y = ny; });
     }
 
     _markDirty() {
-        for (let r = this._y; r < this._y + this._h; r++) this.term.markRowDirty(r);
+        markDirtyRows(this.term, this._y, this._h);
     }
 
     endDrag() {
-        this._dragOffX = undefined;
-        this._dragOffY = undefined;
+        endDrag(this);
     }
 
     putc(x, y, ch, fg, bg, attrs) {

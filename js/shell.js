@@ -411,8 +411,9 @@ export class ShellWidgetManager {
     }
 
     add(widget) {
-        const n = this._widgets.length;
-        widget.setPosition(widget._x, n);
+        if (widget._managedPos) {
+            widget.setPosition(widget._x, this._widgets.length);
+        }
         widget.start();
         this._widgets.push(widget);
     }
@@ -424,7 +425,7 @@ export class ShellWidgetManager {
         this._widgets.splice(i, 1);
         for (let j = 0; j < this._widgets.length; j++) {
             const w = this._widgets[j];
-            w.setPosition(w._x, j);
+            if (w._managedPos) w.setPosition(w._x, j);
         }
         this.redrawAll();
     }

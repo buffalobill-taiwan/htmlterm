@@ -41,7 +41,6 @@ export class Parser {
             if (this._state === 'osc') {
                 if (ch === '\x07' || (ch === '\x1B' && data[i + 1] === '\\')) {
                     if (ch === '\x1B') i++;
-                    this._processOSC(this._oscString);
                     this._oscString = '';
                     this._state = 'ground';
                 } else {
@@ -194,15 +193,6 @@ export class Parser {
             case 'n':
                 if (p0 === 6) this._send('\x1B[' + (screen.curY + 1) + ';' + (screen.curX + 1) + 'R');
                 break;
-        }
-    }
-
-    _processOSC(str) {
-        const idx = str.indexOf(';');
-        if (idx < 0) return;
-        const cmd = parseInt(str.substring(0, idx), 10);
-        if (cmd === 0 || cmd === 2) {
-        } else if (cmd === 8) {
         }
     }
 
