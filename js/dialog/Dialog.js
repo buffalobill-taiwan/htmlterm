@@ -1,13 +1,12 @@
 import { isWide } from '../unicode-width.js';
 import { _writeStr } from './write.js';
 import { startDrag, moveDrag, endDrag, markDirtyRows } from '../drag.js';
-import { OverlayZ, CURSOR_HIDE, CURSOR_SHOW, isFinalByte, createEmptyBuffer } from '../sgr.js';
+import { OverlayZ, isFinalByte, createEmptyBuffer } from '../sgr.js';
 import { DEFAULT_DIALOG_WIDTH, CSI_INTRODUCER } from '../constants.js';
 
 export class Dialog {
     constructor(term, opts) {
         this.term = term;
-        this.stack = opts.stack || null;
         this.width = opts.width || DEFAULT_DIALOG_WIDTH;
         this.title = opts.title || '';
         this.footer = opts.footer || '';
@@ -38,13 +37,6 @@ export class Dialog {
         };
         this.term.addOverlay(this._overlay);
 
-        if (this.stack) {
-            this.stack.push(this.y, this.h);
-        } else {
-            this.term.cursorHidden = true;
-            this.term.write(CURSOR_HIDE);
-        }
-
         this._drawFrame();
         this.refreshContent();
     }
@@ -54,12 +46,6 @@ export class Dialog {
         this.closed = true;
         if (this._savePos) this._savePos(this.x, this.y);
         this._markDirty();
-        if (this.stack) {
-            this.stack.pop();
-        } else {
-            this.term.cursorHidden = false;
-            this.term.write(CURSOR_SHOW);
-        }
         this.term.removeOverlay(this._overlay);
         this._overlay = null;
         this._buffer = null;

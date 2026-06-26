@@ -1,4 +1,4 @@
-import { StateStack, MenuDialog, InputDialog, ShowDialog } from './dialog/index.js';
+import { MenuDialog, InputDialog, ShowDialog } from './dialog/index.js';
 import { Typewriter } from './typewriter.js';
 import { LineEditor } from './LineEditor.js';
 import * as cmdModule from './cmd/index.js';
@@ -12,7 +12,6 @@ export class DemoShell {
         this.term = term;
         this.prompt = '$ ';
         this.running = false;
-        this.stateStack = new StateStack(this.term);
         this.menuDialog = null;
         this.commands = {};
         this.menuItems = [];
@@ -26,6 +25,7 @@ export class DemoShell {
         });
         this.editor.setPrompt(this.prompt);
 
+        this._dialogRestoreHooks = [];
         this.widgetManager = new ShellWidgetManager(this);
         this._registerCommands();
 
@@ -54,9 +54,19 @@ export class DemoShell {
 
     get abortGeneration() { return this._abortGeneration; }
 
+    addDialogRestoreHook(fn) {
+        this._dialogRestoreHooks.push(fn);
+    }
+
+    removeDialogRestoreHook(fn) {
+        const i = this._dialogRestoreHooks.indexOf(fn);
+        if (i >= 0) this._dialogRestoreHooks.splice(i, 1);
+    }
+
     pushDialogFrame(dlg) {
-        dlg.open();
         const frame = new DialogFrame(this, dlg);
+        frame._saveCursor();
+        dlg.open();
         frame.started = true;
         this._pushFrame(frame);
         this._tick();
@@ -314,7 +324,6 @@ export class DemoShell {
         const pos = this._savedPositions[key] || {};
         const dlg = new DialogClass(this.term, ...ctorArgs, {
             ...opts,
-            stack: this.stateStack,
             x: pos.x,
             y: pos.y,
             savePos: (x, y) => { this._savedPositions[key] = { x, y }; },
@@ -411,7 +420,7 @@ export class ShellWidgetManager {
         this._widgets = [];
         this._savedState = new Map();
         this._hook = () => this.redrawAll();
-        shell.stateStack.addRestoreHook(this._hook);
+        shell.addDialogRestoreHook(this._hook);
     }
 
     add(widget) {
@@ -439,7 +448,7 @@ export class ShellWidgetManager {
     }
 
     destroy() {
-        this.shell.stateStack.removeRestoreHook(this._hook);
+        this.shell.removeDialogRestoreHook(this._hook);
         for (const w of this._widgets) w.stop();
         this._widgets = [];
     }

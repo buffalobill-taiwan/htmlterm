@@ -100,7 +100,7 @@ stack:
 | Frame | Source | `blocked` condition | I/O owner |
 |---|---|---|---|---|
 | `SyncCmdFrame` | `js/CmdFrame.js` | typewriter active, `_busy`, `_asyncPending`, or `!cmd.closed` | typewriter / `cmd.handleKey` |
-| `DialogFrame` | `js/CmdFrame.js` | `!dialog.closed` | dialog's `handleKey` |
+| `DialogFrame` | `js/CmdFrame.js` | `!dialog.closed` | dialog's `handleKey`; cursor saved on push, restored on finish |
 
 ```
 Empty stack                     → editor mode, LineEditor handles input
@@ -234,12 +234,11 @@ Dialog.open():
   _initBuffer()
   _overlay = { y, x, w, h, z:100, getCell }
   term.addOverlay(_overlay)
-  if (stack) stack.push(y, h)  // cursor state save (optional)
   _drawFrame() + refreshContent()
 
-Dialog.close():
-  if (stack) stack.pop()       // cursor state restore, hooks fire
-  term.removeOverlay(_overlay)
+DialogFrame (owns cursor lifecycle):
+  pushDialogFrame() → frame._saveCursor() → dlg.open()
+  finish()          → restore cursor from saved state → fire hooks
 ```
 
 ### Widget vs Dialog
@@ -250,8 +249,8 @@ Widgets and dialogs are both buffer-overlay elements:
 |---|---|---|
 | Buffer | `WidgetBase._buffer[][]` via `putc()` | `Dialog._buffer[][]` via `_writeStr()` |
 | Draggable | Yes (`startDrag`/`moveDrag`/`endDrag` on WidgetBase) | Yes (built into Dialog) |
-| Position remembered | Yes — `ShellWidgetManager._savedPos` keyed by `constructor.name` | Yes — `StateStack` saves/restores |
-| Reopen at last position | Automatic via manager | Via `StateStack` cursor state |
+| Position remembered | Yes — `ShellWidgetManager._savedPos` keyed by `constructor.name` | Yes — cursor saved/restored by `DialogFrame` |
+| Reopen at last position | Automatic via manager | Via cursor state on `DialogFrame` |
 | Input handling | None (TSR only) | Yes — `handleKey()`, `_onMouse()` |
 | Update mechanism | `setInterval()` / `requestAnimationFrame` (self-driven) | Event-driven (keyboard/mouse) |
 
@@ -314,6 +313,7 @@ unaddressed:
 - **`String()` removed** (`calc.js`): Unnecessary wrapper around `result` (already a number).
 - **Null guard added** (`write.js`): `buf[y]` null check before `buf[y].length`.
 - **Renderer defaults** (`Renderer.js`): `charWidth`/`charHeight` fallbacks now reference `CHAR_WIDTH`/`CHAR_HEIGHT` from constants.js.
+- **StateStack→CmdFrame integration** (`js/CmdFrame.js`): `DialogFrame` now owns cursor lifecycle via `_saveCursor()`/`finish()`; removed stand-alone `StateStack` class. `ShellWidgetManager` hooks into `shell.addDialogRestoreHook()`.
 
 ### Removed
 - `DialogFrame` import from `CmdBase.js`
@@ -323,6 +323,7 @@ unaddressed:
 - `_saveScroll` property in `Screen.js` (renamed to `_normalScroll`)
 - `_maxViewOffset` private method (renamed to public `maxViewOffset`)
 - Old `typeof console !== 'undefined'` guards in terminal.js ×2, shell.js ×1
+- `StateStack.js` file — cursor lifecycle moved to `DialogFrame` in `CmdFrame.js`
 
 ## Command Architecture
 
@@ -547,15 +548,14 @@ draw() {
 - `js/Renderer.js`: Per-cell DOM grid (`cellEls[][]`), cursor element, render loop, overlay blend, `colToHex()` color palette
 - `js/terminal.js`: Thin coordinator composing Screen/Parser/Renderer
 - `js/LineEditor.js`: Line editing, history, tab completion
-- `js/shell.js`: DemoShell orchestrates editor/typewriter/stateStack/dialogs/widgets
+- `js/shell.js`: DemoShell orchestrates editor/typewriter/dialogs/widgets
 - `js/dialog/index.js`: Barrel export
 - `js/dialog/Dialog.js`: Dialog base class, `_writeStr`
-- `js/dialog/StateStack.js`: StateStack (nested cursor/state management)
 - `js/dialog/MenuDialog.js`: Menu dialog
 - `js/dialog/InputDialog.js`: Input dialog
 - `js/dialog/ShowDialog.js`: Show message dialog
 - `js/typewriter.js`: Animated text output
-- `js/CmdFrame.js`: Frame stack types (CmdFrame, SyncCmdFrame, DialogFrame)
+- `js/CmdFrame.js`: Frame stack types (CmdFrame, SyncCmdFrame, DialogFrame — cursor save/restore in `DialogFrame._saveCursor`/`finish`)
 - `js/cmd/WidgetBase.js`: Overlay lifecycle, `_buffer`, `putc()`
 - `js/cmd/widgets/ClockWidget.js`: TSR clock using `putc()`
 - `js/cmd/widgets/DVDWidget.js`: Bouncing DVD logo — 7×3 color block, 120ms interval

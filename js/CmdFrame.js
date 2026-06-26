@@ -1,3 +1,5 @@
+import { CURSOR_HIDE, CURSOR_SHOW } from './sgr.js';
+
 export class CmdFrame {
     constructor(shell) {
         this.shell = shell;
@@ -64,6 +66,7 @@ export class DialogFrame extends CmdFrame {
     constructor(shell, dialog) {
         super(shell);
         this.dialog = dialog;
+        this._savedCursor = null;
     }
 
     get label() {
@@ -72,6 +75,29 @@ export class DialogFrame extends CmdFrame {
         const name = ctor && ctor.name;
         if (ctor && ctor.commandName) return 'cmd:' + ctor.commandName;
         return 'dialog:' + (name || '?');
+    }
+
+    _saveCursor() {
+        this._savedCursor = {
+            x: this.term.curX,
+            y: this.term.curY,
+            cursorHidden: this.term.cursorHidden,
+        };
+        this.term.cursorHidden = true;
+        this.term.write(CURSOR_HIDE);
+    }
+
+    finish() {
+        if (this.done) return;
+        if (this._savedCursor) {
+            const s = this._savedCursor;
+            this.term.cursorHidden = s.cursorHidden;
+            this.term.write(s.cursorHidden ? CURSOR_HIDE : CURSOR_SHOW);
+            this.term.curX = s.x;
+            this.term.curY = s.y;
+        }
+        for (const fn of (this.shell._dialogRestoreHooks || [])) fn();
+        super.finish();
     }
 
     handleInput(data) {

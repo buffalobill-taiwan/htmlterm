@@ -29,8 +29,8 @@ Renders entirely via DOM `<span>` elements with CSS color classes — no Canvas.
 |-----------|----------|
 | **Rendering** | DOM `<span>` elements grouped by CSS color classes (`q{0-255} b{0-255}`, truecolor via `qhi`/`bhi` + inline style) |
 | **Buffer** | 2D array of cell objects (`{ch, fg, bg, bold, italic, ..., width}`) + scrollback array; CJK chars have `width: 2` with a `width: 0` continuation cell |
-| **Dialog** | Reusable dialog framework (`Dialog`, `MenuDialog`, `InputDialog`, `ClockDialog`) in `dialog.js` with overlay lifecycle |
-| **StateStack** | Each dialog push saves cursor position + visibility; pop restores both — no buffer save/restore, overlays handle compositing |
+| **Dialog** | Reusable dialog framework (`Dialog`, `MenuDialog`, `InputDialog`, `ShowDialog`) in `js/dialog/` with overlay lifecycle |
+| **Cursor state** | `DialogFrame` saves cursor position + visibility on open, restores on close — nested dialogs handled correctly via LIFO frame stack |
 | **Input** | `keydown` on `document` (always captured) + hidden `<textarea>` for IME |
 | **Focus** | Automatic refocus on `keyup` (ptt.cc pattern) |
 | **Cursor** | Absolutely-positioned `<div>` with CSS `blink` animation |
