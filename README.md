@@ -31,6 +31,7 @@ Renders entirely via DOM `<span>` elements with CSS color classes — no Canvas.
 | **Buffer** | 2D array of cell objects (`{ch, fg, bg, bold, italic, ..., width}`) + scrollback array; CJK chars have `width: 2` with a `width: 0` continuation cell |
 | **Dialog** | Reusable dialog framework (`Dialog`, `MenuDialog`, `InputDialog`, `ShowDialog`) in `js/dialog/` with overlay lifecycle |
 | **Cursor state** | `DialogFrame` saves cursor position + visibility on open, restores on close — nested dialogs handled correctly via LIFO frame stack |
+| **Shell** | Frame-stack command runner with animated Typewriter output, interactive command input, dialogs, and TSR-style widgets |
 | **Input** | `keydown` on `document` (always captured) + hidden `<textarea>` for IME |
 | **Focus** | Automatic refocus on `keyup` (ptt.cc pattern) |
 | **Cursor** | Absolutely-positioned `<div>` with CSS `blink` animation |
@@ -73,6 +74,7 @@ Open `index.html` in a modern browser, or visit the live demo:
 | `menu` | Open command menu dialog |
 | `mbti` | MBTI personality test (interactive) |
 | `quiz` | Math quiz challenge |
+| `sleep` | Wait for N seconds (default 1) |
 
 **Ctrl+Shift++ / Ctrl+-** — Scroll back/forward through history.
 
