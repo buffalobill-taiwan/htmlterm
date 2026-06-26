@@ -121,7 +121,6 @@ export class MbtiCmd extends CmdBase {
     }
 
     async execute(args) {
-        this.open();
         try {
             this.answers = [];
 

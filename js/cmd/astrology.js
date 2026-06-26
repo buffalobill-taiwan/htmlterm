@@ -75,7 +75,6 @@ function _fortune(signIdx) {
 
 export class AstrologyCmd extends CmdBase {
     execute(args) {
-        this.open();
         this.print('\r\n' + bold(cyan('=== 今日星座運勢 ===')) + '\r\n');
         this._pickSign();
     }

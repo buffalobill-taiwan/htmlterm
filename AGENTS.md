@@ -98,8 +98,8 @@ Each executing entity is a `CmdFrame` that controls I/O while on top of the
 stack:
 
 | Frame | Source | `blocked` condition | I/O owner |
-|---|---|---|---|
-| `SyncCmdFrame` | `js/CmdFrame.js` | typewriter active, `_busy`, or `_asyncPending` | shell typewriter |
+|---|---|---|---|---|
+| `SyncCmdFrame` | `js/CmdFrame.js` | typewriter active, `_busy`, `_asyncPending`, or `!cmd.closed` | typewriter / `cmd.handleKey` |
 | `DialogFrame` | `js/CmdFrame.js` | `!dialog.closed` | dialog's `handleKey` |
 
 ```
@@ -116,8 +116,10 @@ execute("menu")                 → push SyncCmdFrame → handler calls _createD
                                   → push DialogFrame(menuDlg) atop SyncCmdFrame
                                   → SyncCmdFrame done (buried under DialogFrame)
                                   → dialog I/O until close → pop chain → prompt
-CmdBase.open()/close()          → open pushes DialogFrame
-                                  → close sets closed=true → frame detects → pop
+SyncCmdFrame (interactive cmd)   → cmd.select() sets cmd.closed=false
+                                  → frame blocks on !cmd.closed
+                                  → SyncCmdFrame.handleInput routes to cmd.handleKey
+                                  → cmd.close() → cmd.closed=true → frame unblocks → pop
 ```
 
 ### Execution flow
@@ -141,7 +143,7 @@ User input
 
 | Priority | Condition | Handler |
 |---|---|---|
-| 1 | `top.handleInput` (DialogFrame) | `frame.handleInput(data)` → auto-unblock → pop |
+| 1 | `top.handleInput` (DialogFrame / SyncCmdFrame) | `frame.handleInput(data)` → auto-unblock → pop |
 | 2 | `_readLinePending` | `_handleReadLineInput(data)` |
 | 3 | `top.blocked` | Ctrl+C → `_abortAll()`; else queue |
 | 4 | No frame + typewriter active | Ctrl+C → `_abortAll()`; else queue |
@@ -201,14 +203,20 @@ _processStack() {
 | Animated output | `this.print(text)` | Enqueues via Typewriter; frame blocks on it |
 | Instant output | `this.term.write(text)` | Bypasses Typewriter — use with care |
 | Interactive input | `this.readLine(callback)` | Callback receives trimmed string; frame blocks via `_readLinePending` |
-| **Modal dialog** | `this.open()` / `this.close()` (from CmdBase) | Pushes/pops DialogFrame; frame handles keys |
+| **Interactive select** | `this.select()` | Sets `cmd.closed=false`; SyncCmdFrame routes keys via `cmd.handleKey` |
 | Create overlay | `WidgetBase.start()` | Own buffer, composited by renderer |
 | Async handler | `async execute()` | SyncCmdFrame blocks on `_asyncPending` until Promise resolves |
 
-**Critical rule for cmd authors:** output → `this.print()`, not `this.term.write()`.
-The Typewriter animation is what gates the frame lifecycle. Bypassing it risks
-prompt timing bugs. Dialogs and widgets are the exception — they own cell buffers
-and render instantly via overlays (z=100 / z=10).
+**Critical rules for cmd authors:**
+1. Output → `this.print()`, not `this.term.write()`. The Typewriter animation is
+   what gates the frame lifecycle. Bypassing it risks prompt timing bugs.
+2. Interactive input → `this.select()` or `this.selectAsync()`. These set
+   `cmd.closed=false`, causing `SyncCmdFrame.handleInput` to route keyboard
+   events to `cmd.handleKey()` — no `this.open()` needed.
+3. `this.close()` sets `cmd.closed=true`, which unblocks the SyncCmdFrame and
+   eventually pops it — no DialogFrame involved.
+4. Dialogs and widgets are the exception to rule 1: they own cell buffers and
+   render instantly via overlays (z=100 / z=10).
 
 ### Overlay lifecycle
 
@@ -314,6 +322,8 @@ unaddressed:
 - `ask()` — unused dead code, removed
 - `neofetch`, `uname`, `whoami` — three fileless commands removed
 - `InteractiveCmd.js` — merged into `CmdBase.js`
+- `CmdBase.open()` — replaced by `select()` auto-setting `cmd.closed=false`;
+  keyboard routed via `SyncCmdFrame.handleInput()` directly, no DialogFrame needed
 - `WidgetBase._saveBacking()`, `_restoreBacking()`
 - `ShellWidgetManager._setScrollTop()`
 - `shell.clockMode()` — replaced by ClockWidget-based ClockCmd.execute()

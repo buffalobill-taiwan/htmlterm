@@ -6,6 +6,8 @@ export class CmdFrame {
         this.started = false;
     }
 
+    get label() { return this.constructor.name; }
+
     start() {}
     get blocked() { return false; }
     handleInput(data) { return false; }
@@ -17,12 +19,15 @@ export class CmdFrame {
 }
 
 export class SyncCmdFrame extends CmdFrame {
-    constructor(shell, cmdName, args) {
+    constructor(shell, cmdName, args, cmd) {
         super(shell);
         this.cmdName = cmdName;
         this.args = args;
+        this.cmd = cmd;
         this._asyncPending = false;
     }
+
+    get label() { return this.cmdName; }
 
     start() {
         const handler = this.shell.commands[this.cmdName];
@@ -32,7 +37,7 @@ export class SyncCmdFrame extends CmdFrame {
                 this._asyncPending = true;
                 result.then(() => {
                     this._asyncPending = false;
-                    this.shell._tick();
+                    if (!this.done) this.shell._tick();
                 });
                 return;
             }
@@ -40,9 +45,18 @@ export class SyncCmdFrame extends CmdFrame {
         if (!this.blocked) this.finish();
     }
 
+    handleInput(data) {
+        if (this.cmd && !this.cmd.closed && typeof this.cmd.handleKey === 'function') {
+            this.cmd.handleKey(data);
+            if (this.cmd.closed) this.finish();
+            return true;
+        }
+        return false;
+    }
+
     get blocked() {
         if (!this.started || this.done) return false;
-        return this._asyncPending || this.shell.typewriter.isActive() || this.shell._busy;
+        return (this.cmd && !this.cmd.closed) || this._asyncPending || this.shell.typewriter.isActive() || this.shell._busy;
     }
 }
 
@@ -50,6 +64,14 @@ export class DialogFrame extends CmdFrame {
     constructor(shell, dialog) {
         super(shell);
         this.dialog = dialog;
+    }
+
+    get label() {
+        const d = this.dialog;
+        const ctor = d.constructor;
+        const name = ctor && ctor.name;
+        if (ctor && ctor.commandName) return 'cmd:' + ctor.commandName;
+        return 'dialog:' + (name || '?');
     }
 
     handleInput(data) {

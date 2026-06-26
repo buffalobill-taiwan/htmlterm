@@ -60,7 +60,6 @@ export class DemoShell {
     constructor(term) {
         this.term = term;
         this.prompt = '$ ';
-        this.promptShown = false;
         this.running = false;
         this.stateStack = new StateStack(this.term);
         this.menuDialog = null;
@@ -93,12 +92,14 @@ export class DemoShell {
     }
 
     _registerCommands() {
+        this._cmdInstances = {};
         for (const Cls of Object.values(cmdModule)) {
             if (typeof Cls !== 'function' || !Cls.commandName) continue;
             const cmd = new Cls(this);
             const name = Cls.commandName;
             const help = Cls.help;
             const menu = Cls.menu;
+            this._cmdInstances[name] = cmd;
             this.commands[name] = cmd.execute.bind(cmd);
             this.cmdList.push({ name, help });
             if (menu) this.menuItems.push({ name, desc: menu });
@@ -118,7 +119,6 @@ export class DemoShell {
 
     showPrompt() {
         this.term.write(this.prompt);
-        this.promptShown = true;
         this.editor.reset();
         this._flushQueuedInput();
     }
@@ -152,8 +152,11 @@ export class DemoShell {
         });
     }
 
+    _pushFrame(frame) {
+        this._cmdStack.push(frame);
+    }
+
     _processStack() {
-        this.promptShown = false;
         while (true) {
             while (this._cmdStack.length > 0 && this._cmdStack[this._cmdStack.length - 1].done) {
                 this._cmdStack.pop();
@@ -161,7 +164,7 @@ export class DemoShell {
 
             if (this._cmdStack.length === 0) {
                 if (this.typewriter.isActive()) return;
-                if (!this._busy && !this._readLinePending && !this.promptShown) {
+                if (!this._busy && !this._readLinePending) {
                     this.showPrompt();
                 }
                 return;
@@ -193,7 +196,8 @@ export class DemoShell {
 
         const handler = this.commands[cmd];
         if (handler) {
-            this._cmdStack.push(new SyncCmdFrame(this, cmd, args));
+            const cmdInstance = this._cmdInstances[cmd];
+            this._pushFrame(new SyncCmdFrame(this, cmd, args, cmdInstance));
             this._tick();
         } else {
             this.print(red('Command not found: ' + cmd) + '\n');
@@ -345,7 +349,7 @@ export class DemoShell {
         dlg.open();
         const frame = new DialogFrame(this, dlg);
         frame.started = true;
-        this._cmdStack.push(frame);
+        this._pushFrame(frame);
         this._tick();
         return dlg;
     }
@@ -364,10 +368,12 @@ export class DemoShell {
                 } catch (e) {
                     msg = red('Error:') + ' ' + e.message;
                 }
-                this._createDialog(ShowDialog, 'show', {
-                    message: msg,
-                    onExit: () => {},
-                });
+                setTimeout(() => {
+                    this._createDialog(ShowDialog, 'show', {
+                        message: msg,
+                        onExit: () => {},
+                    });
+                }, 0);
             },
             onCancel: () => {},
         });
@@ -394,10 +400,12 @@ export class DemoShell {
                 } else {
                     msg = bold(red('\u2717 Wrong!')) + '  Answer: ' + bold(white('' + answer));
                 }
-                this._createDialog(ShowDialog, 'show', {
-                    message: msg,
-                    onExit: () => {},
-                });
+                setTimeout(() => {
+                    this._createDialog(ShowDialog, 'show', {
+                        message: msg,
+                        onExit: () => {},
+                    });
+                }, 0);
             },
             onCancel: () => {},
         });
@@ -419,8 +427,8 @@ export class DemoShell {
                     this._openQuizDialog(menuDlg);
                     return;
                 }
+                this._pushFrame(new SyncCmdFrame(this, item.name, [], this._cmdInstances[item.name]));
                 this.menuDialog = null;
-                this._cmdStack.push(new SyncCmdFrame(this, item.name, []));
                 return 'close';
             },
             onCancel: () => {}

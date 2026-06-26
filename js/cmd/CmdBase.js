@@ -34,7 +34,6 @@ export class CmdBase {
         this.term = shell.term;
         this.closed = true;
         this.isTyping = false;
-        this.inHandleKey = false;
         this._cbSession = 0;
         this._selectResolve = null;
     }
@@ -90,27 +89,11 @@ export class CmdBase {
         if (usage) this.print('  Usage: ' + usage + '\n');
     }
 
-    open() {
-        this.closed = false;
-        this.term.write('\x1B[?25l');
-        const frame = new DialogFrame(this.shell, this);
-        frame.started = true;
-        this._frame = frame;
-        this.shell._cmdStack.push(frame);
-        this.shell._tick();
-    }
-
     close() {
         if (this.closed) return;
         this.closed = true;
         this.term.write('\x1B[?25h');
-        if (this._frame) {
-            this._frame.finish();
-            this._frame = null;
-        }
-        if (!this.inHandleKey) {
-            this.shell._tick();
-        }
+        this.shell._tick();
     }
 
     onCancel() {
@@ -135,12 +118,7 @@ export class CmdBase {
 
     handleKey(data) {
         if (this.closed) return;
-        this.inHandleKey = true;
-        try {
-            this._handleKey(data);
-        } finally {
-            this.inHandleKey = false;
-        }
+        this._handleKey(data);
     }
 
     _handleKey(data) {
@@ -200,6 +178,7 @@ export class CmdBase {
             term.write(s);
         };
 
+        this.closed = false;
         this._selectState = {
             options: opts.options,
             move: opts.move || _defaultGridMove,
@@ -289,7 +268,7 @@ export class CmdBase {
             dlg.open();
             const frame = new DialogFrame(this.shell, dlg);
             frame.started = true;
-            this.shell._cmdStack.push(frame);
+            this.shell._pushFrame(frame);
             this.shell._tick();
         });
     }
@@ -305,13 +284,13 @@ export class CmdBase {
             dlg.open();
             const frame = new DialogFrame(this.shell, dlg);
             frame.started = true;
-            this.shell._cmdStack.push(frame);
+            this.shell._pushFrame(frame);
             this.shell._tick();
         });
     }
 
     async confirm(question) {
-        this.open();
+        this.closed = false;
         try {
             const result = await this.selectAsync({
                 text: question + '\n',
