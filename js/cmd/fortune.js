@@ -1,43 +1,34 @@
-import { CmdBase } from './CmdBase.js';
+export const fortunes = [
+    '42 is the answer. But what was the question again?',
+    'In a world of GUIs, be a terminal.',
+    'There is no place like ~',
+    'Have you tried turning it off and on again?',
+    'Talk is cheap. Show me the code.',
+    'Any sufficiently advanced technology is indistinguishable from magic.',
+    "It's not a bug — it's an undocumented feature.",
+    'The best way to predict the future is to invent it.',
+    'First, solve the problem. Then, write the code.',
+    'Debugging is twice as hard as writing the code in the first place.',
+    '千里之行，始於足下。',
+    '學而不思則罔，思而不學則殆。',
+    '己所不欲，勿施於人。',
+    '溫故而知新，可以為師矣。',
+    '三人行，必有我師焉。',
+    '天行健，君子以自強不息。',
+    '不以物喜，不以己悲。',
+    '人生如逆旅，我亦是行人。',
+    '生活就像海洋，只有意志堅強的人才能到達彼岸。',
+    '上善若水，水善利萬物而不爭。',
+    '美麗的花兒，如果缺少伴侶，也是孤單的。',
+    '七車び八起きり',
+    '猿も木から落ちる',
+    '継続は力なり',
+    '花より団子',
+    '時は金なり',
+    '急がば回れ',
+    '郷に入っては郷に従え',
+    '明日は明日の風が吹く',
+    '塵も積もれば山となる',
+    '虎穴に入らずんば虎子を得ず',
+];
 
-export class Fortune extends CmdBase {
-    execute(args) {
-        const fortunes = [
-            '42 is the answer. But what was the question again?',
-            'In a world of GUIs, be a terminal.',
-            'There is no place like ~',
-            'Have you tried turning it off and on again?',
-            'Talk is cheap. Show me the code.',
-            'Any sufficiently advanced technology is indistinguishable from magic.',
-            "It’s not a bug — it’s an undocumented feature.",
-            'The best way to predict the future is to invent it.',
-            'First, solve the problem. Then, write the code.',
-            'Debugging is twice as hard as writing the code in the first place.',
-            '千里之行，始於足下。',
-            '學而不思則罔，思而不學則殆。',
-            '己所不欲，勿施於人。',
-            '溫故而知新，可以為師矣。',
-            '三人行，必有我師焉。',
-            '天行健，君子以自強不息。',
-            '不以物喜，不以己悲。',
-            '人生如逆旅，我亦是行人。',
-            '生活就像海洋，只有意志堅強的人才能到達彼岸。',
-            '上善若水，水善利萬物而不爭。',
-            '美麗的花兒，如果缺少伴侶，也是孤單的。',
-            '七車び八起きり',
-            '猿も木から落ちる',
-            '継続は力なり',
-            '花より団子',
-            '時は金なり',
-            '急がば回れ',
-            '郷に入っては郷に従え',
-            '明日は明日の風が吹く',
-            '塵も積もれば山となる',
-            '虎穴に入らずんば虎子を得ず',
-        ];
-        this.print(fortunes[Math.floor(Math.random() * fortunes.length)] + '\n');
-    }
-    static get commandName() { return 'fortune'; }
-    static get help() { return 'Show a random fortune'; }
-    static get menu() { return 'Random Fortune'; }
-}

@@ -85,7 +85,6 @@ Open `index.html` in a modern browser, or visit the live demo:
 | `dvd` | Toggle bouncing DVD logo widget |
 | `echo` | Print arguments |
 | `flash` | Flash the screen N times (default 1). Use `--border` for border flash |
-| `fortune` | Display a random fortune |
 | `goodbye` | Print farewell message |
 | `help` | List available commands |
 | `menu` | Open command menu dialog |

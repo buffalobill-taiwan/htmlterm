@@ -1,14 +1,29 @@
 import { CmdBase } from './CmdBase.js';
 import { yellow, bold, white, green } from '../sgr.js';
+import { displayWidth } from '../select-grid.js';
+import { fortunes } from './fortune.js';
+
+const COW_EYES = [
+    { top: '^__^', eyes: 'oo' },
+    { top: '*__*', eyes: '**' },
+    { top: '.__.', eyes: '..' },
+    { top: '@__@', eyes: '@@' },
+    { top: 'O__O', eyes: 'OO' },
+    { top: '>__<', eyes: '><' },
+    { top: '-__-', eyes: '--' },
+    { top: '\'__\'', eyes: '\'\'' },
+    { top: 'T__T', eyes: 'xX' },
+];
 
 export class Cowsay extends CmdBase {
     execute(args) {
-        const text = args.join(' ') || 'Moo!';
-        const len = text.length;
-        const border = yellow('='.repeat(len + 2));
+        const text = args.join(' ') || fortunes[Math.floor(Math.random() * fortunes.length)];
+        const w = displayWidth(text);
+        const border = yellow('='.repeat(w + 2));
         const mid = yellow('< ') + bold(white(text)) + yellow(' >');
-        const cow = green('        \\   ') + bold(white('^__^')) + green('\n') +
-                   green('         \\  (') + bold(white('oo')) + green(')\\_______\n') +
+        const face = COW_EYES[Math.floor(Math.random() * COW_EYES.length)];
+        const cow = green('        \\   ') + bold(white(face.top)) + green('\n') +
+                   green('         \\  (') + bold(white(face.eyes)) + green(')\\_______\n') +
                    green('            (__)\\       )\\/\\\n') +
                    green('                ||----') + yellow('w') + green(' |\n') +
                    green('                ||     ||') + '\n';

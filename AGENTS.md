@@ -336,7 +336,6 @@ js/cmd/
 ├── date.js            DateCmd
 ├── cowsay.js          Cowsay
 ├── ascii.js           Ascii
-├── fortune.js         Fortune
 ├── calc.js            Calc        — delegates to safeEval (calc-expr.js)
 ├── goodbye.js         GoodbyeCmd
 ├── menu.js            MenuCmd     — delegates to shell.menuCmd()
@@ -354,8 +353,8 @@ js/cmd/
     └── DVDWidget.js
 ```
 
-**18 registered commands:** `art`, `ascii`, `astrology`, `calc`, `clear`, `clock`,
-`cowsay`, `date`, `dvd`, `echo`, `flash`, `fortune`, `goodbye`, `help`, `menu`,
+**17 registered commands:** `art`, `ascii`, `astrology`, `calc`, `clear`, `clock`,
+`cowsay`, `date`, `dvd`, `echo`, `flash`, `goodbye`, `help`, `menu`,
 `mbti`, `quiz`, `sleep`
 
 **CmdBase contract:**
@@ -366,7 +365,7 @@ js/cmd/
 | `execute(args)` | Command logic, called with parsed arg array |
 | `print(text)` | Enqueues text to shell's Typewriter |
 | `readLine(callback)` | Request next line of input; callback receives trimmed string |
-| `static get commandName()` | Command name string, e.g. `'fortune'` |
+| `static get commandName()` | Command name string, e.g. `'cowsay'` |
 | `static get help()` | Description shown in `help` output |
 | `static get menu()` | Menu description or `null` to hide from menu |
 

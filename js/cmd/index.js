@@ -5,7 +5,6 @@ export { Echo } from './echo.js';
 export { DateCmd } from './date.js';
 export { Cowsay } from './cowsay.js';
 export { Ascii } from './ascii.js';
-export { Fortune } from './fortune.js';
 export { Calc } from './calc.js';
 export { GoodbyeCmd } from './goodbye.js';
 export { MenuCmd } from './menu.js';
