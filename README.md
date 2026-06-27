@@ -28,7 +28,7 @@ dialogs, and TSR-style widgets.
 ### Demo shell
 
 - Frame-stack command runner with rAF-based Typewriter output
-- 18 built-in commands (games, widgets, interactive tests — see below)
+- 17 built-in commands (games, widgets, interactive tests — see below)
 - Dialog framework (`MenuDialog`, `InputDialog`, `ShowDialog`) with overlay compositing
 - TSR widgets (clock, DVD logo) — draggable, position remembered
 - Tab completion for command names; command history (Up/Down)
@@ -44,7 +44,7 @@ dialogs, and TSR-style widgets.
 | **Rendering** | Pre-created 80×25 `<span>` grid; dirty-row updates via `.textContent` / `.className` / `.style.cssText` |
 | **Buffer** | 2D cell array (`{ch, fg, bg, bold, italic, …, width}`) + scrollback; CJK uses `width: 2` + continuation cell |
 | **Overlays** | Widgets (z=10) and dialogs (z=100) own separate buffers; `Renderer._blendOverlays` composites at render time |
-| **Shell** | `DemoShell` frame stack (`SyncCmdFrame`, `DialogFrame`) + Typewriter + `LineEditor` |
+| **Shell** | `DemoShell` (command dispatch, frame stack) + `SystemManager` (typewriter, editor, widgets, mouse, dialogs) |
 | **Dialogs** | Buffer-based rendering in `js/dialog/`; `DialogFrame` saves/restores cursor on open/close |
 | **Input** | `keydown` on `document` (always captured) + hidden `<textarea>` for IME |
 | **Focus** | Automatic refocus on `keyup` (ptt.cc pattern) |
@@ -110,7 +110,8 @@ Open `index.html` in a modern browser, or visit the live demo:
 ```
 js/
 ├── Screen.js Parser.js Renderer.js terminal.js   # Terminal core
-├── shell.js LineEditor.js typewriter.js CmdFrame.js
+├── shell.js system.js CmdFrame.js                # Shell + system
+├── LineEditor.js typewriter.js                   # Input editing + output
 ├── dialog/                                       # Dialog framework
 ├── cmd/                                          # Demo commands + widgets
 └── …

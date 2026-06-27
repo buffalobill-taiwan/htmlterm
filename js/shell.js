@@ -1,9 +1,7 @@
-import { MenuDialog } from './dialog/index.js';
-import { Typewriter } from './typewriter.js';
-import { LineEditor } from './LineEditor.js';
 import * as cmdModule from './cmd/index.js';
 import { SyncCmdFrame, DialogFrame } from './CmdFrame.js';
-import { bold, green, yellow, gray, red, warn } from './sgr.js';
+import { SystemManager } from './system.js';
+import { bold, green, yellow, red, gray, warn } from './sgr.js';
 import { tokenize } from './tokenize.js';
 
 export class DemoShell {
@@ -11,62 +9,38 @@ export class DemoShell {
         this.term = term;
         this.prompt = '$ ';
         this.running = false;
-        this.menuDialog = null;
         this.commands = {};
         this.menuItems = [];
         this.cmdList = [];
 
-        this.typewriter = new Typewriter(this.term);
-        this.typewriter.onDrain(() => this._tick());
-        this.editor = new LineEditor(this.term, {
-            onExecute: (line) => { this.execute(line); },
-            onShowPrompt: () => this._tick(),
-        });
-        this.editor.setPrompt(this.prompt);
-
-        this._dialogRestoreHooks = [];
-        this.widgetManager = new ShellWidgetManager(this);
-        this._registerCommands();
-
-        this.editor.setCommands(Object.keys(this.commands));
         this._cmdStack = [];
         this._tickQueued = false;
         this._queuedInput = [];
         this._busy = false;
         this._abortGeneration = 0;
         this._readLineState = null;
-        this._dragTarget = null;
-        this._savedPositions = {};
+
+        this.system = new SystemManager(this);
+        this._registerCommands();
+        this.system.setup();
+
+        this.typewriter = this.system.typewriter;
+        this.editor = this.system.editor;
+        this.widgetManager = this.system.widgetManager;
+        this._dialogRestoreHooks = this.system._dialogRestoreHooks;
+        this.menuDialog = null;
 
         this.start();
     }
 
     get busy() { return this._busy; }
 
+    get abortGeneration() { return this._abortGeneration; }
+
     holdBusy() { this._busy = true; }
 
     releaseBusy() {
         this._busy = false;
-        this._tick();
-    }
-
-    get abortGeneration() { return this._abortGeneration; }
-
-    addDialogRestoreHook(fn) {
-        this._dialogRestoreHooks.push(fn);
-    }
-
-    removeDialogRestoreHook(fn) {
-        const i = this._dialogRestoreHooks.indexOf(fn);
-        if (i >= 0) this._dialogRestoreHooks.splice(i, 1);
-    }
-
-    pushDialogFrame(dlg) {
-        const frame = new DialogFrame(this, dlg);
-        frame._saveCursor();
-        dlg.open();
-        frame.started = true;
-        this._pushFrame(frame);
         this._tick();
     }
 
@@ -281,111 +255,12 @@ export class DemoShell {
         this.editor.handleKey(data);
     }
 
-    handleMouse(type, info) {
-        if (type === 'mousedown') {
-            const ovs = this.term.overlays;
-            for (let i = ovs.length - 1; i >= 0; i--) {
-                const ov = ovs[i];
-                if (info.col >= ov.x && info.col < ov.x + ov.w &&
-                    info.row >= ov.y && info.row < ov.y + ov.h) {
-                    const owner = ov.owner;
-                    if (owner && typeof owner.startDrag === 'function') {
-                        this._dragTarget = owner;
-                        owner.startDrag(info.col, info.row);
-                        return true;
-                    }
-                    break;
-                }
-            }
-            return false;
-        }
-
-        if (type === 'mousemove' && this._dragTarget) {
-            this._dragTarget.moveDrag(info.col, info.row);
-            return true;
-        }
-
-        if (type === 'mouseup' && this._dragTarget) {
-            this._dragTarget.endDrag();
-            this._dragTarget = null;
-            return true;
-        }
-
-        return false;
-    }
-
-    _createDialog(DialogClass, key, opts, ...ctorArgs) {
-        const pos = this._savedPositions[key] || {};
-        const dlg = new DialogClass(this.term, ...ctorArgs, {
-            ...opts,
-            x: pos.x,
-            y: pos.y,
-            savePos: (x, y) => { this._savedPositions[key] = { x, y }; },
-        });
-        this.pushDialogFrame(dlg);
-        return dlg;
-    }
-
-    menuCmd() {
-        this.menuDialog = null;
-        const menuDlg = this._createDialog(MenuDialog, 'menu', {
-            width: 44,
-            title: 'Command Menu',
-            footer: '↑↓ Navigate  ↩ Execute  ESC Quit',
-            visibleCount: 5,
-            onSelect: (item) => {
-                const inst = this._cmdInstances[item.name];
-                if (inst && inst.constructor.openMenuDialog) {
-                    inst.constructor.openMenuDialog(this, menuDlg);
-                    return;
-                }
-                this._pushFrame(new SyncCmdFrame(this, item.name, [], inst));
-                this.menuDialog = null;
-                return 'close';
-            },
-            onCancel: () => {}
-        }, this.menuItems);
-        this.menuDialog = menuDlg;
-    }
-}
-
-export class ShellWidgetManager {
-    constructor(shell) {
-        this.shell = shell;
-        this.term = shell.term;
-        this._widgets = [];
-        this._savedState = new Map();
-        this._hook = () => this.redrawAll();
-        shell.addDialogRestoreHook(this._hook);
-    }
-
-    add(widget) {
-        const key = widget.constructor.name;
-        if (this._savedState.has(key)) {
-            widget.restoreSaveState(this._savedState.get(key));
-        }
-        widget.start();
-        this._widgets.push(widget);
-    }
-
-    remove(widget) {
-        const i = this._widgets.indexOf(widget);
-        if (i < 0) return;
-        this._savedState.set(widget.constructor.name, widget.getSaveState());
-        widget.stop();
-        this._widgets.splice(i, 1);
-        this.redrawAll();
-    }
-
-    redrawAll() {
-        for (const w of this._widgets) {
-            w.draw();
-        }
-    }
-
-    destroy() {
-        this.shell.removeDialogRestoreHook(this._hook);
-        for (const w of this._widgets) w.stop();
-        this._widgets = [];
+    pushDialogFrame(dlg) {
+        const frame = new DialogFrame(this, dlg);
+        frame._saveCursor();
+        dlg.open();
+        frame.started = true;
+        this._pushFrame(frame);
+        this._tick();
     }
 }

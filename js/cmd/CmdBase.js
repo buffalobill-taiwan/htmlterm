@@ -6,6 +6,7 @@ import { defaultGridMove, defaultGridRender } from '../select-grid.js';
 export class CmdBase {
     constructor(shell) {
         this.shell = shell;
+        this.system = shell.system;
         this.term = shell.term;
         this.closed = true;
         this.isTyping = false;
@@ -16,8 +17,8 @@ export class CmdBase {
     print(text) { this.shell.print(text); }
     readLine(callback) { this.shell.readLine(callback); }
     _afterDrain(callback) {
-        const cb = () => { this.shell.typewriter.removeOnDrain(cb); callback(); };
-        this.shell.typewriter.onDrain(cb);
+        const cb = () => { this.system.typewriter.removeOnDrain(cb); callback(); };
+        this.system.typewriter.onDrain(cb);
     }
     static get commandName() { return ''; }
     static get help() { return ''; }
@@ -84,11 +85,11 @@ export class CmdBase {
         const session = this._cbSession;
         this.print(text);
         const cb = () => {
-            this.shell.typewriter.removeOnDrain(cb);
+            this.system.typewriter.removeOnDrain(cb);
             if (this.closed || session !== this._cbSession) return;
             callback();
         };
-        this.shell.typewriter.onDrain(cb);
+        this.system.typewriter.onDrain(cb);
     }
 
     handleKey(data) {
@@ -100,15 +101,15 @@ export class CmdBase {
         const code = typeof data === 'string' ? data.charCodeAt(0) : data;
         if (code === 0x03) {
             this._selectState = null;
-            if (this.shell.typewriter.isActive()) {
-                this.shell.typewriter.dispose();
+            if (this.system.typewriter.isActive()) {
+                this.system.typewriter.dispose();
             }
             this.onCancel();
             return;
         }
         if (this.isTyping) {
-            if (this.shell.typewriter.isActive()) {
-                this.shell.typewriter.abort();
+            if (this.system.typewriter.isActive()) {
+                this.system.typewriter.abort();
             }
             return;
         }

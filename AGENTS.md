@@ -98,8 +98,8 @@ down/up/move/wheel. If the callback returns `true`, no escape sequence is sent.
 ```
 Mouse event
   → terminal._onMouseDown/Up/Move/Wheel
-    → this.onMouse(type, info)          // main.js wires shell.handleMouse
-      → shell.handleMouse(type, info)
+    → this.onMouse(type, info)          // main.js wires shell.system.handleMouse
+      → shell.system.handleMouse(type, info)
         → mousedown on overlay.owner?   → startDrag (widgets + dialogs)
         → mousemove/mouseup             → moveDrag/endDrag while _dragTarget set
         → else                          → return false (terminal sends mouse escapes)
@@ -266,7 +266,7 @@ Widgets and dialogs are both buffer-overlay elements:
 |---|---|---|
 | Buffer | `WidgetBase._buffer[][]` via `putc()` | `Dialog._buffer[][]` via `_writeStr()` |
 | Draggable | Yes (`startDrag`/`moveDrag`/`endDrag` on WidgetBase) | Yes (built into Dialog) |
-| Position remembered | Yes — `ShellWidgetManager._savedPos` keyed by `constructor.name` | Yes — cursor saved/restored by `DialogFrame` |
+| Position remembered | Yes — `WidgetManager._savedPos` keyed by `constructor.name` | Yes — cursor saved/restored by `DialogFrame` |
 | Reopen at last position | Automatic via manager | Via cursor state on `DialogFrame` |
 | Input handling | None (TSR only) | Yes — `handleKey()` (keyboard); drag via overlay `owner` |
 | Update mechanism | `setInterval()` / `requestAnimationFrame` (self-driven) | Event-driven (keyboard/mouse) |
@@ -338,7 +338,7 @@ js/cmd/
 ├── ascii.js           Ascii
 ├── calc.js            Calc        — delegates to safeEval (calc-expr.js)
 ├── goodbye.js         GoodbyeCmd
-├── menu.js            MenuCmd     — delegates to shell.menuCmd()
+├── menu.js            MenuCmd     — delegates to system.menuCmd()
 ├── mbti.js            MbtiCmd     — interactive MBTI test (select())
 ├── astrology.js       AstrologyCmd — zodiac grid selection + horoscope
 ├── clock.js           ClockCmd    — toggle TSR clock (replaces removed widget cmd)
@@ -361,7 +361,7 @@ js/cmd/
 
 | Member | Purpose |
 |---|---|
-| `constructor(shell)` | Receives DemoShell instance; `this.term` available |
+| `constructor(shell)` | Receives DemoShell instance; `this.term` and `this.system` available |
 | `execute(args)` | Command logic, called with parsed arg array |
 | `print(text)` | Enqueues text to shell's Typewriter |
 | `readLine(callback)` | Request next line of input; callback receives trimmed string |
@@ -470,6 +470,10 @@ input arrives only through the callback parameter.
   from the `colToHex()` algorithmic palette in Renderer.js. Do not propose generating
   these classes dynamically.
 
+- **Native UTF-8 strings only**: All string literals in JS source use native
+  UTF-8 characters (e.g. `'↑↓'`), not `\uXXXX` escape sequences. `\uXXXX`
+  destroys readability and is never used.
+
 - **No filesystem**: This project is a stateless demo terminal. There is no
   virtual filesystem, no file I/O, no script execution from disk. Features
   requiring a real or virtual filesystem (redirections `>`/`<`/`>>`, globbing
@@ -568,9 +572,10 @@ draw() {
 - `js/tokenize.js`: Shell command tokenizer (backslash escaping, quotes)
 - `js/calc-expr.js`: Safe recursive-descent expression evaluator (`safeEval`)
 
-### Shell
+### System
 
-- `js/shell.js`: DemoShell + ShellWidgetManager — editor, typewriter, dialogs, widgets, frame stack
+- `js/system.js`: SystemManager (typewriter, editor, mouse/drag, dialog positions) + WidgetManager
+- `js/shell.js`: DemoShell — command registry, execute, frame stack, input routing
 - `js/LineEditor.js`: Line editing, history, tab completion
 - `js/typewriter.js`: rAF-based animated command output
 - `js/CmdFrame.js`: Frame stack types (CmdFrame, SyncCmdFrame, DialogFrame — cursor save/restore in `DialogFrame._saveCursor`/`finish`)

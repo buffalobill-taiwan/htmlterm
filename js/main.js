@@ -15,7 +15,7 @@ const term = new Terminal(document.getElementById('screen'), {
 
 const shell = new DemoShell(term);
 term.onData = (data) => shell.handleInput(data);
-term.onMouse = (type, info) => shell.handleMouse(type, info);
+term.onMouse = (type, info) => shell.system.handleMouse(type, info);
 term.focus();
 
 window.term = term;
