@@ -337,7 +337,6 @@ js/cmd/
 ├── cowsay.js          Cowsay
 ├── ascii.js           Ascii
 ├── calc.js            Calc        — delegates to safeEval (calc-expr.js)
-├── goodbye.js         GoodbyeCmd
 ├── menu.js            MenuCmd     — delegates to system.menuCmd()
 ├── mbti.js            MbtiCmd     — interactive MBTI test (select())
 ├── astrology.js       AstrologyCmd — zodiac grid selection + horoscope
@@ -353,8 +352,8 @@ js/cmd/
     └── DVDWidget.js
 ```
 
-**17 registered commands:** `art`, `ascii`, `astrology`, `calc`, `clear`, `clock`,
-`cowsay`, `date`, `dvd`, `echo`, `flash`, `goodbye`, `help`, `menu`,
+**16 registered commands:** `art`, `ascii`, `astrology`, `calc`, `clear`, `clock`,
+`cowsay`, `date`, `dvd`, `echo`, `flash`, `help`, `menu`,
 `mbti`, `quiz`, `sleep`
 
 **CmdBase contract:**

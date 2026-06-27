@@ -6,7 +6,6 @@ export { DateCmd } from './date.js';
 export { Cowsay } from './cowsay.js';
 export { Ascii } from './ascii.js';
 export { Calc } from './calc.js';
-export { GoodbyeCmd } from './goodbye.js';
 export { MenuCmd } from './menu.js';
 export { WidgetBase } from './WidgetBase.js';
 export { ClockCmd } from './clock.js';

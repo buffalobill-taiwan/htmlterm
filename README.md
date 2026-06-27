@@ -28,7 +28,7 @@ dialogs, and TSR-style widgets.
 ### Demo shell
 
 - Frame-stack command runner with rAF-based Typewriter output
-- 17 built-in commands (games, widgets, interactive tests — see below)
+- 16 built-in commands (games, widgets, interactive tests — see below)
 - Dialog framework (`MenuDialog`, `InputDialog`, `ShowDialog`) with overlay compositing
 - TSR widgets (clock, DVD logo) — draggable, position remembered
 - Tab completion for command names; command history (Up/Down)
@@ -85,7 +85,6 @@ Open `index.html` in a modern browser, or visit the live demo:
 | `dvd` | Toggle bouncing DVD logo widget |
 | `echo` | Print arguments |
 | `flash` | Flash the screen N times (default 1). Use `--border` for border flash |
-| `goodbye` | Print farewell message |
 | `help` | List available commands |
 | `menu` | Open command menu dialog |
 | `mbti` | MBTI personality test (interactive) |
