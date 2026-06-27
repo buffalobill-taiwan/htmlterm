@@ -94,6 +94,17 @@ export function makeCell(ch, attr, width) {
     };
 }
 
+/** Blinking block cursor for overlay buffers (dialogs, widgets).
+ *  Sets fg/bg directly — does NOT use inverse, because
+ *  Renderer._swapInverse would swap them back to default colors. */
+export function makeCursorCell(ch = ' ') {
+    return makeCell(ch, {
+        fg: 0, bg: 7,
+        bold: false, dim: false, italic: false, underline: false,
+        blink: true, inverse: false, conceal: false, crossedOut: false,
+    });
+}
+
 export function isFinalByte(code) {
     return code >= 0x40 && code <= 0x7E;
 }

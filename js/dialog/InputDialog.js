@@ -1,5 +1,5 @@
 import { Dialog } from './Dialog.js';
-import { makeCell } from '../sgr.js';
+import { makeCursorCell } from '../sgr.js';
 import { centeredDialogPos } from './position.js';
 import { DEFAULT_DIALOG_WIDTH } from '../constants.js';
 
@@ -30,8 +30,7 @@ export class InputDialog extends Dialog {
         const cx = 1 + this._inputPrefix.length + bufW;
         const cy = this._inputRow;
         if (cx < this.width - 1) {
-            const attr = { fg: 0, bg: 7, bold: false, dim: false, italic: false, underline: false, blink: true, inverse: false, conceal: false, crossedOut: false };
-            this._buffer[cy][cx] = makeCell(' ', attr);
+            this._buffer[cy][cx] = makeCursorCell();
         }
         this.term.markRowDirty(this.y + cy);
     }

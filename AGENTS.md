@@ -564,7 +564,7 @@ draw() {
 
 ### Shared utilities
 
-- `js/sgr.js`: SGR helpers (`defaultAttr`, `applySGR`, `makeCell`, color shortcuts), `createEmptyBuffer`, `isFinalByte`, `warn`, `CURSOR_HIDE`/`CURSOR_SHOW`, `OverlayZ`, `formatTime`
+- `js/sgr.js`: SGR helpers (`defaultAttr`, `applySGR`, `makeCell`, `makeCursorCell`, color shortcuts), `createEmptyBuffer`, `isFinalByte`, `warn`, `CURSOR_HIDE`/`CURSOR_SHOW`, `OverlayZ`, `formatTime`
 - `js/drag.js`: Shared drag helpers used by Dialog and WidgetBase
 - `js/tokenize.js`: Shell command tokenizer (backslash escaping, quotes)
 - `js/calc-expr.js`: Safe recursive-descent expression evaluator (`safeEval`)
