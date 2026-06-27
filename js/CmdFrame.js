@@ -3,6 +3,7 @@ import { CURSOR_HIDE, CURSOR_SHOW } from './sgr.js';
 export class CmdFrame {
     constructor(shell) {
         this.shell = shell;
+        this.system = shell.system;
         this.term = shell.term;
         this.done = false;
         this.started = false;
@@ -39,7 +40,7 @@ export class SyncCmdFrame extends CmdFrame {
                 this._asyncPending = true;
                 result.then(() => {
                     this._asyncPending = false;
-                    if (!this.done) this.shell._tick();
+                    if (!this.done) this.system._tick();
                 });
                 return;
             }
@@ -58,7 +59,7 @@ export class SyncCmdFrame extends CmdFrame {
 
     get blocked() {
         if (!this.started || this.done) return false;
-        return (this.cmd && !this.cmd.closed) || this._asyncPending || this.shell.typewriter.isActive() || this.shell.busy;
+        return (this.cmd && !this.cmd.closed) || this._asyncPending || this.system.typewriter.isActive() || this.system.busy;
     }
 }
 
@@ -96,7 +97,7 @@ export class DialogFrame extends CmdFrame {
             this.term.curX = s.x;
             this.term.curY = s.y;
         }
-        for (const fn of (this.shell._dialogRestoreHooks || [])) fn();
+        for (const fn of (this.system._dialogRestoreHooks || [])) fn();
         super.finish();
     }
 

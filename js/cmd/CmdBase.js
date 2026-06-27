@@ -69,7 +69,7 @@ export class CmdBase {
         if (this.closed) return;
         this.closed = true;
         this.term.write(CURSOR_SHOW);
-        this.shell._tick();
+        this.system._tick();
     }
 
     onCancel() {
@@ -175,7 +175,7 @@ export class CmdBase {
         this.isTyping = true;
         this.printThen(text, () => {
             this.isTyping = false;
-            this.shell.readLine(onInput);
+            this.system.readLine(onInput);
         });
     }
 
@@ -214,7 +214,7 @@ export class CmdBase {
                 message: msg,
                 onExit: resolve,
             });
-            this.shell.pushDialogFrame(dlg);
+            this.system.pushDialogFrame(dlg);
         });
     }
 
@@ -226,7 +226,7 @@ export class CmdBase {
                 onConfirm: val => resolve(val),
                 onCancel: () => resolve(null),
             });
-            this.shell.pushDialogFrame(dlg);
+            this.system.pushDialogFrame(dlg);
         });
     }
 

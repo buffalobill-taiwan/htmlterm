@@ -35,7 +35,7 @@ export class Quiz extends CmdBase {
         if (op === '-' && a < b) b = [a, a = b][0];
         const answer = op === '+' ? a + b : op === '-' ? a - b : a * b;
 
-        shell._createDialog(InputDialog, 'quiz', {
+        shell.system._createDialog(InputDialog, 'quiz', {
             title: 'Quiz',
             prompt: `${a} ${op} ${b} = ?`,
             footer: 'Enter Answer  ESC Back',
@@ -49,7 +49,7 @@ export class Quiz extends CmdBase {
                     msg = bold(red('✗ Wrong!')) + '  Answer: ' + bold(white('' + answer));
                 }
                 setTimeout(() => {
-                    shell._createDialog(ShowDialog, 'show', { message: msg, onExit: () => {} });
+                    shell.system._createDialog(ShowDialog, 'show', { message: msg, onExit: () => {} });
                 }, 0);
             },
             onCancel: () => {},
