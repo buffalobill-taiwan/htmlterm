@@ -126,6 +126,7 @@ export class SystemManager {
 
             if (frame.persistent) {
                 if (frame._pendingActivate) {
+                    if (this.typewriter.isActive() || this._busy || this._readLineState) return;
                     frame.onActivate();
                     frame._pendingActivate = false;
                 }
@@ -138,7 +139,12 @@ export class SystemManager {
 
     execute(line) {
         const trimmed = line.trim();
-        if (trimmed.length === 0) { this._tick(); return; }
+        if (trimmed.length === 0) {
+            const top = this._cmdStack[this._cmdStack.length - 1];
+            if (top && top.persistent) top._pendingActivate = true;
+            this._tick();
+            return;
+        }
         this.editor.history.push(trimmed);
         if (this.editor.history.length > 100) this.editor.history.shift();
 

@@ -134,6 +134,7 @@ export class ShellFrame extends CmdFrame {
     }
 
     handleInput(data) {
+        if (this.system._readLineState) return false;
         this.cmd.handleKey(data);
         return true;
     }

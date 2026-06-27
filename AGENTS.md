@@ -199,9 +199,15 @@ stack and showing the next prompt. Called from every completion path via
 - dialog frame auto-unblock (dialog closed)
 - `_busy` release in flash
 
-The loop pops done frames, starts new frames, and shows prompt only when the
-frame stack is back to the persistent ShellFrame and all blocking conditions
-clear:
+The loop pops done frames and shows the `$` prompt only when **all** of:
+1. ShellFrame is top of the frame stack
+2. `_pendingActivate` flag is set (ShellFrame became top after a frame pop, or `execute('')` re-armed it)
+3. No typewriter animation running, no `_busy`, no `_readLineState`
+
+Condition 3's guard prevents the prompt from showing too early (e.g., during
+readLine input or command output animation). If a guard blocks the prompt,
+`_pendingActivate` is **NOT consumed** — it stays `true` and fires on the
+next `_processStack` call when conditions clear:
 
 ```js
 _processStack() {
@@ -211,13 +217,27 @@ _processStack() {
         if (!frame.started) { frame.start(); continue; }
         if (frame.blocked) return;
         if (frame.persistent) {
-            if (frame._pendingActivate) { frame.onActivate(); frame._pendingActivate = false; }
+            if (frame._pendingActivate) {
+                if (typewriter || _busy || _readLineState) return;  // guard — don't consume flag
+                frame.onActivate();
+                frame._pendingActivate = false;
+            }
             return;
         }
         frame.finish();
     }
 }
 ```
+
+**Why this matters:** The prompt flag (`_pendingActivate`) is a one-shot bridge
+between two independent state machines: the frame stack lifecycle (frames
+popping) and transient shell states (readLine, typewriter, busy). By checking
+all transient guards BEFORE consuming the flag, we eliminate the need for
+ad-hoc re-set calls everywhere — the flag naturally persists until the shell
+is actually ready for input.
+
+**The only explicit re-arm:** `execute('')` (empty Enter at shell prompt) sets
+`_pendingActivate = true` because no frame pops to trigger it naturally.
 
 ### How commands control I/O
 
