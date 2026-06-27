@@ -160,6 +160,9 @@ export class SystemManager {
         } else {
             this.print(red('Command not found: ' + cmd) + '\n');
             this.print('Try ' + yellow('help') + '.\n');
+            const top = this._cmdStack[this._cmdStack.length - 1];
+            if (top && top.persistent) top._pendingActivate = true;
+            this._tick();
         }
     }
 
