@@ -69,7 +69,7 @@ export class SystemManager {
         this.term.write('\x1B[2J\x1B[H');
         this.term.write(bold(green('HTML Term')) + '\n');
         this.term.write('Type ' + yellow('help') + ' for available commands.\n\n');
-        this.term.write(gray('AEIOUÀÈÌÒÙ金木水火土鑫森淼焱垚あいうえおアイウエオ') + '\n\n');
+        this.term.write(gray('AEIOUÀÈÌÒÙ金木水火土鑫森淼焱垚あいうえおアイウエオ✂✓✕✨❄') + '\n\n');
         this._pushFrame(new ShellFrame(new ShellCmd()));
         this._tick();
     }
