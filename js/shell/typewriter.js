@@ -1,4 +1,4 @@
-import { CURSOR_HIDE, CURSOR_SHOW, skipEscapeSeq } from './sgr.js';
+import { CURSOR_HIDE, CURSOR_SHOW, skipEscapeSeq } from '../util/sgr.js';
 
 export class Typewriter {
     constructor(term) {

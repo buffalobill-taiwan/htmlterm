@@ -1,7 +1,7 @@
 import { Dialog } from './Dialog.js';
 import { _writeStr } from './write.js';
 import { centeredDialogPos } from './position.js';
-import { parseCSI } from '../TextInputModel.js';
+import { parseCSI } from '../shell/TextInputModel.js';
 
 export class MenuDialog extends Dialog {
     constructor(term, items, opts) {

@@ -3,8 +3,8 @@
  * Globals window.term / window.system exposed for debugging.
  */
 
-import { Terminal } from './terminal.js';
-import { SystemManager } from './system.js';
+import { Terminal } from './terminal/terminal.js';
+import { SystemManager } from './shell/system.js';
 import * as cmdModule from './cmd/index.js';
 
 const term = new Terminal(document.getElementById('screen'), {

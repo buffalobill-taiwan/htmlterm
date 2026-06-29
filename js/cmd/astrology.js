@@ -1,5 +1,5 @@
 import { CmdBase } from './CmdBase.js';
-import { cyan, bold, green, yellow, white, red } from '../sgr.js';
+import { cyan, bold, green, yellow, white, red } from '../util/sgr.js';
 
 const ZODIAC = [
     '牡羊座', '金牛座', '雙子座', '巨蟹座',

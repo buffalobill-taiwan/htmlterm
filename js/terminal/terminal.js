@@ -1,8 +1,8 @@
 import { Screen } from './Screen.js';
 import { Parser } from './Parser.js';
 import { Renderer } from './Renderer.js';
-import { DEFAULT_COLS, DEFAULT_ROWS } from './constants.js';
-import { warn } from './sgr.js';
+import { DEFAULT_COLS, DEFAULT_ROWS } from '../util/constants.js';
+import { warn } from '../util/sgr.js';
 
 export class Terminal {
     constructor(container, opts = {}) {

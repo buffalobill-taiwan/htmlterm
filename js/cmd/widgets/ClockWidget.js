@@ -1,6 +1,6 @@
-import { SystemManager } from '../../system.js';
+import { SystemManager } from '../../shell/system.js';
 import { WidgetBase } from '../WidgetBase.js';
-import { formatTime } from '../../sgr.js';
+import { formatTime } from '../../util/sgr.js';
 
 export class ClockWidget extends WidgetBase {
     constructor(opts = {}) {

@@ -1,8 +1,8 @@
 import { Dialog } from './Dialog.js';
-import { makeCursorCell } from '../sgr.js';
+import { makeCursorCell } from '../util/sgr.js';
 import { centeredDialogPos } from './position.js';
-import { DEFAULT_DIALOG_WIDTH } from '../constants.js';
-import { TextInputModel, parseCSI } from '../TextInputModel.js';
+import { DEFAULT_DIALOG_WIDTH } from '../util/constants.js';
+import { TextInputModel, parseCSI } from '../shell/TextInputModel.js';
 
 export class InputDialog extends Dialog {
     constructor(term, opts) {

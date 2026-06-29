@@ -1,5 +1,5 @@
 import { CmdBase } from './CmdBase.js';
-import { cyan, bold, yellow, white, red, magenta } from '../sgr.js';
+import { cyan, bold, yellow, white, red, magenta } from '../util/sgr.js';
 
 export class MbtiCmd extends CmdBase {
     constructor(shell) {

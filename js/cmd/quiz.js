@@ -1,6 +1,6 @@
 import { CmdBase } from './CmdBase.js';
-import { SystemManager } from '../system.js';
-import { cyan, bold, green, red, white } from '../sgr.js';
+import { SystemManager } from '../shell/system.js';
+import { cyan, bold, green, red, white } from '../util/sgr.js';
 import { InputDialog, ShowDialog } from '../dialog/index.js';
 
 export class Quiz extends CmdBase {

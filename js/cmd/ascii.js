@@ -1,5 +1,5 @@
 import { CmdBase } from './CmdBase.js';
-import { bold, gray, sgr } from '../sgr.js';
+import { bold, gray, sgr } from '../util/sgr.js';
 
 export class Ascii extends CmdBase {
     execute(args) {

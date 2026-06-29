@@ -1,4 +1,4 @@
-import { CHAR_WIDTH, CHAR_HEIGHT } from './constants.js';
+import { CHAR_WIDTH, CHAR_HEIGHT } from '../util/constants.js';
 
 export class Renderer {
     constructor(container, screen, opts = {}) {

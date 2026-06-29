@@ -1,4 +1,4 @@
-import { CURSOR_HIDE, CURSOR_SHOW } from './sgr.js';
+import { CURSOR_HIDE, CURSOR_SHOW } from '../util/sgr.js';
 import { SystemManager } from './system.js';
 
 export class CmdFrame {

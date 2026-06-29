@@ -1,7 +1,7 @@
 import { CmdBase } from './CmdBase.js';
-import { SystemManager } from '../system.js';
-import { safeEval } from '../calc-expr.js';
-import { red } from '../sgr.js';
+import { SystemManager } from '../shell/system.js';
+import { safeEval } from '../util/calc-expr.js';
+import { red } from '../util/sgr.js';
 import { InputDialog, ShowDialog } from '../dialog/index.js';
 
 export class Calc extends CmdBase {

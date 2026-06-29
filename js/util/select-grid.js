@@ -1,5 +1,5 @@
-import { bold, green } from '../sgr.js';
-import { isWide } from '../unicode-width.js';
+import { bold, green } from './sgr.js';
+import { isWide } from './unicode-width.js';
 
 export function defaultGridMove(data, row, col, options) {
     if (data === '\x1B[A') {

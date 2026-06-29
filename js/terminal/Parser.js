@@ -5,12 +5,12 @@
  * Emits `send(data)` for DSR responses and similar outbound control sequences.
  */
 
-import { isFinalByte } from './sgr.js';
+import { isFinalByte } from '../util/sgr.js';
 import {
     CSI_INTRODUCER, ESC, ESC_OSC, ESC_DCS, ESC_SOS, ESC_PM, ESC_APC,
     ESC_SS2, ESC_SS3, ESC_IND, ESC_NEL, ESC_SAVE, ESC_RESTORE,
     ESC_TABSET, ESC_RI, ESC_ST, BEL, CR, LF, BS, TAB,
-} from './constants.js';
+} from '../util/constants.js';
 
 export class Parser {
     constructor(screen, callbacks = {}) {

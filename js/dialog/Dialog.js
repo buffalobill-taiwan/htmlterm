@@ -1,7 +1,7 @@
 import { _writeStr, bufWidth } from './write.js';
-import { addDragMethods, markDirtyRows } from '../drag.js';
-import { OverlayZ, createEmptyBuffer, makeOverlayGetCell } from '../sgr.js';
-import { DEFAULT_DIALOG_WIDTH } from '../constants.js';
+import { addDragMethods, markDirtyRows } from '../util/drag.js';
+import { OverlayZ, createEmptyBuffer, makeOverlayGetCell } from '../util/sgr.js';
+import { DEFAULT_DIALOG_WIDTH } from '../util/constants.js';
 
 export class Dialog {
     constructor(term, opts) {

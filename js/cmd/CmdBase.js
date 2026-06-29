@@ -1,8 +1,8 @@
-import { SystemManager } from '../system.js';
-import { red, bold, yellow, CURSOR_SHOW, CURSOR_HIDE } from '../sgr.js';
+import { SystemManager } from '../shell/system.js';
+import { red, bold, yellow, CURSOR_SHOW, CURSOR_HIDE } from '../util/sgr.js';
 import { ShowDialog } from '../dialog/ShowDialog.js';
 import { InputDialog } from '../dialog/InputDialog.js';
-import { defaultGridMove, defaultGridRender } from './select-grid.js';
+import { defaultGridMove, defaultGridRender } from '../util/select-grid.js';
 
 export class CmdBase {
     constructor() {

@@ -1,6 +1,6 @@
 import { CmdBase } from './CmdBase.js';
-import { yellow, bold, white, green } from '../sgr.js';
-import { displayWidth } from './select-grid.js';
+import { yellow, bold, white, green } from '../util/sgr.js';
+import { displayWidth } from '../util/select-grid.js';
 import { fortunes } from './fortune.js';
 
 const COW_EYES = [

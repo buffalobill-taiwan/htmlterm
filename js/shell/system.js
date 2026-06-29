@@ -1,10 +1,10 @@
 import { Typewriter } from './typewriter.js';
 import { LineEditor } from './LineEditor.js';
-import { tokenize } from './tokenize.js';
-import { ShellCmd } from './cmd/ShellCmd.js';
+import { tokenize } from '../util/tokenize.js';
+import { ShellCmd } from '../cmd/ShellCmd.js';
 import { ShellFrame, SyncCmdFrame, DialogFrame } from './CmdFrame.js';
-import { bold, green, yellow, gray, red, warn } from './sgr.js';
-import { MenuDialog } from './dialog/MenuDialog.js';
+import { bold, green, yellow, gray, red, warn } from '../util/sgr.js';
+import { MenuDialog } from '../dialog/MenuDialog.js';
 
 export class SystemManager {
     static instance = null;

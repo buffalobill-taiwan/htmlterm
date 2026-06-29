@@ -1,6 +1,6 @@
-import { SystemManager } from '../system.js';
-import { makeCell, defaultAttr, OverlayZ, createEmptyBuffer, makeOverlayGetCell } from '../sgr.js';
-import { addDragMethods, markDirtyRows } from '../drag.js';
+import { SystemManager } from '../shell/system.js';
+import { makeCell, defaultAttr, OverlayZ, createEmptyBuffer, makeOverlayGetCell } from '../util/sgr.js';
+import { addDragMethods, markDirtyRows } from '../util/drag.js';
 
 export class WidgetBase {
     constructor() {

@@ -1,5 +1,5 @@
 import { CmdBase } from './CmdBase.js';
-import { bold, yellow } from '../sgr.js';
+import { bold, yellow } from '../util/sgr.js';
 
 export class Help extends CmdBase {
     execute(args) {

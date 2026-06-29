@@ -1,6 +1,6 @@
-import { defaultAttr, applySGR, makeCell, isFinalByte } from '../sgr.js';
-import { isWide } from '../unicode-width.js';
-import { CSI_INTRODUCER } from '../constants.js';
+import { defaultAttr, applySGR, makeCell, isFinalByte } from '../util/sgr.js';
+import { isWide } from '../util/unicode-width.js';
+import { CSI_INTRODUCER } from '../util/constants.js';
 
 /**
  * Measure the display width of a string containing inline SGR sequences.

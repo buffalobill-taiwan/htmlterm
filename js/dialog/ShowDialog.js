@@ -1,6 +1,6 @@
 import { Dialog } from './Dialog.js';
 import { centeredDialogPos } from './position.js';
-import { DEFAULT_DIALOG_WIDTH } from '../constants.js';
+import { DEFAULT_DIALOG_WIDTH } from '../util/constants.js';
 
 export class ShowDialog extends Dialog {
     constructor(term, opts) {
