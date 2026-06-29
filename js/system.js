@@ -171,44 +171,24 @@ export class SystemManager {
         if (this._readLineState) {
             warn('readLine called while another readLine is pending — overwriting');
         }
-        this._readLineState = { callback, buffer: '' };
+        const editor = new LineEditor(this.term, {
+            onExecute: (line) => {
+                this._readLineState = null;
+                callback(line.trim());
+                this._tick();
+            },
+            onShowPrompt: () => {
+                // Ctrl+C / Ctrl+D inside readLine — cancel
+                this._readLineState = null;
+                this._tick();
+            },
+        });
+        editor.setPrompt('');
+        this._readLineState = { editor };
     }
 
     _handleReadLineInput(data) {
-        for (let i = 0; i < data.length; i++) {
-            const ch = data[i];
-            const code = ch.charCodeAt ? ch.charCodeAt(0) : ch;
-            if (code === 0x0D || code === 0x0A) {
-                const state = this._readLineState;
-                this._readLineState = null;
-                this.term.write('\r\n');
-                state.callback(state.buffer.trim());
-                this._tick();
-                return;
-            }
-            if (code === 0x03) {
-                this._readLineState = null;
-                this.term.write('^C\n');
-                this._tick();
-                return;
-            }
-            if (code === 0x7F || code === 0x08) {
-                if (this._readLineState && this._readLineState.buffer.length > 0) {
-                    const last = this._readLineState.buffer[this._readLineState.buffer.length - 1];
-                    const w = this.term.isWide(last) ? 2 : 1;
-                    this._readLineState.buffer = this._readLineState.buffer.slice(0, -1);
-                    this.term.write('\b'.repeat(w) + ' '.repeat(w) + '\b'.repeat(w));
-                }
-                continue;
-            }
-            if (code === 0x1B) {
-                if (data[i + 1] === '[' || data[i + 1] === 'O') i += 2;
-                continue;
-            }
-            if (code < 0x20) continue;
-            if (this._readLineState) this._readLineState.buffer += ch;
-            this.term.write(ch);
-        }
+        this._readLineState.editor.handleKey(data);
     }
 
     _abortAll() {
