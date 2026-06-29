@@ -91,10 +91,14 @@ export class MenuDialog extends Dialog {
             if (!csi) { this._onCancel(); return 'close'; }
 
             const { final, params } = csi;
-            if (final === 'A' || (final === '~' && params === '5')) { // ↑ / PageUp
+            if (final === 'A') {                               // ↑
                 this._moveBy(-1);
-            } else if (final === 'B' || (final === '~' && params === '6')) { // ↓ / PageDown
+            } else if (final === 'B') {                        // ↓
                 this._moveBy(1);
+            } else if (final === '~' && params === '5') {      // PageUp
+                this._moveBy(-this.visibleCount);
+            } else if (final === '~' && params === '6') {      // PageDown
+                this._moveBy(this.visibleCount);
             } else if (final === 'H' || (final === '~' && (params === '1' || params === '7'))) { // Home
                 this._moveTo(0);
             } else if (final === 'F' || (final === '~' && (params === '4' || params === '8'))) { // End

@@ -330,7 +330,7 @@ export class SystemManager {
         const menuDlg = this._createDialog(MenuDialog, 'menu', {
             width: 44,
             title: 'Command Menu',
-            footer: '↑↓ Navigate  ↩ Execute  ESC Quit',
+            footer: '↑↓ Move  PgUp/Dn Page  ↩ Run  ESC Quit',
             visibleCount: 5,
             onSelect: (item) => {
                 const inst = this._cmdInstances[item.name];
