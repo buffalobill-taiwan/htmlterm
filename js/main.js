@@ -14,10 +14,10 @@ const term = new Terminal(document.getElementById('screen'), {
     charHeight: 16,
 });
 
-const system = new SystemManager(term, cmdModule);
-term.onData = (data) => system.handleInput(data);
-term.onMouse = (type, info) => system.handleMouse(type, info);
+new SystemManager(term, cmdModule);
+term.onData = (data) => SystemManager.instance.handleInput(data);
+term.onMouse = (type, info) => SystemManager.instance.handleMouse(type, info);
 term.focus();
 
 window.term = term;
-window.system = system;
+window.system = SystemManager.instance;
