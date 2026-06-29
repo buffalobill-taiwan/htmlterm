@@ -110,7 +110,6 @@ export class SystemManager {
             }
 
             if (this._cmdStack.length === 0) {
-                if (this.typewriter.isActive()) return;
                 return;
             }
 

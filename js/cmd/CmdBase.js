@@ -25,6 +25,14 @@ export class CmdBase {
     get abortGeneration() { return this.system.abortGeneration; }
     get cmdList() { return this.system.cmdList; }
 
+    toggleWidget(key, WidgetClass) {
+        const wm = this.system.widgetManager;
+        const existing = wm._widgets.find(w => w.constructor === WidgetClass);
+        if (existing) { wm.remove(existing); return false; }
+        wm.add(new WidgetClass());
+        return true;
+    }
+
     static get commandName() { return ''; }
     static get help() { return ''; }
     static get menu() { return null; }

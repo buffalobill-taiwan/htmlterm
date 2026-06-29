@@ -15,14 +15,11 @@ export class ClockWidget extends WidgetBase {
     start() {
         super.start();
         this.draw();
-        this._intervalId = setInterval(() => this.draw(), 1000);
+        this._startInterval(() => this.draw(), 1000);
     }
 
     stop() {
-        if (this._intervalId) {
-            clearInterval(this._intervalId);
-            this._intervalId = null;
-        }
+        this._stopInterval();
         super.stop();
     }
 

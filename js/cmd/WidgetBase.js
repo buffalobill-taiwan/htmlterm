@@ -72,21 +72,22 @@ export class WidgetBase {
         markDirtyRows(this.term, this._y, this._h);
     }
 
+    _startInterval(fn, ms) {
+        this._stopInterval();
+        this._intervalId = setInterval(fn, ms);
+    }
+
+    _stopInterval() {
+        if (this._intervalId) { clearInterval(this._intervalId); this._intervalId = null; }
+    }
+
     putc(x, y, ch, fg, bg, attrs) {
         if (y < 0 || y >= this._h || x < 0 || x >= this._w) return;
         const def = defaultAttr();
-        const attr = {
+        const attr = Object.assign(def, attrs, {
             fg: fg != null ? fg : def.fg,
             bg: bg != null ? bg : def.bg,
-            bold: attrs && attrs.bold || false,
-            dim: attrs && attrs.dim || false,
-            italic: attrs && attrs.italic || false,
-            underline: attrs && attrs.underline || false,
-            blink: attrs && attrs.blink || false,
-            inverse: attrs && attrs.inverse || false,
-            conceal: attrs && attrs.conceal || false,
-            crossedOut: attrs && attrs.crossedOut || false,
-        };
+        });
         this._buffer[y][x] = makeCell(ch, attr);
         this.term.markRowDirty(this._y + y);
     }

@@ -24,14 +24,11 @@ export class DVDWidget extends WidgetBase {
     start() {
         super.start();
         this.draw();
-        this._intervalId = setInterval(() => this._tick(), 120);
+        this._startInterval(() => this._tick(), 120);
     }
 
     stop() {
-        if (this._intervalId) {
-            clearInterval(this._intervalId);
-            this._intervalId = null;
-        }
+        this._stopInterval();
         super.stop();
     }
 
@@ -52,17 +49,12 @@ export class DVDWidget extends WidgetBase {
     }
 
     startDrag(col, row) {
-        if (this._intervalId) {
-            clearInterval(this._intervalId);
-            this._intervalId = null;
-        }
+        this._stopInterval();
         super.startDrag(col, row);
     }
 
     endDrag() {
-        if (!this._intervalId) {
-            this._intervalId = setInterval(() => this._tick(), 120);
-        }
+        this._startInterval(() => this._tick(), 120);
     }
 
     _tick() {
