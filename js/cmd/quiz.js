@@ -1,5 +1,5 @@
 import { CmdBase } from './CmdBase.js';
-import { SystemManager } from '../shell/system.js';
+import { SystemManager } from '../system/system.js';
 import { cyan, bold, green, red, white } from '../util/sgr.js';
 import { InputDialog, ShowDialog } from '../dialog/index.js';
 

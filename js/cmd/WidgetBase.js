@@ -1,4 +1,4 @@
-import { SystemManager } from '../shell/system.js';
+import { SystemManager } from '../system/system.js';
 import { makeCell, defaultAttr, OverlayZ, createEmptyBuffer, makeOverlayGetCell } from '../util/sgr.js';
 import { addDragMethods, markDirtyRows } from '../util/drag.js';
 

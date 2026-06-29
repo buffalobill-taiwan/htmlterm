@@ -22,7 +22,7 @@ Frame stack moved from `DemoShell` to `SystemManager` (Jun 2026).
 `SystemManager` became singleton, `DemoShell` absorbed as `ShellCmd` CmdBase subclass (Jun 2026).
 Cmd ergonomics refactor (Jun 2026): `isTyping` → `_waitingForDrain`, `open()` method added,
 `select-grid.js` moved to `js/util/`, `quiz.js` `_genQuestion()` extracted.
-Directory restructure (Jun 2026): `js/` root split into `terminal/`, `shell/`, `util/` subdirs.
+Directory restructure (Jun 2026): `js/` root split into `terminal/`, `system/`, `util/` subdirs.
 
 ## Architecture
 
@@ -126,9 +126,9 @@ I/O while on top of the stack:
 
 | Frame | Source | `blocked` condition | I/O owner |
 |---|---|---|---|---|
-| `ShellFrame` | `js/shell/CmdFrame.js` | always `true` (persistent) | `ShellCmd.handleKey` → LineEditor |
-| `SyncCmdFrame` | `js/shell/CmdFrame.js` | typewriter active, `_busy`, `_asyncPending`, or `!cmd.closed` | typewriter / `cmd.handleKey` |
-| `DialogFrame` | `js/shell/CmdFrame.js` | `!dialog.closed` | dialog's `handleKey`; cursor saved on push, restored on finish |
+| `ShellFrame` | `js/system/CmdFrame.js` | always `true` (persistent) | `ShellCmd.handleKey` → LineEditor |
+| `SyncCmdFrame` | `js/system/CmdFrame.js` | typewriter active, `_busy`, `_asyncPending`, or `!cmd.closed` | typewriter / `cmd.handleKey` |
+| `DialogFrame` | `js/system/CmdFrame.js` | `!dialog.closed` | dialog's `handleKey`; cursor saved on push, restored on finish |
 
 ```
 ShellFrame at bottom         → always present, REPL mode
@@ -596,7 +596,7 @@ draw() {
 - `Renderer.js`: Per-cell DOM grid (`cellEls[][]`), cursor element, render loop, overlay blend, `colToHex()` color palette
 - `terminal.js`: Thin coordinator composing Screen/Parser/Renderer
 
-### `js/shell/` — Shell system layer
+### `js/system/` — Shell system layer
 
 - `system.js`: SystemManager (singleton, typewriter, editor, mouse/drag, dialog positions, frame stack, execute, input routing, command registry, prompt) + WidgetManager
 - `CmdFrame.js`: Frame stack types (CmdFrame, SyncCmdFrame, DialogFrame, ShellFrame — cursor save/restore in `DialogFrame._saveCursor`/`finish`)

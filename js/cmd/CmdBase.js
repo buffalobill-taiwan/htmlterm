@@ -1,4 +1,4 @@
-import { SystemManager } from '../shell/system.js';
+import { SystemManager } from '../system/system.js';
 import { red, bold, yellow, CURSOR_SHOW, CURSOR_HIDE } from '../util/sgr.js';
 import { ShowDialog } from '../dialog/ShowDialog.js';
 import { InputDialog } from '../dialog/InputDialog.js';

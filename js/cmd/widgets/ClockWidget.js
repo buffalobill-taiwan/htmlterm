@@ -1,4 +1,4 @@
-import { SystemManager } from '../../shell/system.js';
+import { SystemManager } from '../../system/system.js';
 import { WidgetBase } from '../WidgetBase.js';
 import { formatTime } from '../../util/sgr.js';
 

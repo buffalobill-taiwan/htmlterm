@@ -4,7 +4,7 @@
  */
 
 import { Terminal } from './terminal/terminal.js';
-import { SystemManager } from './shell/system.js';
+import { SystemManager } from './system/system.js';
 import * as cmdModule from './cmd/index.js';
 
 const term = new Terminal(document.getElementById('screen'), {
