@@ -21,7 +21,8 @@ shared constants/helpers, `StateStack` merged into `DialogFrame`, CJK overlay cl
 Frame stack moved from `DemoShell` to `SystemManager` (Jun 2026).
 `SystemManager` became singleton, `DemoShell` absorbed as `ShellCmd` CmdBase subclass (Jun 2026).
 Cmd ergonomics refactor (Jun 2026): `isTyping` → `_waitingForDrain`, `open()` method added,
-`select-grid.js` moved to `js/cmd/`, `quiz.js` `_genQuestion()` extracted.
+`select-grid.js` moved to `js/util/`, `quiz.js` `_genQuestion()` extracted.
+Directory restructure (Jun 2026): `js/` root split into `terminal/`, `shell/`, `util/` subdirs.
 
 ## Architecture
 
@@ -59,6 +60,8 @@ independent; the main buffer is never touched by overlays.
 | `Parser.js` | VT100 escape state machine → delegates to Screen | no DOM |
 | `Renderer.js` | Per-cell DOM grid (`cellEls[][]`), cursor element, render loop, overlay blend | DOM only |
 | `terminal.js` | Thin coordinator (~100 lines) composing the three | event wiring |
+
+All four files live in `js/terminal/`.
 
 `Terminal` delegates public props/methods to `screen` and `renderer`:
 ```js
@@ -123,9 +126,9 @@ I/O while on top of the stack:
 
 | Frame | Source | `blocked` condition | I/O owner |
 |---|---|---|---|---|
-| `ShellFrame` | `js/CmdFrame.js` | always `true` (persistent) | `ShellCmd.handleKey` → LineEditor |
-| `SyncCmdFrame` | `js/CmdFrame.js` | typewriter active, `_busy`, `_asyncPending`, or `!cmd.closed` | typewriter / `cmd.handleKey` |
-| `DialogFrame` | `js/CmdFrame.js` | `!dialog.closed` | dialog's `handleKey`; cursor saved on push, restored on finish |
+| `ShellFrame` | `js/shell/CmdFrame.js` | always `true` (persistent) | `ShellCmd.handleKey` → LineEditor |
+| `SyncCmdFrame` | `js/shell/CmdFrame.js` | typewriter active, `_busy`, `_asyncPending`, or `!cmd.closed` | typewriter / `cmd.handleKey` |
+| `DialogFrame` | `js/shell/CmdFrame.js` | `!dialog.closed` | dialog's `handleKey`; cursor saved on push, restored on finish |
 
 ```
 ShellFrame at bottom         → always present, REPL mode
@@ -586,30 +589,32 @@ draw() {
 
 ## Relevant Files
 
-### Core terminal
+### `js/terminal/` — VT100 core (no shell)
 
-- `js/constants.js`: Shared constants (`CHAR_WIDTH`, `CHAR_HEIGHT`, `TAB_WIDTH`, `CSI_INTRODUCER`, `DEFAULT_DIALOG_WIDTH`, `SCROLLBACK_MAX`)
-- `js/Screen.js`: Cell buffer, cursor, scroll/SGR state, dirty tracking, overlays[]
-- `js/Parser.js`: VT100 escape state machine
-- `js/Renderer.js`: Per-cell DOM grid (`cellEls[][]`), cursor element, render loop, overlay blend, `colToHex()` color palette
-- `js/terminal.js`: Thin coordinator composing Screen/Parser/Renderer
-- `js/unicode-width.js`: Font-metric `isWide(ch)` for CJK/double-width detection
+- `Screen.js`: Cell buffer, cursor, scroll/SGR state, dirty tracking, overlays[]
+- `Parser.js`: VT100 escape state machine
+- `Renderer.js`: Per-cell DOM grid (`cellEls[][]`), cursor element, render loop, overlay blend, `colToHex()` color palette
+- `terminal.js`: Thin coordinator composing Screen/Parser/Renderer
 
-### Shared utilities
+### `js/shell/` — Shell system layer
 
-- `js/sgr.js`: SGR helpers (`defaultAttr`, `applySGR`, `makeCell`, `makeCursorCell`, color shortcuts), `createEmptyBuffer`, `isFinalByte`, `warn`, `CURSOR_HIDE`/`CURSOR_SHOW`, `OverlayZ`, `formatTime`
-- `js/drag.js`: Shared drag helpers used by Dialog and WidgetBase
-- `js/tokenize.js`: Shell command tokenizer (backslash escaping, quotes)
-- `js/calc-expr.js`: Safe recursive-descent expression evaluator (`safeEval`)
+- `system.js`: SystemManager (singleton, typewriter, editor, mouse/drag, dialog positions, frame stack, execute, input routing, command registry, prompt) + WidgetManager
+- `CmdFrame.js`: Frame stack types (CmdFrame, SyncCmdFrame, DialogFrame, ShellFrame — cursor save/restore in `DialogFrame._saveCursor`/`finish`)
+- `LineEditor.js`: Line editing, history, tab completion
+- `TextInputModel.js`: Low-level text input model (used by LineEditor + InputDialog)
+- `typewriter.js`: rAF-based animated command output
 
-### System
+### `js/util/` — Pure utilities (no DOM, no side-effects)
 
-- `js/system.js`: SystemManager (singleton, typewriter, editor, mouse/drag, dialog positions, frame stack, execute, input routing, command registry, prompt) + WidgetManager
-- `js/LineEditor.js`: Line editing, history, tab completion
-- `js/typewriter.js`: rAF-based animated command output
-- `js/CmdFrame.js`: Frame stack types (CmdFrame, SyncCmdFrame, DialogFrame, ShellFrame — cursor save/restore in `DialogFrame._saveCursor`/`finish`)
+- `constants.js`: Shared constants (`CHAR_WIDTH`, `CHAR_HEIGHT`, `TAB_WIDTH`, `CSI_INTRODUCER`, `DEFAULT_DIALOG_WIDTH`, `SCROLLBACK_MAX`)
+- `sgr.js`: SGR helpers (`defaultAttr`, `applySGR`, `makeCell`, `makeCursorCell`, color shortcuts), `createEmptyBuffer`, `isFinalByte`, `warn`, `CURSOR_HIDE`/`CURSOR_SHOW`, `OverlayZ`, `formatTime`
+- `unicode-width.js`: Font-metric `isWide(ch)` for CJK/double-width detection
+- `drag.js`: Shared drag helpers used by Dialog and WidgetBase
+- `tokenize.js`: Shell command tokenizer (backslash escaping, quotes)
+- `calc-expr.js`: Safe recursive-descent expression evaluator (`safeEval`)
+- `select-grid.js`: Grid navigation helpers (`defaultGridMove`, `displayWidth`) used by `CmdBase.select()`
 
-### Dialogs (`js/dialog/`)
+### `js/dialog/`
 
 - `index.js`: Barrel export
 - `Dialog.js`: Base class, frame drawing, drag, overlay lifecycle
@@ -617,12 +622,11 @@ draw() {
 - `write.js`: `_writeStr`, `_bufWidth`, SGR→cell attrs for dialog buffers
 - `position.js`: Dialog positioning helpers
 
-### Commands (`js/cmd/`)
+### `js/cmd/`
 
 - `index.js`: Barrel export for auto-registration
 - `CmdBase.js`: Command base class (no constructor params — `this.system` from singleton)
 - `ShellCmd.js`: Persistent shell REPL (CmdBase subclass)
-- `select-grid.js`: Grid navigation helpers (`defaultGridMove`, `displayWidth`) used by `CmdBase.select()`
 - `WidgetBase.js`: Overlay lifecycle, `_buffer`, `putc()`
 - `widgets/ClockWidget.js`: TSR clock (8 cells, 1s interval)
 - `widgets/DVDWidget.js`: Bouncing DVD logo (7×3, 120ms interval)

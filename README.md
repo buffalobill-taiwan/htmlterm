@@ -108,15 +108,15 @@ Open `index.html` in a modern browser, or visit the live demo:
 
 ```
 js/
-├── Screen.js Parser.js Renderer.js terminal.js   # Terminal core
-├── system.js CmdFrame.js                          # System (singleton) + frame stack
-├── LineEditor.js typewriter.js                   # Input editing + output
-├── dialog/                                       # Dialog framework
-├── cmd/                                          # Demo commands + widgets
-└── …
+├── main.js
+├── terminal/    Screen.js Parser.js Renderer.js terminal.js   # VT100 core
+├── shell/       system.js CmdFrame.js LineEditor.js typewriter.js TextInputModel.js
+├── util/        constants.js sgr.js unicode-width.js drag.js tokenize.js calc-expr.js select-grid.js
+├── dialog/                                        # Dialog framework
+└── cmd/                                           # Demo commands + widgets
 css/style.css
 index.html
-tools/png2art.js                                  # Offline art converter
+tools/png2art.js                                   # Offline art converter
 ```
 
 ## License
