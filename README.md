@@ -43,7 +43,7 @@ dialogs, and TSR-style widgets.
 | **Core split** | `Screen.js` (buffer) · `Parser.js` (VT100 state machine) · `Renderer.js` (DOM grid) · `terminal.js` (coordinator) |
 | **Rendering** | Pre-created 80×25 `<span>` grid; dirty-row updates via `.textContent` / `.className` / `.style.cssText` |
 | **Buffer** | 2D cell array (`{ch, fg, bg, bold, italic, …, width}`) + scrollback; CJK uses `width: 2` + continuation cell |
-| **Overlays** | Widgets (z=10) and dialogs (z=100) own separate buffers; `Renderer._blendOverlays` composites at render time |
+| **Overlays** | Widgets (z=10), dialogs (z=100), and flash (z=200) own separate buffers; `Renderer._blendOverlays` composites at render time |
 | **Shell** | `SystemManager` (singleton: frame stack, execute, input routing, typewriter, editor, widgets, dialogs, command registry, prompt) + `ShellCmd` (persistent CmdBase subclass, REPL) |
 | **Dialogs** | Buffer-based rendering in `js/dialog/`; `DialogFrame` saves/restores cursor on open/close |
 | **Input** | `keydown` on `document` (always captured) + hidden `<textarea>` for IME |
@@ -84,7 +84,7 @@ Open `index.html` in a modern browser, or visit the live demo:
 | `date` | Show current date/time |
 | `dvd` | Toggle bouncing DVD logo widget |
 | `echo` | Print arguments |
-| `flash` | Flash the screen N times (default 1). Use `--border` for border flash |
+| `flash` | Flash the screen N times (default 1). `--border` for border flash, `--art` for random artwork flash |
 | `help` | List available commands |
 | `menu` | Open command menu dialog |
 | `mbti` | MBTI personality test (interactive) |
@@ -110,7 +110,7 @@ Open `index.html` in a modern browser, or visit the live demo:
 js/
 ├── main.js
 ├── terminal/    Screen.js Parser.js Renderer.js terminal.js   # VT100 core
-├── shell/       system.js CmdFrame.js LineEditor.js typewriter.js TextInputModel.js
+├── system/      system.js CmdFrame.js LineEditor.js typewriter.js TextInputModel.js
 ├── util/        constants.js sgr.js unicode-width.js drag.js tokenize.js calc-expr.js select-grid.js
 ├── dialog/                                        # Dialog framework
 └── cmd/                                           # Demo commands + widgets

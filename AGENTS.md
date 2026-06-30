@@ -16,8 +16,10 @@ Live demo: <https://buffalobill-taiwan.github.io/htmlterm/>
 | Automated tests | Excluded — manual testing only |
 | CI | Excluded — not planned |
 
-Recent focus (Jun 2026): architecture refactors — frame stack model, dialog module split,
-shared constants/helpers, `StateStack` merged into `DialogFrame`, CJK overlay clipping.
+Recent focus (Jun 2026): flash refactored from CSS DOM overlay to buffer overlay
+compositing (`OverlayZ.FLASH = 200`); `ARTWORKS` exported from `art.js` for reuse;
+`flash --art` renders random artwork inline via same overlay pipeline.
+`terminal.js` gained `markAllDirty()` proxy.
 Frame stack moved from `DemoShell` to `SystemManager` (Jun 2026).
 `SystemManager` became singleton, `DemoShell` absorbed as `ShellCmd` CmdBase subclass (Jun 2026).
 Cmd ergonomics refactor (Jun 2026): `isTyping` → `_waitingForDrain`, `open()` method added,
@@ -46,6 +48,7 @@ Renderer._blendOverlays(Y):
 | Main buffer (Screen) | 0 | Parser + shell | `term.write()` → Parser |
 | Widget (TSR) | 10 | WidgetBase._buffer | `putc()` → fills own buffer |
 | Dialog | 100 | Dialog._buffer | `_writeStr()` → inline SGR→cell attrs |
+| Flash (transient) | 200 | SystemManager inline getCell | `_flashCycle()` / `_flashBorderCycle()` / `_flashArtNext()` |
 
 No `saveArea`/`restoreArea`, no scroll region protection. Each layer is
 independent; the main buffer is never touched by overlays.
@@ -137,6 +140,10 @@ execute("help")              → push SyncCmdFrame → handler runs
                                → drain → finish → pop → ShellFrame shows prompt
 execute("flash")             → push SyncCmdFrame → handler sets _busy=true
                                → block on _busy → _busy=false → finish → pop → prompt
+execute("flash --art")       → push SyncCmdFrame → async handler loads artwork
+                               → block on _asyncPending → promise resolves
+                               → block on _busy → _flashArtNext cycle
+                               → _busy=false → finish → pop → prompt
 execute("art")               → push SyncCmdFrame → handler returns Promise
                                → block on _asyncPending → promise resolves
                                → typewriter active → block → drain → finish → pop → prompt
@@ -187,6 +194,7 @@ User input
 | **Cmd** (`this.print()`) | `CmdBase.print()` → `system.print()` → `Typewriter.enqueue()` | Animated (rAF; half=1, wide=2 frame credits) |
 | **Dialog** (`_writeStr`) | Fills `_buffer[][]` → overlay z=100 | Instant |
 | **Widget** (`putc`) | Fills `_buffer[][]` → overlay z=10 | Instant |
+| **Flash** (system) | Inline getCell → overlay z=200 | Instant (stepped via setTimeout cycle) |
 | **Shell prompt** (`showPrompt`) | `term.write(system.prompt)` (direct, no Typewriter) | Instant |
 | **term.write()** (direct) | Bypasses Typewriter — renderer sees it next frame | Instant |
 
@@ -368,7 +376,7 @@ js/cmd/
 ├── clock.js           ClockCmd    — toggle TSR clock (replaces removed widget cmd)
 ├── quiz.js            Quiz        — math quiz via readLine()
 ├── dvd.js             DvdCmd      — toggle bouncing DVD logo
-├── flash.js           Flash       — screen/border flash; `--border` flag; Ctrl+C abort
+├── flash.js           Flash       — screen/border/art flash; `--border`, `--art` flags; Ctrl+C abort (buffer overlay)
 ├── art.js             Art         — async pixel-art renderer (random artwork)
 ├── sleep.js           Sleep       — wait N seconds; Ctrl+C abort
 ├── art/               Static pixel data modules (adam, blacklotus, glaneuses, …)
@@ -598,7 +606,7 @@ draw() {
 
 ### `js/system/` — Shell system layer
 
-- `system.js`: SystemManager (singleton, typewriter, editor, mouse/drag, dialog positions, frame stack, execute, input routing, command registry, prompt) + WidgetManager
+- `system.js`: SystemManager (singleton, typewriter, editor, mouse/drag, dialog positions, frame stack, execute, input routing, command registry, prompt, flash overlay) + WidgetManager
 - `CmdFrame.js`: Frame stack types (CmdFrame, SyncCmdFrame, DialogFrame, ShellFrame — cursor save/restore in `DialogFrame._saveCursor`/`finish`)
 - `LineEditor.js`: Line editing, history, tab completion
 - `TextInputModel.js`: Low-level text input model (used by LineEditor + InputDialog)
@@ -630,7 +638,7 @@ draw() {
 - `WidgetBase.js`: Overlay lifecycle, `_buffer`, `putc()`
 - `widgets/ClockWidget.js`: TSR clock (8 cells, 1s interval)
 - `widgets/DVDWidget.js`: Bouncing DVD logo (7×3, 120ms interval)
-- `art.js` + `art/*.js`: Pixel-art renderer and static artwork data
+- `art.js` + `art/*.js`: Pixel-art renderer and static artwork data; exports `ARTWORKS` for reuse by `flash --art`
 
 ### Tools
 

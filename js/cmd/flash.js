@@ -1,15 +1,24 @@
 import { CmdBase } from './CmdBase.js';
+import { ARTWORKS } from './art.js';
 
 export class Flash extends CmdBase {
-    execute(args) {
+    async execute(args) {
         const p = this.parseArgs(args);
-        const border = p.flag('--border', '-b');
+        const art = p.flag('--art', '-a');
+        const border = art ? null : p.flag('--border', '-b');
         const count = p.rest.length > 0 ? parseInt(p.rest[0], 10) : 1;
         if (isNaN(count) || count < 1) {
             this.error('invalid count');
             return;
         }
-        if (border) {
+        if (art) {
+            const loaded = [];
+            for (let i = 0; i < count; i++) {
+                const loader = ARTWORKS[Math.floor(Math.random() * ARTWORKS.length)];
+                loaded.push(await loader());
+            }
+            this.system.flashArt(loaded);
+        } else if (border) {
             this.system.flashBorder(count);
         } else {
             this.system.flash(count);
@@ -17,7 +26,7 @@ export class Flash extends CmdBase {
     }
 
     static get commandName() { return 'flash'; }
-    static get help() { return 'Flash screen N times (default 1). --border for border flash.'; }
+    static get help() { return 'Flash screen N times. --border for border, --art for random artwork.'; }
     static get menu() { return 'Flash the screen'; }
-    static get usage() { return 'flash [--border] [count]'; }
+    static get usage() { return 'flash [--art|--border] [count]'; }
 }

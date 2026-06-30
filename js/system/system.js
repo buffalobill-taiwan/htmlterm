@@ -366,6 +366,13 @@ export class SystemManager {
         this._flashBorderCycle();
     }
 
+    flashArt(artworks) {
+        this._flashGen = this._abortGeneration;
+        this._artQueue = artworks.slice();
+        this.holdBusy();
+        this._flashArtNext();
+    }
+
     _flashCleanup() {
         if (this._flashTimerId) { clearTimeout(this._flashTimerId); this._flashTimerId = null; }
         if (this._flashOv) {
@@ -433,6 +440,47 @@ export class SystemManager {
                 this.releaseBusy();
             }
         }, 60);
+    }
+
+    _flashArtNext() {
+        if (this._flashGen !== this._abortGeneration) { this._flashCleanup(); return; }
+        if (!this._artQueue || this._artQueue.length === 0) { this._flashCleanup(); this.releaseBusy(); return; }
+
+        const mod = this._artQueue.shift();
+        const { cols, pixels } = mod.default;
+        const artRows = Math.ceil(pixels.length / cols);
+        const cellRows = Math.ceil(artRows / 2);
+        const ox = Math.floor((this.term.cols - cols) / 2);
+        const oy = Math.floor((this.term.rows - cellRows) / 2);
+
+        const ctx = { pixels, cols, artRows };
+        this._flashOv = {
+            y: oy, x: ox, h: cellRows, w: cols,
+            z: OverlayZ.FLASH,
+            owner: null,
+            getCell: (relY, relX) => {
+                const py = relY * 2;
+                const fg = ctx.pixels[py * ctx.cols + relX];
+                const bg = py + 1 < ctx.artRows ? ctx.pixels[(py + 1) * ctx.cols + relX] : 0;
+                return makeCell('▀', { ...defaultAttr(), fg, bg }, 1);
+            },
+        };
+        this.term.addOverlay(this._flashOv);
+        this.term.markAllDirty();
+
+        this._flashTimerId = setTimeout(() => {
+            this._flashTimerId = null;
+            if (this._flashGen !== this._abortGeneration) { this._flashCleanup(); return; }
+            this._flashCleanup();
+            if (this._artQueue.length > 0) {
+                this._flashTimerId = setTimeout(() => {
+                    this._flashTimerId = null;
+                    this._flashArtNext();
+                }, 150);
+            } else {
+                this.releaseBusy();
+            }
+        }, 150);
     }
 }
 

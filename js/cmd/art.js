@@ -1,6 +1,6 @@
 import { CmdBase } from './CmdBase.js';
 
-const ARTWORKS = [
+export const ARTWORKS = [
     () => import('./art/mona.js'),
     () => import('./art/night.js'),
     () => import('./art/adam.js'),
