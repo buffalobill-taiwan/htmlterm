@@ -26,7 +26,7 @@ export class Flash extends CmdBase {
     }
 
     static get commandName() { return 'flash'; }
-    static get help() { return 'Flash screen N times. --border for border, --art for random artwork.'; }
+    static get help() { return 'Flash screen N times. --border / --art.'; }
     static get menu() { return 'Flash the screen'; }
     static get usage() { return 'flash [--art|--border] [count]'; }
 }
