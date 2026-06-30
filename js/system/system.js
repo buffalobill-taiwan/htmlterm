@@ -208,6 +208,7 @@ export class SystemManager {
         this._busy = false;
         this._queuedInput = [];
         this._readLineState = null;
+        this._framePopHooks = [];
         while (this._cmdStack.length > 1) this._cmdStack.pop();
         this.typewriter.abort();
         this._flashCleanup();
