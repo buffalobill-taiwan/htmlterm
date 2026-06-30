@@ -19,4 +19,5 @@ export { MbtiCmd } from './mbti.js';
 export { AstrologyCmd } from './astrology.js';
 export { Art } from './art.js';
 export { Sleep } from './sleep.js';
+export { TimeCmd } from './time.js';
 

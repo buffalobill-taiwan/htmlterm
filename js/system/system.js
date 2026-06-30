@@ -21,6 +21,7 @@ export class SystemManager {
         this._abortEpoch = 0;
         this._flashOv = null;
         this._flashTimerId = null;
+        this._framePopHooks = [];
 
         this.typewriter = new Typewriter(this.term);
         this.typewriter.onDrain(() => this._tick());
@@ -103,10 +104,19 @@ export class SystemManager {
         this._cmdStack.push(frame);
     }
 
+    addFramePopHook(fn) {
+        this._framePopHooks.push(fn);
+        return () => {
+            const idx = this._framePopHooks.indexOf(fn);
+            if (idx >= 0) this._framePopHooks.splice(idx, 1);
+        };
+    }
+
     _processStack() {
         while (true) {
             while (this._cmdStack.length > 0 && this._cmdStack[this._cmdStack.length - 1].done) {
                 this._cmdStack.pop();
+                for (const fn of this._framePopHooks.slice()) fn();
                 if (this._cmdStack.length > 0 && this._cmdStack[this._cmdStack.length - 1].persistent) {
                     this._cmdStack[this._cmdStack.length - 1]._pendingActivate = true;
                 }
@@ -140,7 +150,7 @@ export class SystemManager {
         }
     }
 
-    execute(line) {
+    _execCmd(line) {
         const trimmed = line.trim();
         if (trimmed.length === 0) {
             const top = this._cmdStack[this._cmdStack.length - 1];
@@ -148,8 +158,6 @@ export class SystemManager {
             this._tick();
             return;
         }
-        this.editor.history.push(trimmed);
-        if (this.editor.history.length > 100) this.editor.history.shift();
 
         const tokens = tokenize(trimmed);
         const cmd = tokens[0] ? tokens[0].toLowerCase() : '';
@@ -159,11 +167,16 @@ export class SystemManager {
         if (handler) {
             const cmdInstance = this._cmdInstances[cmd];
             this._pushFrame(new SyncCmdFrame(cmd, args, cmdInstance));
-            this._tick();
         } else {
             this._pushFrame(new SyncCmdFrame(cmd, args, null));
-            this._tick();
         }
+        this._tick();
+    }
+
+    execute(line) {
+        this.editor.history.push(line.trim());
+        if (this.editor.history.length > 100) this.editor.history.shift();
+        this._execCmd(line);
     }
 
     readLine(callback) {
