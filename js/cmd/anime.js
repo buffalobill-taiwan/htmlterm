@@ -1,5 +1,20 @@
 import { CmdBase } from './CmdBase.js';
+import { decodeRLE, applyDiff } from '../util/pixel-codec.js';
 import { OverlayZ, createEmptyBuffer, makeOverlayGetCell, CURSOR_HIDE, CURSOR_SHOW, makeCell, defaultAttr } from '../util/sgr.js';
+
+function toCells(pixels, cols, termRows, pixelRows) {
+    const frameBuf = new Array(termRows);
+    for (let ty = 0; ty < termRows; ty++) {
+        const row = new Array(cols);
+        for (let x = 0; x < cols; x++) {
+            const fg = pixels[ty * 2 * cols + x];
+            const bg = (ty * 2 + 1) < pixelRows ? pixels[(ty * 2 + 1) * cols + x] : 0;
+            row[x] = makeCell('▀', { ...defaultAttr(), fg, bg }, 1);
+        }
+        frameBuf[ty] = row;
+    }
+    return frameBuf;
+}
 
 export class AnimeCmd extends CmdBase {
     static get commandName() { return 'anime'; }
@@ -8,25 +23,18 @@ export class AnimeCmd extends CmdBase {
 
     async execute(args) {
         const { default: data } = await import('./art/anime.js');
-        const { cols, rows, frames } = data;
+        const { cols, rows, frames: numFrames, rle0, diffs } = data;
         const termRows = rows / 2;
         const overlayH = termRows + 1;
         const ox = Math.floor((this.term.cols - cols) / 2);
         const oy = Math.floor((this.term.rows - overlayH) / 2);
 
-        const cellFrames = frames.map(pixels => {
-            const frameBuf = new Array(termRows);
-            for (let ty = 0; ty < termRows; ty++) {
-                const row = new Array(cols);
-                for (let x = 0; x < cols; x++) {
-                    const fg = pixels[ty * 2 * cols + x];
-                    const bg = (ty * 2 + 1) < rows ? pixels[(ty * 2 + 1) * cols + x] : 0;
-                    row[x] = makeCell('▀', { ...defaultAttr(), fg, bg }, 1);
-                }
-                frameBuf[ty] = row;
-            }
-            return frameBuf;
-        });
+        let prevFrame = decodeRLE(rle0, cols * rows);
+        const cellFrames = [toCells(prevFrame, cols, termRows, rows)];
+        for (const diff of diffs) {
+            applyDiff(prevFrame, diff);
+            cellFrames.push(toCells(prevFrame, cols, termRows, rows));
+        }
 
         const hintText = 'Press Ctrl+C to stop';
         const hintPad = Math.floor((cols - hintText.length) / 2);

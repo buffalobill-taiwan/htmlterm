@@ -16,7 +16,13 @@ Live demo: <https://buffalobill-taiwan.github.io/htmlterm/>
 | Automated tests | Excluded — manual testing only |
 | CI | Excluded — not planned |
 
-Recent focus (Jun 2026): flash refactored from CSS DOM overlay to buffer overlay
+Recent focus (Jun 2026): `anime` rewritten from `setInterval`+esc-seq to
+rAF + buffer overlay compositing, centered like `flash --art`.
+`js/util/pixel-codec.js` added — RLE+diff compression for pixel data;
+tools/compress-anime.js offline script compresses frame 0 → RLE (492 vs 1800),
+frames 1–123 → frame differencing (21376 vs 221400 raw entries).
+Source size 523KB → 86KB (6.1×), gzip 18.5KB → 29KB.
+flash refactored from CSS DOM overlay to buffer overlay
 compositing (`OverlayZ.FLASH = 200`); `ARTWORKS` exported from `art.js` for reuse;
 `flash --art` renders random artwork inline via same overlay pipeline.
 `terminal.js` gained `markAllDirty()` proxy.
@@ -378,15 +384,16 @@ js/cmd/
 ├── dvd.js             DvdCmd      — toggle bouncing DVD logo
 ├── flash.js           Flash       — screen/border/art flash; `--border`, `--art` flags; Ctrl+C abort (buffer overlay)
 ├── art.js             Art         — async pixel-art renderer (random artwork)
+├── anime.js           Anime       — play 124-frame animation (rAF + buffer overlay, pixel-codec)
 ├── sleep.js           Sleep       — wait N seconds; Ctrl+C abort
 ├── time.js            TimeCmd     — measure execution time of a command
-├── art/               Static pixel data modules (adam, blacklotus, glaneuses, …)
+├── art/               Static pixel data modules (adam, blacklotus, glaneuses, anime, …)
 └── widgets/
     ├── ClockWidget.js
     └── DVDWidget.js
 ```
 
-**17 registered commands:** `art`, `ascii`, `astrology`, `calc`, `clear`, `clock`,
+**18 registered commands:** `anime`, `art`, `ascii`, `astrology`, `calc`, `clear`, `clock`,
 `cowsay`, `date`, `dvd`, `echo`, `flash`, `help`, `menu`,
 `mbti`, `quiz`, `sleep`, `time`
 
@@ -622,6 +629,7 @@ draw() {
 - `tokenize.js`: Shell command tokenizer (backslash escaping, quotes)
 - `calc-expr.js`: Safe recursive-descent expression evaluator (`safeEval`)
 - `select-grid.js`: Grid navigation helpers (`defaultGridMove`, `displayWidth`) used by `CmdBase.select()`
+- `pixel-codec.js`: RLE + frame-diff pixel codec (`decodeRLE`, `applyDiff`, `computeRLE`, `computeDiff`)
 
 ### `js/dialog/`
 
@@ -640,7 +648,9 @@ draw() {
 - `widgets/ClockWidget.js`: TSR clock (8 cells, 1s interval)
 - `widgets/DVDWidget.js`: Bouncing DVD logo (7×3, 120ms interval)
 - `art.js` + `art/*.js`: Pixel-art renderer and static artwork data; exports `ARTWORKS` for reuse by `flash --art`
+- `anime.js`: 124-frame animation player (rAF + buffer overlay, pixel-codec)
 
 ### Tools
 
 - `tools/png2art.js`: Offline PNG → art module converter (not used at runtime)
+- `tools/compress-anime.js`: Offline script to compress anime pixel data (RLE + frame-diff)
