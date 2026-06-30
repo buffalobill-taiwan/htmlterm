@@ -7,6 +7,9 @@ export const ARTWORKS = [
     () => import('./art/kanagawa.js'),
     () => import('./art/glaneuses.js'),
     () => import('./art/blacklotus.js'),
+    () => import('./art/parel.js'),
+    () => import('./art/tang.js'),
+    () => import('./art/skrik.js'),
 ];
 
 export class Art extends CmdBase {

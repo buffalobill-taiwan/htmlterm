@@ -84,9 +84,12 @@ if (!artworkName) {
         .replace(/\b\w/g, c => c.toUpperCase());
 }
 
+const MAX_COLS = 80;
+const MAX_ROWS = 50;
+
 let txt;
 try {
-    txt = execSync(`convert "${filePath}" -depth 8 txt:-`, { encoding: 'utf8', maxBuffer: 10 * 1024 * 1024 });
+    txt = execSync(`convert "${filePath}" -resize ${MAX_COLS}x${MAX_ROWS}\\> -depth 8 txt:-`, { encoding: 'utf8', maxBuffer: 10 * 1024 * 1024 });
 } catch (e) {
     process.stderr.write('Error running convert: ' + e.message + '\n');
     process.exit(1);

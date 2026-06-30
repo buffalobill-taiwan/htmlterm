@@ -97,8 +97,6 @@ export class AstrologyCmd extends CmdBase {
     showFortune(signIdx) {
         const signName = ZODIAC[signIdx];
         const items = _fortune(signIdx);
-        this._waitingForDrain = true;
-
         this.print(bold(yellow('==================================================')) + '\r\n');
         this.print(bold(cyan('            ' + signName + ' 今日運勢')) + '\r\n');
         this.print(bold(yellow('==================================================')) + '\r\n');
@@ -109,7 +107,6 @@ export class AstrologyCmd extends CmdBase {
         this.print(bold(yellow('==================================================')) + '\r\n\r\n');
 
         this.printThen('', () => {
-            this._waitingForDrain = false;
             this.close();
         });
     }

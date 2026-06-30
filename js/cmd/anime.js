@@ -40,15 +40,15 @@ export class AnimeCmd extends CmdBase {
         this.print(firstFrame);
 
         this.holdBusy();
-        const gen = this.abortGeneration;
+        const gen = this.abortEpoch;
         let frameIdx = 0;
 
         this._afterDrain(() => {
-            if (gen !== this.abortGeneration) { this.releaseBusy(); return; }
+            if (gen !== this.abortEpoch) { this.releaseBusy(); return; }
             this.term.write('\x1B[?25l');  // typewriter drain shows cursor; hide it again
 
             const interval = setInterval(() => {
-                if (gen !== this.abortGeneration) {
+                if (gen !== this.abortEpoch) {
                     clearInterval(interval);
                     this.term.write('\x1B[?25h');  // restore cursor
                     this.releaseBusy();

@@ -26,6 +26,11 @@ export class CmdBase {
     execute(args) {}
     print(text) { this.system.print(text); }
     readLine(callback) { this.system.readLine(callback); }
+
+    // Override _onKey(data) for interactive key handling inside select()/prompt() flows.
+    // Only override handleKey() directly if you must bypass all infrastructure
+    // (Ctrl+C, typewriter guard, select intercept) — ShellCmd is the sole example.
+    // Most interactive cmds should use select()/readLine()/prompt() instead.
     // Private implementation — use printThen() for interactive flows (select/prompt).
     // Use _afterDrain() directly only when cmd.closed stays true (e.g. pure-output async cmds
     // like anime that hold busy and don't open interactive mode).
@@ -35,7 +40,7 @@ export class CmdBase {
     }
     holdBusy() { this.system.holdBusy(); }
     releaseBusy() { this.system.releaseBusy(); }
-    get abortGeneration() { return this.system.abortGeneration; }
+    get abortEpoch() { return this.system.abortEpoch; }
     get cmdList() { return this.system.cmdList; }
 
     toggleWidget(key, WidgetClass) {

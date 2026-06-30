@@ -2,8 +2,8 @@ import { CmdBase } from './CmdBase.js';
 import { cyan, bold, yellow, white, red, magenta } from '../util/sgr.js';
 
 export class MbtiCmd extends CmdBase {
-    constructor(shell) {
-        super(shell);
+    constructor() {
+        super();
         this.pools = {
             EI: [
                 {
@@ -205,8 +205,6 @@ export class MbtiCmd extends CmdBase {
 
         const profile = profiles[mbti] || { title: '未知類型', desc: '無法取得對應的 MBTI 描述。' };
 
-        this._waitingForDrain = true;
-
         this.print(bold(yellow('==================================================')) + '\r\n');
         this.print(bold(cyan('              MBTI 職業性格測試結果')) + '\r\n');
         this.print(bold(yellow('==================================================')) + '\r\n');
@@ -216,7 +214,6 @@ export class MbtiCmd extends CmdBase {
         this.print(bold(yellow('==================================================')) + '\r\n\r\n');
 
         await this.waitForPrint();
-        this._waitingForDrain = false;
     }
 
     static get commandName() { return 'mbti'; }

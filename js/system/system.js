@@ -18,7 +18,7 @@ export class SystemManager {
         this._queuedInput = [];
         this._busy = false;
         this._readLineState = null;
-        this._abortGeneration = 0;
+        this._abortEpoch = 0;
         this._flashOv = null;
         this._flashTimerId = null;
 
@@ -51,6 +51,7 @@ export class SystemManager {
     _registerCommands(cmdModule) {
         for (const Cls of Object.values(cmdModule)) {
             if (typeof Cls !== 'function' || !Cls.commandName) continue;
+            if (Cls.commandName === 'shell') continue; // persistent shell, not a user command
             const cmd = new Cls();
             const name = Cls.commandName;
             const help = Cls.help;
@@ -77,7 +78,7 @@ export class SystemManager {
     }
 
     get busy() { return this._busy; }
-    get abortGeneration() { return this._abortGeneration; }
+    get abortEpoch() { return this._abortEpoch; }
 
     holdBusy() { this._busy = true; }
     releaseBusy() {
@@ -193,7 +194,7 @@ export class SystemManager {
     }
 
     _abortAll() {
-        this._abortGeneration++;
+        this._abortEpoch++;
         this._busy = false;
         this._queuedInput = [];
         this._readLineState = null;
@@ -353,21 +354,21 @@ export class SystemManager {
     // === Flash overlay (buffer-based, no CSS DOM) ===
 
     flash(count = 1) {
-        this._flashGen = this._abortGeneration;
+        this._flashGen = this._abortEpoch;
         this._flashRemaining = count;
         this.holdBusy();
         this._flashCycle();
     }
 
     flashBorder(count = 1) {
-        this._flashGen = this._abortGeneration;
+        this._flashGen = this._abortEpoch;
         this._flashRemaining = count;
         this.holdBusy();
         this._flashBorderCycle();
     }
 
     flashArt(artworks) {
-        this._flashGen = this._abortGeneration;
+        this._flashGen = this._abortEpoch;
         this._artQueue = artworks.slice();
         this.holdBusy();
         this._flashArtNext();
@@ -392,7 +393,7 @@ export class SystemManager {
     }
 
     _flashCycle() {
-        if (this._flashGen !== this._abortGeneration) { this._flashCleanup(); return; }
+        if (this._flashGen !== this._abortEpoch) { this._flashCleanup(); return; }
         if (this._flashRemaining <= 0) { this.releaseBusy(); return; }
 
         this._flashOv = this._flashOverlay(() => FLASH_WHITE);
@@ -401,7 +402,7 @@ export class SystemManager {
 
         this._flashTimerId = setTimeout(() => {
             this._flashTimerId = null;
-            if (this._flashGen !== this._abortGeneration) { this._flashCleanup(); return; }
+            if (this._flashGen !== this._abortEpoch) { this._flashCleanup(); return; }
             this._flashCleanup();
             this._flashRemaining--;
             if (this._flashRemaining > 0) {
@@ -416,7 +417,7 @@ export class SystemManager {
     }
 
     _flashBorderCycle() {
-        if (this._flashGen !== this._abortGeneration) { this._flashCleanup(); return; }
+        if (this._flashGen !== this._abortEpoch) { this._flashCleanup(); return; }
         if (this._flashRemaining <= 0) { this.releaseBusy(); return; }
 
         const cols = this.term.cols;
@@ -428,7 +429,7 @@ export class SystemManager {
 
         this._flashTimerId = setTimeout(() => {
             this._flashTimerId = null;
-            if (this._flashGen !== this._abortGeneration) { this._flashCleanup(); return; }
+            if (this._flashGen !== this._abortEpoch) { this._flashCleanup(); return; }
             this._flashCleanup();
             this._flashRemaining--;
             if (this._flashRemaining > 0) {
@@ -443,7 +444,7 @@ export class SystemManager {
     }
 
     _flashArtNext() {
-        if (this._flashGen !== this._abortGeneration) { this._flashCleanup(); return; }
+        if (this._flashGen !== this._abortEpoch) { this._flashCleanup(); return; }
         if (!this._artQueue || this._artQueue.length === 0) { this._flashCleanup(); this.releaseBusy(); return; }
 
         const mod = this._artQueue.shift();
@@ -470,7 +471,7 @@ export class SystemManager {
 
         this._flashTimerId = setTimeout(() => {
             this._flashTimerId = null;
-            if (this._flashGen !== this._abortGeneration) { this._flashCleanup(); return; }
+            if (this._flashGen !== this._abortEpoch) { this._flashCleanup(); return; }
             this._flashCleanup();
             if (this._artQueue.length > 0) {
                 this._flashTimerId = setTimeout(() => {

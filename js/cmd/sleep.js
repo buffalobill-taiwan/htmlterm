@@ -7,10 +7,10 @@ export class Sleep extends CmdBase {
             this.error('invalid number');
             return;
         }
-        const gen = this.abortGeneration;
+        const gen = this.abortEpoch;
         this.holdBusy();
         setTimeout(() => {
-            if (gen !== this.abortGeneration) return;
+            if (gen !== this.abortEpoch) return;
             this.releaseBusy();
         }, seconds * 1000);
     }
