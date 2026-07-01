@@ -133,7 +133,12 @@ export class Renderer {
 
             span.className = this._spanClass(fg, bg, cell.italic, cell.underline, cell.crossedOut, cell.blink, cell.dim);
 
-            if (cell._clipRight) {
+            if (cell.clip) {
+                const ox = (cell.clipOffX || 0) * this.charWidth;
+                const oy = (cell.clipOffY || 0) * this.charHeight;
+                span.innerHTML = '<span style="position:absolute;left:' + ox + 'px;top:' + oy + 'px">' + (cell.ch || ' ') + '</span>';
+                span.style.cssText = 'position:relative;display:inline-block;width:' + this.charWidth + 'px;height:' + this.charHeight + 'px;font-size:' + (this.charHeight * 2) + 'px;line-height:' + (this.charHeight * 2) + 'px;overflow:hidden;vertical-align:top;';
+            } else if (cell._clipRight) {
                 span.style.cssText = 'display:inline-block;width:' + this.charWidth + 'px;height:' + this.charHeight + 'px;overflow:hidden;vertical-align:top;';
             } else if (cell._clipLeft) {
                 span.style.cssText = 'display:inline-block;width:' + this.charWidth + 'px;height:' + this.charHeight + 'px;overflow:hidden;text-indent:-' + this.charWidth + 'px;vertical-align:top;';

@@ -126,11 +126,17 @@ export class Screen {
     lineFeedEdge() {
         if (this.curY < this.scrollTop) this.curY = this.scrollTop;
         this.markRowDirty(this.curY);
-        if (this.curY >= this.scrollBottom) {
-            this._scrollUp(1);
+
+        const curHasBig = this._rowHasBigChar(this.curY);
+        const nextHasBig = this.curY + 1 < this.rows && this._rowHasBigChar(this.curY + 1);
+        const step = (curHasBig && nextHasBig) ? 2 : 1;
+
+        const target = this.curY + step;
+        if (target > this.scrollBottom) {
+            this._scrollUp(target - this.scrollBottom);
             this.curY = this.scrollBottom;
         } else {
-            this.curY++;
+            this.curY = target;
         }
     }
 
@@ -145,6 +151,9 @@ export class Screen {
     }
 
     writeChar(ch) {
+        if (this.attr.big) {
+            return this._writeBigChar(ch);
+        }
         const cell = this._makeCell(ch);
         if (cell.width === 2 && this.curX >= this.cols - 1) {
             this.curX = 0;
@@ -171,6 +180,41 @@ export class Screen {
         }
         this.markRowDirty(this.curY);
         this.curX += cell.width;
+    }
+
+    _writeBigChar(ch) {
+        const nCols = this.isWide(ch) ? 4 : 2;
+
+        if (this.curX + nCols > this.cols) {
+            this.curX = 0;
+            this.lineFeedEdge();
+        }
+
+        if (this.curY >= this.rows - 1) {
+            this._scrollUp(1);
+            this.curY = this.rows - 2;
+        }
+
+        for (let r = 0; r < 2; r++) {
+            for (let c = 0; c < nCols; c++) {
+                const cell = makeCell(ch, this.attr, 1);
+                cell.clip = true;
+                cell.clipOffX = -c;
+                cell.clipOffY = -r;
+                this.buffer[this.curY + r][this.curX + c] = cell;
+            }
+            this.markRowDirty(this.curY + r);
+        }
+        this.curX += nCols;
+    }
+
+    _rowHasBigChar(rowIdx) {
+        const row = this.buffer[rowIdx];
+        if (!row) return false;
+        for (let c = 0; c < this.cols; c++) {
+            if (row[c] && row[c].clip) return true;
+        }
+        return false;
     }
 
     clearBuffer() {

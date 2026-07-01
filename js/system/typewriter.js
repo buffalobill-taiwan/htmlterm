@@ -18,30 +18,21 @@ export class Typewriter {
         if (!text) return;
         const tokens = this._tokenize(text);
 
-        const merged = [];
-        for (let i = 0; i < tokens.length; i++) {
-            const t = tokens[i];
-            if (t.type === 'seq' && i + 1 < tokens.length && tokens[i + 1].type === 'text') {
-                const next = tokens[i + 1];
-                let totalDelay = 0;
-                for (const ch of next.text) {
-                    totalDelay += this.term.isWide(ch) ? this._speed.wide : this._speed.half;
-                }
-                merged.push({ type: 'seqtext', seq: t.text, text: next.text, delay: totalDelay });
-                i++;
-            } else if (t.type === 'nl') {
-                merged.push({ type: 'char', ch: '\n', wide: false });
+        const expanded = [];
+        for (const t of tokens) {
+            if (t.type === 'nl') {
+                expanded.push({ type: 'char', ch: '\n', wide: false });
             } else if (t.type === 'text') {
                 for (const ch of t.text) {
                     const wide = this.term.isWide(ch);
-                    merged.push({ type: 'char', ch, wide });
+                    expanded.push({ type: 'char', ch, wide });
                 }
             } else {
-                merged.push(t);
+                expanded.push(t);
             }
         }
 
-        this._queue.push(...merged);
+        this._queue.push(...expanded);
         this._start();
     }
 
@@ -53,7 +44,6 @@ export class Typewriter {
         let out = '';
         for (const item of this._queue) {
             if (item.type === 'seq') out += item.text;
-            else if (item.type === 'seqtext') out += item.seq + item.text;
             else out += item.ch;
         }
         this._queue = [];
@@ -128,15 +118,13 @@ export class Typewriter {
         while (this._accumulator >= 0 && this._queue.length) {
             const item = this._queue[0];
             const delay = item.type === 'seq' ? 0
-                : item.type === 'seqtext' ? item.delay
                 : (item.wide ? this._speed.wide : this._speed.half);
 
             if (delay > this._accumulator) break;
 
             this._accumulator -= delay;
             this._queue.shift();
-            if (item.type === 'seqtext') out += item.seq + item.text;
-            else if (item.type === 'seq') out += item.text;
+            if (item.type === 'seq') out += item.text;
             else out += item.ch;
         }
 

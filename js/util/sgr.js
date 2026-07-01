@@ -1,7 +1,7 @@
 import { DEFAULT_FG, DEFAULT_BG, CSI_INTRODUCER } from './constants.js';
 
 export function defaultAttr() {
-    return { fg: DEFAULT_FG, bg: DEFAULT_BG, bold: false, dim: false, italic: false, underline: false, blink: false, inverse: false, conceal: false, crossedOut: false };
+    return { fg: DEFAULT_FG, bg: DEFAULT_BG, bold: false, dim: false, italic: false, underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, big: false };
 }
 
 export function applySGR(attr, params) {
@@ -24,6 +24,8 @@ export function applySGR(attr, params) {
         else if (p === 27) attr.inverse = false;
         else if (p === 28) attr.conceal = false;
         else if (p === 29) attr.crossedOut = false;
+        else if (p === 500) attr.big = true;
+        else if (p === 501) attr.big = false;
         else if (p >= 30 && p <= 37) attr.fg = p - 30;
         else if (p === 39) attr.fg = DEFAULT_FG;
         else if (p >= 40 && p <= 47) attr.bg = p - 40;
