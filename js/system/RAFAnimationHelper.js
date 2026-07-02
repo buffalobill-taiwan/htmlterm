@@ -1,6 +1,7 @@
 // RAF-based animation helper with overlay management
 
 import { CURSOR_SHOW, CURSOR_HIDE, OverlayZ } from '../util/sgr.js';
+import { term } from './sys.js';
 
 /**
  * Manager for RAF-driven animations with overlay compositing.
@@ -8,7 +9,6 @@ import { CURSOR_SHOW, CURSOR_HIDE, OverlayZ } from '../util/sgr.js';
 export class RAFAnimationManager {
     constructor(cmd, options = {}) {
         this.cmd = cmd;
-        this.term = cmd.term;
         this.overlay = null;
         this.rafId = null;
         this.isRunning = false;
@@ -18,8 +18,8 @@ export class RAFAnimationManager {
             z: options.z || OverlayZ.FLASH,
             y: options.y !== undefined ? options.y : 1,
             x: options.x !== undefined ? options.x : 0,
-            w: options.w || this.term.cols,
-            h: options.h || (this.term.rows - 2),
+            w: options.w || term.cols,
+            h: options.h || (term.rows - 2),
             hideCursor: options.hideCursor !== false,
             holdBusy: options.holdBusy !== false,
             ...options,
@@ -55,7 +55,7 @@ export class RAFAnimationManager {
         this.isRunning = true;
 
         if (this.options.hideCursor) {
-            this.term.write(CURSOR_HIDE);
+            term.write(CURSOR_HIDE);
         }
 
         if (this.options.holdBusy) {
@@ -63,7 +63,7 @@ export class RAFAnimationManager {
         }
 
         if (this.overlay) {
-            this.term.addOverlay(this.overlay);
+            term.addOverlay(this.overlay);
         }
 
         let frameIndex = 0;
@@ -108,13 +108,13 @@ export class RAFAnimationManager {
         }
 
         if (this.overlay) {
-            this.term.removeOverlay(this.overlay);
+            term.removeOverlay(this.overlay);
         }
 
-        this.term.markAllDirty();
+        term.markAllDirty();
 
         if (this.options.hideCursor) {
-            this.term.write(CURSOR_SHOW);
+            term.write(CURSOR_SHOW);
         }
 
         if (this.options.holdBusy) {

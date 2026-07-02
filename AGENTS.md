@@ -153,9 +153,10 @@ so it works correctly regardless of initialization order. Method calls on the pr
 preserve `this` binding to `SystemManager`. All cmd files use these proxies;
 `SystemManager` is no longer imported in `js/cmd/`.
 
-`CmdBase` getters (`this.system` / `this.term`) return the proxies, so `CmdBase`
-subclass code via `this.system.xxx` / `this.term.xxx` works identically. Files
-outside `CmdBase` (widgets, ShellCmd, static menu helpers) import `system` or `term`
+`CmdBase` methods (`this.print()`, `this.readLine()`, `this.select()`, etc.) use
+the proxies internally. CmdBase subclass code imports `system` or `term` directly from
+`'../system/sys.js'` (or uses `this.print()`/`this.select()` for CmdBase-provided APIs).
+Files outside `CmdBase` (widgets, ShellCmd, static menu helpers) also import `system` or `term`
 directly from `'../system/sys.js'`.
 
 ### Frame stack — persistent ShellFrame
@@ -293,9 +294,9 @@ is actually ready for input.
 ### How commands control I/O
 
 | Need | Use | Effect |
-|---|---|---|
+|---|---|---|---|
 | Animated output | `this.print(text)` | Enqueues via Typewriter; frame blocks on it |
-| Instant output | `this.term.write(text)` | Bypasses Typewriter — use with care |
+| Instant output | `term.write(text)` | Bypasses Typewriter — use with care |
 | Interactive input | `this.readLine(callback)` | Callback receives trimmed string; frame blocks via `readLineState` |
 | **Interactive select** | `this.select()` | Calls `open()` internally; SyncCmdFrame routes keys via `cmd.handleKey` |
 | Busy-wait / async | `this.holdBusy()` / `this.releaseBusy()` | Frame blocks via `_busy` until released |
@@ -304,7 +305,7 @@ is actually ready for input.
 | Async handler | `async execute()` | SyncCmdFrame blocks on `_asyncPending` until Promise resolves |
 
 **Critical rules for cmd authors:**
-1. Output → `this.print()`, not `this.term.write()`. The Typewriter animation is
+1. Output → `this.print()`, not `term.write()`. The Typewriter animation is
    what gates the frame lifecycle. Bypassing it risks prompt timing bugs.
 2. Interactive input → `this.select()` or `this.selectAsync()`. These call
    `this.open()` internally, causing `SyncCmdFrame.handleInput` to route keyboard
@@ -445,16 +446,16 @@ js/cmd/
 
 | Member | Purpose |
 |---|---|
-| `constructor()` | No parameters — `this.system` / `this.term` via getters returning Proxy from `js/system/sys.js` |
+| `constructor()` | No parameters — `system` / `term` proxies imported from `js/system/sys.js` |
 | `execute(args)` | Command logic, called with parsed arg array |
-| `print(text)` | Enqueues text to Typewriter via `this.system.print()` |
+| `print(text)` | Enqueues text to Typewriter via `system.print()` |
 | `readLine(callback)` | Request next line of input; callback receives trimmed string |
 | `open()` | Open cmd for interactive input — sets `closed=false`; paired with `close()` |
 | `close()` | End interactive mode — sets `closed=true`, shows cursor, ticks frame stack |
 | `holdBusy()` | Hold busy flag (for async/busy-wait commands like flash, sleep) |
 | `releaseBusy()` | Release busy flag |
 | `get abortGeneration()` | Monotonically increasing counter for Ctrl+C detection |
-| `get cmdList()` | `this.system.cmdList` — registered command list for help etc. |
+| `get cmdList()` | `system.cmdList` — registered command list for help etc. |
 | `static get commandName()` | Command name string, e.g. `'cowsay'` |
 | `static get help()` | Description shown in `help` output |
 | `static get menu()` | Menu description or `null` to hide from menu |
@@ -531,7 +532,7 @@ CmdBase.readLine(callback)
 ```
 
 **Critical rule:** `_readLineBuffer` is completely independent from `this.line`.
-A cmd using `readLine` must NOT access `this.line` or `this.system.editor.line` — the
+A cmd using `readLine` must NOT access `this.line` or `system.editor.line` — the
 input arrives only through the callback parameter.
 
 ### Typewriter — animated command output
@@ -659,8 +660,8 @@ draw() {
 ### `js/system/` — Shell system layer
 
 - `sys.js`: `system` / `term` Proxy exports — single access point for all cmd code (replaces direct `SystemManager.instance`)
-- `system.js`: SystemManager (singleton, typewriter, editor, mouse/drag, dialog positions, frame stack, execute, input routing, command registry, prompt, flash overlay) + WidgetManager
-- `CmdFrame.js`: Frame stack types (CmdFrame, SyncCmdFrame, DialogFrame, ShellFrame — cursor save/restore in `DialogFrame._saveCursor`/`finish`)
+- `system.js`: SystemManager (singleton, typewriter, editor, mouse/drag, dialog positions, frame stack, execute, input routing, command registry, prompt, flash overlay) + WidgetManager (uses `system` proxy from `sys.js`)
+- `CmdFrame.js`: Frame stack types (CmdFrame, SyncCmdFrame, DialogFrame, ShellFrame — cursor save/restore in `DialogFrame._saveCursor`/`finish`; uses `system`/`term` proxies from `sys.js`)
 - `LineEditor.js`: Line editing, history, tab completion; `_redraw()` uses `_cursorDisplayCol`/`_lastPromptRow` tracking + CUP for multi-row wrapped line support
 - `TextInputModel.js`: Low-level text input model (used by LineEditor + InputDialog)
 - `typewriter.js`: rAF-based animated command output
@@ -687,7 +688,7 @@ draw() {
 ### `js/cmd/`
 
 - `index.js`: Barrel export for auto-registration
-- `CmdBase.js`: Command base class (no constructor params — `this.system` / `this.term` via getters on Proxy from `js/system/sys.js`)
+- `CmdBase.js`: Command base class (no constructor params — `system` / `term` proxies imported from `js/system/sys.js`)
 - `ShellCmd.js`: Persistent shell REPL (CmdBase subclass)
 - `WidgetBase.js`: Overlay lifecycle, `_buffer`, `putc()`
 - `widgets/ClockWidget.js`: TSR clock (8 cells, 1s interval)

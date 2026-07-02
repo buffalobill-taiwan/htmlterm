@@ -3,6 +3,7 @@ import { LineEditor } from './LineEditor.js';
 import { tokenize } from '../util/tokenize.js';
 import { ShellCmd } from '../cmd/ShellCmd.js';
 import { ShellFrame, SyncCmdFrame, DialogFrame } from './CmdFrame.js';
+import { system } from './sys.js';
 import { bold, green, yellow, gray, warn, makeCell, defaultAttr, OverlayZ } from '../util/sgr.js';
 import { MenuDialog } from '../dialog/MenuDialog.js';
 
@@ -500,12 +501,10 @@ const FLASH_WHITE = makeCell(' ', (() => {
 
 export class WidgetManager {
     constructor() {
-        this.system = SystemManager.instance;
-        this.term = this.system.term;
         this._widgets = [];
         this._savedState = new Map();
         this._hook = () => this.redrawAll();
-        this.system.addDialogRestoreHook(this._hook);
+        system.addDialogRestoreHook(this._hook);
     }
 
     add(widget) {
@@ -533,7 +532,7 @@ export class WidgetManager {
     }
 
     destroy() {
-        this.system.removeDialogRestoreHook(this._hook);
+        system.removeDialogRestoreHook(this._hook);
         for (const w of this._widgets) w.stop();
         this._widgets = [];
     }

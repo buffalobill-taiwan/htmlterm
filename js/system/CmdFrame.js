@@ -1,10 +1,8 @@
 import { CURSOR_HIDE, CURSOR_SHOW } from '../util/sgr.js';
-import { SystemManager } from './system.js';
+import { system, term } from './sys.js';
 
 export class CmdFrame {
     constructor() {
-        this.system = SystemManager.instance;
-        this.term = this.system.term;
         this.done = false;
         this.started = false;
     }
@@ -36,20 +34,20 @@ export class SyncCmdFrame extends CmdFrame {
     get label() { return this.cmdName; }
 
     start() {
-        const handler = this.system.commands[this.cmdName];
+        const handler = system.commands[this.cmdName];
         if (handler) {
             const result = handler(this.args);
             if (result instanceof Promise) {
                 this._asyncPending = true;
                 result.then(() => {
                     this._asyncPending = false;
-                    if (!this.done) this.system.tick();
+                    if (!this.done) system.tick();
                 });
                 return;
             }
         } else if (this.cmdName) {
-            this.system.print('\x1B[31mCommand not found: ' + this.cmdName + '\x1B[0m\n');
-            this.system.print('Try \x1B[33mhelp\x1B[0m.\n');
+            system.print('\x1B[31mCommand not found: ' + this.cmdName + '\x1B[0m\n');
+            system.print('Try \x1B[33mhelp\x1B[0m.\n');
         }
         if (!this.blocked) this.finish();
     }
@@ -65,7 +63,7 @@ export class SyncCmdFrame extends CmdFrame {
 
     get blocked() {
         if (!this.started || this.done) return false;
-        return (this.cmd && !this.cmd.closed) || this._asyncPending || this.system.typewriter.isActive() || this.system.busy;
+        return (this.cmd && !this.cmd.closed) || this._asyncPending || system.typewriter.isActive() || system.busy;
     }
 }
 
@@ -86,24 +84,24 @@ export class DialogFrame extends CmdFrame {
 
     _saveCursor() {
         this._savedCursor = {
-            x: this.term.curX,
-            y: this.term.curY,
-            cursorHidden: this.term.cursorHidden,
+            x: term.curX,
+            y: term.curY,
+            cursorHidden: term.cursorHidden,
         };
-        this.term.cursorHidden = true;
-        this.term.write(CURSOR_HIDE);
+        term.cursorHidden = true;
+        term.write(CURSOR_HIDE);
     }
 
     finish() {
         if (this.done) return;
         if (this._savedCursor) {
             const s = this._savedCursor;
-            this.term.cursorHidden = s.cursorHidden;
-            this.term.write(s.cursorHidden ? CURSOR_HIDE : CURSOR_SHOW);
-            this.term.curX = s.x;
-            this.term.curY = s.y;
+            term.cursorHidden = s.cursorHidden;
+            term.write(s.cursorHidden ? CURSOR_HIDE : CURSOR_SHOW);
+            term.curX = s.x;
+            term.curY = s.y;
         }
-        for (const fn of (this.system.dialogRestoreHooks || [])) fn();
+        for (const fn of (system.dialogRestoreHooks || [])) fn();
         super.finish();
     }
 
@@ -137,7 +135,7 @@ export class ShellFrame extends CmdFrame {
     }
 
     handleInput(data) {
-        if (this.system.readLineState) return false;
+        if (system.readLineState) return false;
         this.cmd.handleKey(data);
         return true;
     }
