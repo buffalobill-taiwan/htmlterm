@@ -47,7 +47,7 @@ export class SyncCmdFrame extends CmdFrame {
                 });
                 return;
             }
-        } else {
+        } else if (this.cmdName) {
             this.system.print('\x1B[31mCommand not found: ' + this.cmdName + '\x1B[0m\n');
             this.system.print('Try \x1B[33mhelp\x1B[0m.\n');
         }

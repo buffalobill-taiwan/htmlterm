@@ -28,7 +28,11 @@ export class SystemManager {
 
         this.editor = new LineEditor(this.term, {
             onExecute: (line) => this.execute(line),
-            onShowPrompt: () => this.tick(),
+            onShowPrompt: () => {
+                const top = this.cmdStack[this.cmdStack.length - 1];
+                if (top && top.persistent) top._pendingActivate = true;
+                this.tick();
+            },
         });
 
         this.cmdList = [];
@@ -152,13 +156,6 @@ export class SystemManager {
 
     execCmd(line) {
         const trimmed = line.trim();
-        if (trimmed.length === 0) {
-            const top = this.cmdStack[this.cmdStack.length - 1];
-            if (top && top.persistent) top._pendingActivate = true;
-            this.tick();
-            return;
-        }
-
         const tokens = tokenize(trimmed);
         const cmd = tokens[0] ? tokens[0].toLowerCase() : '';
         const args = tokens.slice(1);
@@ -192,6 +189,8 @@ export class SystemManager {
             onShowPrompt: () => {
                 // Ctrl+C / Ctrl+D inside readLine — cancel
                 this.readLineState = null;
+                const top = this.cmdStack[this.cmdStack.length - 1];
+                if (top && top.persistent) top._pendingActivate = true;
                 this.tick();
             },
         });
@@ -208,14 +207,11 @@ export class SystemManager {
         this._busy = false;
         this._queuedInput = [];
         this.readLineState = null;
-        this._framePopHooks = [];
         while (this.cmdStack.length > 1) this.cmdStack.pop();
         this.typewriter.abort();
         this._flashCleanup();
         this.term.write('^C\n');
-        if (this.cmdStack.length === 1 && this.cmdStack[0].persistent) {
-            this.cmdStack[0]._pendingActivate = true;
-        }
+        this._pushFrame(new SyncCmdFrame('', [], null));
         this.tick();
     }
 
