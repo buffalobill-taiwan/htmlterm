@@ -4,7 +4,6 @@ import { addDragMethods, markDirtyRows } from '../util/drag.js';
 
 export class WidgetBase {
     constructor() {
-        this.term = term;
         this._y = 0;
         this._x = 0;
         this._w = 0;
@@ -12,7 +11,7 @@ export class WidgetBase {
         this._buffer = null;
         this._overlay = null;
 
-        addDragMethods(this, this.term, {
+        addDragMethods(this, term, {
             getX: () => this._x, getY: () => this._y,
             setX: v => this._x = v, setY: v => this._y = v,
             getW: () => this._w, getH: () => this._h,
@@ -31,16 +30,16 @@ export class WidgetBase {
             owner: this,
             getCell: makeOverlayGetCell(() => this._buffer, this._w, this._h),
         };
-        this.term.addOverlay(this._overlay);
+        term.addOverlay(this._overlay);
     }
 
     stop() {
         if (this._overlay) {
             for (let r = this._y; r < this._y + this._h; r++) {
-                this.term.markRowDirty(r);
+                term.markRowDirty(r);
             }
         }
-        this.term.removeOverlay(this._overlay);
+        term.removeOverlay(this._overlay);
         this._overlay = null;
         this._buffer = null;
     }
@@ -69,7 +68,7 @@ export class WidgetBase {
     }
 
     _markDirty() {
-        markDirtyRows(this.term, this._y, this._h);
+        markDirtyRows(term, this._y, this._h);
     }
 
     _startInterval(fn, ms) {
@@ -108,6 +107,6 @@ export class WidgetBase {
             bg: bg != null ? bg : def.bg,
         });
         this._buffer[y][x] = makeCell(ch, attr);
-        this.term.markRowDirty(this._y + y);
+        term.markRowDirty(this._y + y);
     }
 }

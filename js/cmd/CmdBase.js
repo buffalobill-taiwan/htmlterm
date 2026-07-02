@@ -21,12 +21,9 @@ export class CmdBase {
     static get usage() { return null; }
     static get persistent() { return false; }
 
-    get system() { return system; }
-    get term() { return term; }
-
     execute(args) {}
-    print(text) { this.system.print(text); }
-    readLine(callback) { this.system.readLine(callback); }
+    print(text) { system.print(text); }
+    readLine(callback) { system.readLine(callback); }
 
     // Override _onKey(data) for interactive key handling inside select()/prompt() flows.
     // Only override handleKey() directly if you must bypass all infrastructure
@@ -36,16 +33,16 @@ export class CmdBase {
     // Use _afterDrain() directly only when cmd.closed stays true (e.g. pure-output async cmds
     // like anime that hold busy and don't open interactive mode).
     _afterDrain(callback) {
-        const cb = () => { this.system.typewriter.removeOnDrain(cb); callback(); };
-        this.system.typewriter.onDrain(cb);
+        const cb = () => { system.typewriter.removeOnDrain(cb); callback(); };
+        system.typewriter.onDrain(cb);
     }
-    holdBusy() { this.system.holdBusy(); }
-    releaseBusy() { this.system.releaseBusy(); }
-    get abortEpoch() { return this.system.abortEpoch; }
-    get cmdList() { return this.system.cmdList; }
+    holdBusy() { system.holdBusy(); }
+    releaseBusy() { system.releaseBusy(); }
+    get abortEpoch() { return system.abortEpoch; }
+    get cmdList() { return system.cmdList; }
 
     toggleWidget(key, WidgetClass) {
-        const wm = this.system.widgetManager;
+        const wm = system.widgetManager;
         const existing = wm._widgets.find(w => w.constructor === WidgetClass);
         if (existing) { wm.remove(existing); return false; }
         wm.add(new WidgetClass());
@@ -95,8 +92,8 @@ export class CmdBase {
     close() {
         if (this.closed) return;
         this.closed = true;
-        this.term.write(CURSOR_SHOW);
-        this.system.tick();
+        term.write(CURSOR_SHOW);
+        system.tick();
     }
 
     // Opens the command for interactive input (paired with close()).
@@ -118,11 +115,11 @@ export class CmdBase {
         const epoch = this._printCallbackEpoch;
         this.print(text);
         const cb = () => {
-            this.system.typewriter.removeOnDrain(cb);
+            system.typewriter.removeOnDrain(cb);
             if (this.closed || epoch !== this._printCallbackEpoch) return;
             callback();
         };
-        this.system.typewriter.onDrain(cb);
+        system.typewriter.onDrain(cb);
     }
 
     handleKey(data) {
@@ -134,15 +131,15 @@ export class CmdBase {
         const code = typeof data === 'string' ? data.charCodeAt(0) : data;
         if (code === 0x03) {
             this._selectState = null;
-            if (this.system.typewriter.isActive()) {
-                this.system.typewriter.dispose();
+            if (system.typewriter.isActive()) {
+                system.typewriter.dispose();
             }
             this.onCancel();
             return;
         }
         if (this._awaitingTypewriterDrain) {
-            if (this.system.typewriter.isActive()) {
-                this.system.typewriter.abort();
+            if (system.typewriter.isActive()) {
+                system.typewriter.abort();
             }
             return;
         }
@@ -166,7 +163,7 @@ export class CmdBase {
             render,
             onPick: opts.onPick,
             onCancel: opts.onCancel || null,
-            term: this.term,
+            term: term,
             selRow: 0,
             selCol: 0,
         };
@@ -174,7 +171,7 @@ export class CmdBase {
         this._awaitingTypewriterDrain = true;
         this.printThen(opts.text || '', () => {
             this._awaitingTypewriterDrain = false;
-            this.term.write(CURSOR_HIDE);
+            term.write(CURSOR_HIDE);
             const ss = this._selectState;
             ss.render(ss.selRow, ss.selCol, ss.options, ss.term);
             renderedRef.value = true;
@@ -208,7 +205,7 @@ export class CmdBase {
         this._awaitingTypewriterDrain = true;
         this.printThen(text, () => {
             this._awaitingTypewriterDrain = false;
-            this.system.readLine(onInput);
+            system.readLine(onInput);
         });
     }
 
@@ -243,23 +240,23 @@ export class CmdBase {
 
     showMessage(msg) {
         return new Promise(resolve => {
-            const dlg = new ShowDialog(this.term, {
+            const dlg = new ShowDialog(term, {
                 message: msg,
                 onExit: resolve,
             });
-            this.system.pushDialogFrame(dlg);
+            system.pushDialogFrame(dlg);
         });
     }
 
     ask(question) {
         return new Promise(resolve => {
-            const dlg = new InputDialog(this.term, {
+            const dlg = new InputDialog(term, {
                 title: 'Input',
                 prompt: question,
                 onConfirm: val => resolve(val),
                 onCancel: () => resolve(null),
             });
-            this.system.pushDialogFrame(dlg);
+            system.pushDialogFrame(dlg);
         });
     }
 
