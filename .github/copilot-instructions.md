@@ -93,7 +93,7 @@ Renderer._blendOverlays(rowIdx):
 | Main buffer | 0 | Screen (Parser writes) | `Screen._buffer[][]` | Base layer | `term.write()` → Parser |
 | Widget (TSR) | 10 | WidgetBase subclass | `_buffer[][]` | Composited over main | `putc(x, y, ch, fg, bg, …)` |
 | Dialog | 100 | Dialog subclass | `_buffer[][]` | Composited over main | `_writeStr()` (SGR parsing inline) |
-| Flash | 200 | SystemManager | Inline `getCell()` | Highest priority | `_flashCycle()`, `_flashBorderCycle()`, `_flashArtNext()` |
+| Flash | 200 | flash-helper.js | Inline `getCell()` | Highest priority | `screenFlash()`, `borderFlash()`, `artSequence()` |
 
 **Critical**: Overlays never modify the main buffer. The main buffer is only touched by the Parser (via Screen methods). This ensures clean state separation.
 

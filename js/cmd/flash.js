@@ -1,6 +1,7 @@
-import { system } from '../system/sys.js';
+import { term } from '../system/sys.js';
 import { CmdBase } from './CmdBase.js';
 import { ARTWORKS } from './art.js';
+import { screenFlash, borderFlash, artSequence } from '../util/flash-helper.js';
 
 export class Flash extends CmdBase {
     async execute(args) {
@@ -18,11 +19,11 @@ export class Flash extends CmdBase {
                 const loader = ARTWORKS[Math.floor(Math.random() * ARTWORKS.length)];
                 loaded.push(await loader());
             }
-            system.flashArt(loaded);
+            artSequence(this, term, loaded);
         } else if (border) {
-            system.flashBorder(count);
+            borderFlash(this, term, count);
         } else {
-            system.flash(count);
+            screenFlash(this, term, count);
         }
     }
 

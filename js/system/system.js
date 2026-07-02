@@ -4,7 +4,7 @@ import { tokenize } from '../util/tokenize.js';
 import { ShellCmd } from '../cmd/ShellCmd.js';
 import { ShellFrame, SyncCmdFrame, DialogFrame } from './CmdFrame.js';
 import { system } from './sys.js';
-import { bold, green, yellow, gray, warn, makeCell, defaultAttr, OverlayZ } from '../util/sgr.js';
+import { bold, green, yellow, gray, warn } from '../util/sgr.js';
 import { MenuDialog } from '../dialog/MenuDialog.js';
 
 export class SystemManager {
@@ -20,8 +20,6 @@ export class SystemManager {
         this._busy = false;
         this.readLineState = null;
         this._abortEpoch = 0;
-        this._flashOv = null;
-        this._flashTimerId = null;
         this._framePopHooks = [];
 
         this.typewriter = new Typewriter(this.term);
@@ -210,7 +208,6 @@ export class SystemManager {
         this.readLineState = null;
         while (this.cmdStack.length > 1) this.cmdStack.pop();
         this.typewriter.abort();
-        this._flashCleanup();
         this.term.write('^C\n');
         this._pushFrame(new SyncCmdFrame('', [], null));
         this.tick();
@@ -359,145 +356,7 @@ export class SystemManager {
         this.menuDialog = menuDlg;
     }
 
-    // === Flash overlay (buffer-based, no CSS DOM) ===
-
-    flash(count = 1) {
-        this._flashGen = this._abortEpoch;
-        this._flashRemaining = count;
-        this.holdBusy();
-        this._flashCycle();
-    }
-
-    flashBorder(count = 1) {
-        this._flashGen = this._abortEpoch;
-        this._flashRemaining = count;
-        this.holdBusy();
-        this._flashBorderCycle();
-    }
-
-    flashArt(artworks) {
-        this._flashGen = this._abortEpoch;
-        this._artQueue = artworks.slice();
-        this.holdBusy();
-        this._flashArtNext();
-    }
-
-    _flashCleanup() {
-        if (this._flashTimerId) { clearTimeout(this._flashTimerId); this._flashTimerId = null; }
-        if (this._flashOv) {
-            this.term.removeOverlay(this._flashOv);
-            this.term.markAllDirty();
-            this._flashOv = null;
-        }
-    }
-
-    _flashOverlay(getCell) {
-        return {
-            y: 0, x: 0, h: this.term.rows, w: this.term.cols,
-            z: OverlayZ.FLASH,
-            owner: null,
-            getCell,
-        };
-    }
-
-    _flashCycle() {
-        if (this._flashGen !== this._abortEpoch) { this._flashCleanup(); return; }
-        if (this._flashRemaining <= 0) { this.releaseBusy(); return; }
-
-        this._flashOv = this._flashOverlay(() => FLASH_WHITE);
-        this.term.addOverlay(this._flashOv);
-        this.term.markAllDirty();
-
-        this._flashTimerId = setTimeout(() => {
-            this._flashTimerId = null;
-            if (this._flashGen !== this._abortEpoch) { this._flashCleanup(); return; }
-            this._flashCleanup();
-            this._flashRemaining--;
-            if (this._flashRemaining > 0) {
-                this._flashTimerId = setTimeout(() => {
-                    this._flashTimerId = null;
-                    this._flashCycle();
-                }, 100);
-            } else {
-                this.releaseBusy();
-            }
-        }, 60);
-    }
-
-    _flashBorderCycle() {
-        if (this._flashGen !== this._abortEpoch) { this._flashCleanup(); return; }
-        if (this._flashRemaining <= 0) { this.releaseBusy(); return; }
-
-        const cols = this.term.cols;
-        const rows = this.term.rows;
-        this._flashOv = this._flashOverlay((y, x) =>
-            (y === 0 || y === rows - 1 || x === 0 || x === cols - 1) ? FLASH_WHITE : null);
-        this.term.addOverlay(this._flashOv);
-        this.term.markAllDirty();
-
-        this._flashTimerId = setTimeout(() => {
-            this._flashTimerId = null;
-            if (this._flashGen !== this._abortEpoch) { this._flashCleanup(); return; }
-            this._flashCleanup();
-            this._flashRemaining--;
-            if (this._flashRemaining > 0) {
-                this._flashTimerId = setTimeout(() => {
-                    this._flashTimerId = null;
-                    this._flashBorderCycle();
-                }, 100);
-            } else {
-                this.releaseBusy();
-            }
-        }, 60);
-    }
-
-    _flashArtNext() {
-        if (this._flashGen !== this._abortEpoch) { this._flashCleanup(); return; }
-        if (!this._artQueue || this._artQueue.length === 0) { this._flashCleanup(); this.releaseBusy(); return; }
-
-        const mod = this._artQueue.shift();
-        const { cols, pixels } = mod.default;
-        const artRows = Math.ceil(pixels.length / cols);
-        const cellRows = Math.ceil(artRows / 2);
-        const ox = Math.floor((this.term.cols - cols) / 2);
-        const oy = Math.floor((this.term.rows - cellRows) / 2);
-
-        const ctx = { pixels, cols, artRows };
-        this._flashOv = {
-            y: oy, x: ox, h: cellRows, w: cols,
-            z: OverlayZ.FLASH,
-            owner: null,
-            getCell: (relY, relX) => {
-                const py = relY * 2;
-                const fg = ctx.pixels[py * ctx.cols + relX];
-                const bg = py + 1 < ctx.artRows ? ctx.pixels[(py + 1) * ctx.cols + relX] : 0;
-                return makeCell('▀', { ...defaultAttr(), fg, bg }, 1);
-            },
-        };
-        this.term.addOverlay(this._flashOv);
-        this.term.markAllDirty();
-
-        this._flashTimerId = setTimeout(() => {
-            this._flashTimerId = null;
-            if (this._flashGen !== this._abortEpoch) { this._flashCleanup(); return; }
-            this._flashCleanup();
-            if (this._artQueue.length > 0) {
-                this._flashTimerId = setTimeout(() => {
-                    this._flashTimerId = null;
-                    this._flashArtNext();
-                }, 150);
-            } else {
-                this.releaseBusy();
-            }
-        }, 150);
-    }
 }
-
-const FLASH_WHITE = makeCell(' ', (() => {
-    const a = defaultAttr();
-    a.fg = 15; a.bg = 15;
-    return a;
-})(), 1);
 
 export class WidgetManager {
     constructor() {

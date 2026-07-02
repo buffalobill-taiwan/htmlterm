@@ -38,6 +38,10 @@ System Proxy refactor (Jul 2026): `js/system/sys.js` added — Proxy-based `syst
 `term` exports replace direct `SystemManager.instance` access across all cmd files.
 All 14 cmd/widget files updated; zero remaining `SystemManager.instance` references
 in `js/cmd/`.
+Flash extraction (Jul 2026): flash overlay logic extracted from `SystemManager` to
+`js/util/flash-helper.js` — three standalone functions (`screenFlash`, `borderFlash`,
+`artSequence`) take `cmd`+`term` parameters, reusable by any command without
+`SystemManager` coupling. `system.js` shrunk by ~130 lines.
 
 ## Architecture
 
@@ -61,7 +65,7 @@ Renderer._blendOverlays(Y):
 | Main buffer (Screen) | 0 | Parser + shell | `term.write()` → Parser |
 | Widget (TSR) | 10 | WidgetBase._buffer | `putc()` → fills own buffer |
 | Dialog | 100 | Dialog._buffer | `_writeStr()` → inline SGR→cell attrs |
-| Flash (transient) | 200 | SystemManager inline getCell | `_flashCycle()` / `_flashBorderCycle()` / `_flashArtNext()` |
+| Flash (transient) | 200 | flash-helper.js | `screenFlash()` / `borderFlash()` / `artSequence()` |
 
 No `saveArea`/`restoreArea`, no scroll region protection. Each layer is
 independent; the main buffer is never touched by overlays.
@@ -181,8 +185,8 @@ execute("flash")             → push SyncCmdFrame → handler sets _busy=true
                                → block on _busy → _busy=false → finish → pop → prompt
 execute("flash --art")       → push SyncCmdFrame → async handler loads artwork
                                → block on _asyncPending → promise resolves
-                               → block on _busy → _flashArtNext cycle
-                               → _busy=false → finish → pop → prompt
+                                → block on _busy → artSequence cycle
+                                → _busy=false → finish → pop → prompt
 execute("art")               → push SyncCmdFrame → handler returns Promise
                                → block on _asyncPending → promise resolves
                                → typewriter active → block → drain → finish → pop → prompt
@@ -233,7 +237,7 @@ User input
 | **Cmd** (`this.print()`) | `CmdBase.print()` → `system.print()` → `Typewriter.enqueue()` | Animated (rAF; half=1, wide=2 frame credits) |
 | **Dialog** (`_writeStr`) | Fills `_buffer[][]` → overlay z=100 | Instant |
 | **Widget** (`putc`) | Fills `_buffer[][]` → overlay z=10 | Instant |
-| **Flash** (system) | Inline getCell → overlay z=200 | Instant (stepped via setTimeout cycle) |
+| **Flash** (flash-helper) | Inline getCell → overlay z=200 | Instant (stepped via setTimeout cycle) |
 | **Shell prompt** (`showPrompt`) | `term.write(system.prompt)` (direct, no Typewriter) | Instant |
 | **term.write()** (direct) | Bypasses Typewriter — renderer sees it next frame | Instant |
 
@@ -660,7 +664,7 @@ draw() {
 ### `js/system/` — Shell system layer
 
 - `sys.js`: `system` / `term` Proxy exports — single access point for all cmd code (replaces direct `SystemManager.instance`)
-- `system.js`: SystemManager (singleton, typewriter, editor, mouse/drag, dialog positions, frame stack, execute, input routing, command registry, prompt, flash overlay) + WidgetManager (uses `system` proxy from `sys.js`)
+- `system.js`: SystemManager (singleton, typewriter, editor, mouse/drag, dialog positions, frame stack, execute, input routing, command registry, prompt) + WidgetManager (uses `system` proxy from `sys.js`)
 - `CmdFrame.js`: Frame stack types (CmdFrame, SyncCmdFrame, DialogFrame, ShellFrame — cursor save/restore in `DialogFrame._saveCursor`/`finish`; uses `system`/`term` proxies from `sys.js`)
 - `LineEditor.js`: Line editing, history, tab completion; `_redraw()` uses `_cursorDisplayCol`/`_lastPromptRow` tracking + CUP for multi-row wrapped line support
 - `TextInputModel.js`: Low-level text input model (used by LineEditor + InputDialog)
@@ -676,6 +680,7 @@ draw() {
 - `calc-expr.js`: Safe recursive-descent expression evaluator (`safeEval`)
 - `select-grid.js`: Grid navigation helpers (`defaultGridMove`, `displayWidth`) used by `CmdBase.select()`
 - `pixel-codec.js`: RLE + frame-diff pixel codec (`decodeRLE`, `applyDiff`, `computeRLE`, `computeDiff`)
+- `flash-helper.js`: Standalone buffer overlay flash utilities (`screenFlash`, `borderFlash`, `artSequence`) — reusable by any command, no `SystemManager` dependency
 
 ### `js/dialog/`
 
