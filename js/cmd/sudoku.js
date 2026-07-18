@@ -1,6 +1,7 @@
 import { system, term } from '../system/sys.js';
 import { CmdBase } from './CmdBase.js';
 import { ConfirmDialog } from '../dialog/ConfirmDialog.js';
+import { SelectDialog } from '../dialog/SelectDialog.js';
 import { bold, red, green, cyan, yellow, gray, CURSOR_HIDE } from '../util/sgr.js';
 
 const SIZE = 9;
@@ -224,15 +225,51 @@ export class SudokuCmd extends CmdBase {
     }
 
     _pickDifficulty() {
-        this.print(bold(cyan('=== Sudoku ===')) + '\r\n');
-        this.select({
-            text: yellow('Select difficulty (↑↓←→ move, Enter confirm, Esc cancel)') + '\r\n',
-            options: [['Easy', 'Medium', 'Hard']],
-            onPick: (row, col, value) => {
-                term.write('\r\n\r\n');
-                this._startGame(value.toLowerCase());
+        this.open();
+        term.write(CURSOR_HIDE);
+        this._renderEmptyBoard();
+        const opts = ['Easy', 'Medium', 'Hard'];
+        const dialog = new SelectDialog(term, {
+            title: 'Sudoku',
+            message: yellow('Select difficulty'),
+            options: opts,
+            footer: '← → Move  ↩ Confirm  ESC Quit',
+            onSelect: (idx) => {
+                this._difficultyDialog = null;
+                this._startGame(opts[idx].toLowerCase());
+            },
+            onCancel: () => {
+                this._difficultyDialog = null;
+                this._quit();
             },
         });
+        dialog.open();
+        this._difficultyDialog = dialog;
+    }
+
+    _renderEmptyBoard() {
+        const lines = [];
+        lines.push(bold(cyan('  Sudoku')) + '                           ' +
+            gray('[n]ew [q]uit'));
+        lines.push('  ╔═══╤═══╤═══╦═══╤═══╤═══╦═══╤═══╤═══╗');
+        for (let r = 0; r < SIZE; r++) {
+            let row = '  ║';
+            for (let c = 0; c < SIZE; c++) {
+                row += '   ';
+                row += (c % BOX === BOX - 1) ? '║' : '│';
+            }
+            lines.push(row);
+            if (r % BOX === BOX - 1 && r < SIZE - 1) {
+                lines.push('  ╠═══╪═══╪═══╬═══╪═══╪═══╬═══╪═══╪═══╣');
+            } else if (r < SIZE - 1) {
+                lines.push('  ╟───┼───┼───╫───┼───┼───╫───┼───┼───╢');
+            }
+        }
+        lines.push('  ╚═══╧═══╧═══╩═══╧═══╧═══╩═══╧═══╧═══╝');
+        term.write('\x1B[2J\x1B[H');
+        for (const line of lines) {
+            term.write(line + '\r\n');
+        }
     }
 
     _startGame(difficulty) {
@@ -241,6 +278,7 @@ export class SudokuCmd extends CmdBase {
         this._timer = 0;
         this._autoCheck = true;
         this._errors = new Set();
+        this._difficultyDialog = null;
 
         const { board, solution, given } = _generate(difficulty);
         this._board = board;
@@ -405,6 +443,11 @@ export class SudokuCmd extends CmdBase {
     }
 
     _onKey(data) {
+        if (this._difficultyDialog) {
+            this._difficultyDialog.handleKey(data);
+            return;
+        }
+
         if (this._completed) {
             const code = typeof data === 'string' ? data.charCodeAt(0) : data;
             if (code === 0x03) { this._quit(); return; }
@@ -500,6 +543,10 @@ export class SudokuCmd extends CmdBase {
     }
 
     _quit() {
+        if (this._difficultyDialog) {
+            this._difficultyDialog.close();
+            this._difficultyDialog = null;
+        }
         if (this._timerInterval) {
             clearInterval(this._timerInterval);
             this._timerInterval = null;
