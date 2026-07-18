@@ -1,5 +1,6 @@
-import { term } from '../system/sys.js';
+import { system, term } from '../system/sys.js';
 import { CmdBase } from './CmdBase.js';
+import { ConfirmDialog } from '../dialog/ConfirmDialog.js';
 import { bold, red, green, cyan, yellow, gray, CURSOR_HIDE } from '../util/sgr.js';
 
 const SIZE = 9;
@@ -260,10 +261,12 @@ export class SudokuCmd extends CmdBase {
 
     _updateHeader() {
         const auto = this._autoCheck;
+        term.write('\x1B[s');
         term.write('\x1B[1;1H\x1B[K');
         term.write(bold(cyan('  Sudoku [' + DIFFICULTY[this._difficulty].label + ']')) +
             '    ' + yellow(_formatTime(this._timer)) +
-            '    ' + gray('[h]int [n]ew [c]heck:' + (auto ? 'ON' : 'OFF') + ' [q]uit'));
+            '    ' + gray('[g]ive up [n]ew [c]heck:' + (auto ? 'ON' : 'OFF') + ' [q]uit'));
+        term.write('\x1B[u');
     }
 
     _render() {
@@ -274,11 +277,26 @@ export class SudokuCmd extends CmdBase {
         }
     }
 
+    _hasConflict(r, c) {
+        const v = this._board[r][c];
+        if (v === 0) return false;
+        for (let i = 0; i < SIZE; i++) {
+            if (i !== c && this._board[r][i] === v) return true;
+            if (i !== r && this._board[i][c] === v) return true;
+        }
+        const br = Math.floor(r / BOX) * BOX;
+        const bc = Math.floor(c / BOX) * BOX;
+        for (let dr = 0; dr < BOX; dr++)
+            for (let dc = 0; dc < BOX; dc++)
+                if ((br + dr !== r || bc + dc !== c) && this._board[br + dr][bc + dc] === v) return true;
+        return false;
+    }
+
     _cellStr(r, c, br, bc, auto) {
         const val = this._board[r][c];
         const isGiven = this._given[r][c];
         const isCur = r === br && c === bc;
-        const isError = auto && !isGiven && val !== 0 && val !== this._solution[r][c];
+        const isError = auto && !isGiven && val !== 0 && this._hasConflict(r, c);
         const digit = val !== 0 ? String(val) : ' ';
 
         if (isCur) {
@@ -301,7 +319,7 @@ export class SudokuCmd extends CmdBase {
 
         lines.push(bold(cyan('  Sudoku [' + DIFFICULTY[this._difficulty].label + ']')) +
             '    ' + yellow(_formatTime(this._timer)) +
-            '    ' + gray('[h]int [n]ew [c]heck:' + (auto ? 'ON' : 'OFF') + ' [q]uit'));
+            '    ' + gray('[g]ive up [n]ew [c]heck:' + (auto ? 'ON' : 'OFF') + ' [q]uit'));
 
         lines.push('  ╔═══╤═══╤═══╦═══╤═══╤═══╦═══╤═══╤═══╗');
 
@@ -346,17 +364,31 @@ export class SudokuCmd extends CmdBase {
         return true;
     }
 
-    _giveHint() {
+    _giveUpConfirm() {
         if (this._completed) return;
-        const br = this._cursorRow;
-        const bc = this._cursorCol;
-        if (this._given[br][bc]) return;
-        if (this._board[br][bc] === this._solution[br][bc]) return;
-        this._board[br][bc] = this._solution[br][bc];
-        this._given[br][bc] = true;
-        this._errors.delete(br + ',' + bc);
-        this._renderRow(br);
-        if (this._checkWin()) this._win();
+        system.createDialog(ConfirmDialog, 'sudoku-confirm', {
+            title: 'Confirm',
+            message: 'Give up and reveal\nthe answer?',
+            onConfirm: () => this._giveUp(),
+        });
+    }
+
+    _giveUp() {
+        this._completed = true;
+        if (this._timerInterval) {
+            clearInterval(this._timerInterval);
+            this._timerInterval = null;
+        }
+        for (let r = 0; r < SIZE; r++)
+            for (let c = 0; c < SIZE; c++)
+                this._board[r][c] = this._solution[r][c];
+        this._autoCheck = false;
+        this._render();
+        const timeStr = _formatTime(this._timer);
+        term.write('\x1B[21;1H\x1B[K');
+        term.write(bold(red('  Game Over')) + '  ' +
+            yellow('Time: ' + timeStr) + '\r\n' +
+            gray('  Press [n]ew game or [q]uit'));
     }
 
     _win() {
@@ -402,7 +434,7 @@ export class SudokuCmd extends CmdBase {
         if (typeof data === 'string') {
             const ch = data.toLowerCase();
             if (ch === 'q') { this._quit(); return; }
-            if (ch === 'h') { this._giveHint(); return; }
+            if (ch === 'g') { this._giveUpConfirm(); return; }
             if (ch === 'n') { this._newGame(); return; }
             if (ch === 'c') { this._toggleCheck(); return; }
         }
@@ -433,7 +465,7 @@ export class SudokuCmd extends CmdBase {
         if (this._given[r][c]) return;
         this._board[r][c] = num;
 
-        if (this._autoCheck && num !== this._solution[r][c]) {
+        if (this._autoCheck && this._hasConflict(r, c)) {
             this._errors.add(r + ',' + c);
         } else {
             this._errors.delete(r + ',' + c);
@@ -472,7 +504,7 @@ export class SudokuCmd extends CmdBase {
             clearInterval(this._timerInterval);
             this._timerInterval = null;
         }
-        term.write('\x1B[2J\x1B[H');
+        term.write('\r\n');
         this.close();
     }
 

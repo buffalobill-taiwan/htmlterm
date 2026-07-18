@@ -42,6 +42,10 @@ Flash extraction (Jul 2026): flash overlay logic extracted from `SystemManager` 
 `js/util/flash-helper.js` — three standalone functions (`screenFlash`, `borderFlash`,
 `artSequence`) take `cmd`+`term` parameters, reusable by any command without
 `SystemManager` coupling. `system.js` shrunk by ~130 lines.
+ConfirmDialog + Sudoku give-up (Jul 2026): `js/dialog/ConfirmDialog.js` added —
+Yes/No dialog with ←→ navigation, used by `sudoku` give-up flow. Sudoku auto-check
+switched from solution comparison to board-state conflict detection (`_hasConflict`).
+Sudoku hint replaced with give-up (reveal full answer + Game Over).
 
 ## Architecture
 
@@ -453,7 +457,7 @@ js/cmd/
 ├── anime.js           Anime       — play 124-frame animation (rAF + buffer overlay, pixel-codec)
 ├── sleep.js           Sleep       — wait N seconds; Ctrl+C abort
 ├── time.js            TimeCmd     — measure execution time of a command
-├── sudoku.js          Sudoku      — play Sudoku puzzle (custom _onKey, grid rendering)
+├── sudoku.js          Sudoku      — play Sudoku puzzle (custom _onKey, grid rendering, auto-check, timer)
 ├── art/               Static pixel data modules (adam, blacklotus, glaneuses, anime, …)
 └── widgets/
     ├── ClockWidget.js
@@ -640,6 +644,27 @@ _centerRow(row, content) {
 }
 ```
 
+**⚠️ `_centerRow` content width:** The `content` parameter's **visible width**
+(measured by `_bufWidth`) must be ≤ `width - 2`. `_centerRow` adds `│` on both
+sides internally. If content is too wide, the right `│` falls off the buffer
+and the border silently disappears — `_writeStr` does NOT warn on overflow.
+
+**Dialog height formula:** `_drawFrame` lays out rows as:
+
+| Row | Content | Condition |
+|---|---|---|
+| 0 | `┌` + `─`×(W-2) + `┐` | always |
+| 1 | title (centered) | if `this.title` |
+| 2 | `├` + `─`×(W-2) + `┤` | if `this.title` |
+| 3 … h-4 | content rows | filled by `_renderContent()` |
+| h-3 | `├` + `─`×(W-2) + `┤` | always |
+| h-2 | footer (centered) | always |
+| h-1 | `└` + `─`×(W-2) + `┘` | always |
+
+For a dialog with title and N lines of content: `h = N + 6`.
+Without title: `h = N + 4`.
+Footer row occupies h-2; content rows are 3 to h-4 inclusive.
+
 **Highlight bar (inverted item):** SGR embedded directly in the string:
 
 ```js
@@ -656,6 +681,12 @@ _writeStr(buf, row, 0, s, W);
 **`_bufWidth` ANSI skip:** `_bufWidth` detects `[` (0x5B) as a CSI introducer
 (not a terminator), so param bytes like `1`, `;`, `32`, `m` in `\x1B[1;32m`
 are not counted as visible chars.
+
+**⚠️ `_writeStr` overflow is silent:** `_writeStr(buf, y, x, str, maxX)` stops
+writing when `cx >= maxX` (or when a wide char would exceed `maxX`). Characters
+beyond the limit are silently dropped — no warning, no error. This means if the
+string you pass is wider than `maxX`, the right side is truncated with no visual
+indication. Always verify `bufWidth(str) ≤ maxX` when building strings manually.
 
 ### WidgetBase buffer
 
@@ -720,8 +751,9 @@ draw() {
 - `index.js`: Barrel export
 - `Dialog.js`: Base class, frame drawing, drag, overlay lifecycle
 - `MenuDialog.js`, `InputDialog.js`, `ShowDialog.js`: Concrete dialogs
-- `write.js`: `_writeStr`, `_bufWidth`, SGR→cell attrs for dialog buffers
-- `position.js`: Dialog positioning helpers
+- `ConfirmDialog.js`: Yes/No confirm dialog — ←→ switch, Enter confirm, ESC cancel
+- `write.js`: `_writeStr(buf, y, x, str, maxX)` — writes string with inline SGR→cell attrs; `bufWidth(str)` — measures visible width skipping SGR
+- `position.js`: `centeredDialogPos(term, w, h)` — returns `{x, y}` for centering
 
 ### `js/cmd/`
 
