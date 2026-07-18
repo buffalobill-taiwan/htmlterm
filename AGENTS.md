@@ -12,7 +12,7 @@ Live demo: <https://buffalobill-taiwan.github.io/htmlterm/>
 | Terminal core (Screen/Parser/Renderer) | Complete |
 | Overlay compositing (widgets + dialogs) | Complete |
 | Frame-stack shell + Typewriter | Complete |
-| Demo commands | 19 registered (see Command Architecture) |
+| Demo commands | 20 registered (see Command Architecture) |
 | Automated tests | Excluded — manual testing only |
 | CI | Excluded — not planned |
 
@@ -453,15 +453,16 @@ js/cmd/
 ├── anime.js           Anime       — play 124-frame animation (rAF + buffer overlay, pixel-codec)
 ├── sleep.js           Sleep       — wait N seconds; Ctrl+C abort
 ├── time.js            TimeCmd     — measure execution time of a command
+├── sudoku.js          Sudoku      — play Sudoku puzzle (custom _onKey, grid rendering)
 ├── art/               Static pixel data modules (adam, blacklotus, glaneuses, anime, …)
 └── widgets/
     ├── ClockWidget.js
     └── DVDWidget.js
 ```
 
-**19 registered commands:** `5willow`, `anime`, `art`, `ascii`, `astrology`, `calc`, `clear`, `clock`,
+**20 registered commands:** `5willow`, `anime`, `art`, `ascii`, `astrology`, `calc`, `clear`, `clock`,
 `cowsay`, `date`, `dvd`, `echo`, `flash`, `help`, `menu`,
-`mbti`, `quiz`, `sleep`, `time`
+`mbti`, `quiz`, `sleep`, `sudoku`, `time`
 
 **CmdBase contract:**
 
@@ -578,6 +579,15 @@ input arrives only through the callback parameter.
 ## Key Constraints
 - DOM rendering (not Canvas)
 - 80×25 viewport, auto-scaled
+- When handling keyboard input in `_onKey`, **every escape sequence must be
+  explicitly matched**. Unmatched sequences (Delete `\x1B[3~`, Insert `\x1B[2~`,
+  Home `\x1B[H`, End `\x1B[F`, PageUp/Down `\x1B[5~`/`\x1B[6~`) fall through
+  to the bare-ESC handler and cause unintended exits. Always list all expected
+  sequences before the fallback `this.close()`.
+- When rendering grids or box-drawing layouts via `term.write()`, **verify every
+  character's display width with `isWide(ch)`** from `unicode-width.js` before
+  committing column arithmetic. Box-drawing chars (U+2500–U+257F) are single-width;
+  CJK/fullwidth chars are double-width. Mismatched widths cause misaligned borders.
 
 ## Design Decisions
 
@@ -723,6 +733,7 @@ draw() {
 - `widgets/DVDWidget.js`: Bouncing DVD logo (7×3, 120ms interval)
 - `art.js` + `art/*.js`: Pixel-art renderer and static artwork data; exports `ARTWORKS` for reuse by `flash --art`
 - `anime.js`: 124-frame animation player (rAF + buffer overlay, pixel-codec)
+- `sudoku.js`: Sudoku puzzle game (backtracking generator, grid rendering, custom `_onKey`, auto-check, timer)
 
 ## Command Development Templates
 
@@ -869,6 +880,69 @@ export class MyAnimCmd extends CmdBase {
     static get menu() { return 'Animation demo'; }
 }
 ```
+
+### Template F — Custom key handler (cursor navigation)
+
+For commands needing real-time cursor movement (sudoku, crossword, etc.).
+Override `_onKey(data)` directly. **All escape sequences must be explicitly
+matched** — unmatched sequences fall through to the default action (quit).
+
+```js
+import { term } from '../system/sys.js';
+import { CmdBase } from './CmdBase.js';
+import { bold, cyan, CURSOR_HIDE, CURSOR_SHOW } from '../util/sgr.js';
+
+export class MyCursorCmd extends CmdBase {
+    execute(args) {
+        this.open();
+        term.write(CURSOR_HIDE);
+        this._render();
+    }
+
+    _onKey(data) {
+        const code = typeof data === 'string' ? data.charCodeAt(0) : data;
+
+        if (code === 0x1B) {
+            const s = typeof data === 'string' ? data : '';
+            if (s === '\x1B[A')  { this._move(0, -1); return; }  // ↑
+            if (s === '\x1B[B')  { this._move(0,  1); return; }  // ↓
+            if (s === '\x1B[D')  { this._move(-1, 0); return; }  // ←
+            if (s === '\x1B[C')  { this._move(1,  0); return; }  // →
+            if (s === '\x1B[3~') { /* Delete */ return; }
+            if (s === '\x1B[2~') { /* Insert */ return; }
+            if (s === '\x1B[H')  { /* Home   */ return; }
+            if (s === '\x1B[F')  { /* End    */ return; }
+            this.close();  // bare ESC → exit
+            return;
+        }
+
+        if (code === 0x03) { this.close(); return; }  // Ctrl+C
+        if (code === 0x08 || code === 0x7F) { /* Backspace */ return; }
+        // ... handle other keys ...
+    }
+
+    _move(dx, dy) { /* update cursor, redraw */ }
+    _render() { /* initial draw */ }
+
+    static get commandName() { return 'mycursor'; }
+    static get help() { return 'Cursor navigation demo'; }
+    static get menu() { return null; }
+}
+```
+
+**Escape sequence reference** (common keys):
+
+| Key | Sequence | Notes |
+|---|---|---|
+| Arrow ↑↓←→ | `\x1B[A` `\x1B[B` `\x1B[D` `\x1B[C` | Always 3 bytes |
+| Delete | `\x1B[3~` | 4 bytes |
+| Insert | `\x1B[2~` | 4 bytes |
+| Home | `\x1B[H` or `\x1B[1~` | Terminal-dependent |
+| End | `\x1B[F` or `\x1B[4~` | Terminal-dependent |
+| PageUp/Down | `\x1B[5~` `\x1B[6~` | 4 bytes |
+| Backspace | `0x08` or `0x7F` | Single byte, not escape |
+| Ctrl+C | `0x03` | Single byte |
+| Tab | `0x09` | Single byte |
 
 ### Tools
 
