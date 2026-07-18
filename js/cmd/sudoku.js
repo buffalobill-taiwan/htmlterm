@@ -19,19 +19,6 @@ function _copyGrid(g) {
     return g.map(r => [...r]);
 }
 
-function _isValid(grid, row, col, num) {
-    for (let i = 0; i < SIZE; i++) {
-        if (grid[row][i] === num) return false;
-        if (grid[i][col] === num) return false;
-    }
-    const br = row - row % BOX;
-    const bc = col - col % BOX;
-    for (let r = br; r < br + BOX; r++)
-        for (let c = bc; c < bc + BOX; c++)
-            if (grid[r][c] === num) return false;
-    return true;
-}
-
 function _shuffle(arr) {
     for (let i = arr.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
@@ -40,46 +27,149 @@ function _shuffle(arr) {
     return arr;
 }
 
-function _solve(grid) {
-    for (let r = 0; r < SIZE; r++) {
-        for (let c = 0; c < SIZE; c++) {
-            if (grid[r][c] === 0) {
-                const nums = _shuffle([1,2,3,4,5,6,7,8,9]);
-                for (const n of nums) {
-                    if (_isValid(grid, r, c, n)) {
-                        grid[r][c] = n;
-                        if (_solve(grid)) return true;
-                        grid[r][c] = 0;
-                    }
-                }
-                return false;
+function _buildMasks(grid) {
+    const rows = new Uint16Array(9);
+    const cols = new Uint16Array(9);
+    const boxes = new Uint16Array(9);
+    for (let r = 0; r < 9; r++)
+        for (let c = 0; c < 9; c++) {
+            const v = grid[r][c];
+            if (v !== 0) {
+                const bit = 1 << v;
+                rows[r] |= bit;
+                cols[c] |= bit;
+                boxes[(r / 3 | 0) * 3 + (c / 3 | 0)] |= bit;
             }
         }
+    return { rows, cols, boxes };
+}
+
+function _solve(grid) {
+    const m = _buildMasks(grid);
+    function solve() {
+        for (let r = 0; r < 9; r++) {
+            for (let c = 0; c < 9; c++) {
+                if (grid[r][c] === 0) {
+                    const b = (r / 3 | 0) * 3 + (c / 3 | 0);
+                    const used = m.rows[r] | m.cols[c] | m.boxes[b];
+                    const nums = _shuffle([1,2,3,4,5,6,7,8,9]);
+                    for (const n of nums) {
+                        if (!(used & (1 << n))) {
+                            grid[r][c] = n;
+                            const bit = 1 << n;
+                            m.rows[r] |= bit;
+                            m.cols[c] |= bit;
+                            m.boxes[b] |= bit;
+                            if (solve()) return true;
+                            m.rows[r] &= ~bit;
+                            m.cols[c] &= ~bit;
+                            m.boxes[b] &= ~bit;
+                            grid[r][c] = 0;
+                        }
+                    }
+                    return false;
+                }
+            }
+        }
+        return true;
     }
-    return true;
+    solve();
 }
 
 function _countSolutions(grid, limit) {
     let count = 0;
-    function solve(g) {
-        if (count >= limit) return;
-        for (let r = 0; r < SIZE; r++) {
-            for (let c = 0; c < SIZE; c++) {
-                if (g[r][c] === 0) {
+    const g = _copyGrid(grid);
+    const m = _buildMasks(grid);
+
+    function undoTrail(trail) {
+        for (let i = trail.length - 1; i >= 0; i--) {
+            const [r, c, n, b] = trail[i];
+            const bit = 1 << n;
+            g[r][c] = 0;
+            m.rows[r] &= ~bit;
+            m.cols[c] &= ~bit;
+            m.boxes[b] &= ~bit;
+        }
+    }
+
+    function propagate() {
+        const trail = [];
+        let changed = true;
+        while (changed) {
+            changed = false;
+            for (let r = 0; r < 9; r++) {
+                for (let c = 0; c < 9; c++) {
+                    if (g[r][c] !== 0) continue;
+                    const b = (r / 3 | 0) * 3 + (c / 3 | 0);
+                    const used = m.rows[r] | m.cols[c] | m.boxes[b];
+                    let cnt = 0, lastN = 0;
                     for (let n = 1; n <= 9; n++) {
-                        if (_isValid(g, r, c, n)) {
-                            g[r][c] = n;
-                            solve(g);
-                            g[r][c] = 0;
-                        }
+                        if (!(used & (1 << n))) { cnt++; lastN = n; }
                     }
-                    return;
+                    if (cnt === 0) { undoTrail(trail); return null; }
+                    if (cnt === 1) {
+                        g[r][c] = lastN;
+                        const bit = 1 << lastN;
+                        m.rows[r] |= bit;
+                        m.cols[c] |= bit;
+                        m.boxes[b] |= bit;
+                        trail.push([r, c, lastN, b]);
+                        changed = true;
+                    }
                 }
             }
         }
-        count++;
+        return trail;
     }
-    solve(_copyGrid(grid));
+
+    function solve() {
+        if (count >= limit) return;
+
+        const trail = propagate();
+        if (!trail) return;
+
+        let bestR = -1, bestC = -1, bestB = -1, bestMask = 0, bestCount = 10;
+        for (let r = 0; r < 9; r++) {
+            for (let c = 0; c < 9; c++) {
+                if (g[r][c] !== 0) continue;
+                const b = (r / 3 | 0) * 3 + (c / 3 | 0);
+                const used = m.rows[r] | m.cols[c] | m.boxes[b];
+                let cnt = 0;
+                for (let n = 1; n <= 9; n++) if (!(used & (1 << n))) cnt++;
+                if (cnt < bestCount) {
+                    bestCount = cnt;
+                    bestR = r; bestC = c; bestB = b; bestMask = used;
+                    if (cnt <= 1) break;
+                }
+            }
+            if (bestCount <= 1) break;
+        }
+
+        if (bestR < 0) {
+            count++;
+            undoTrail(trail);
+            return;
+        }
+
+        for (let n = 1; n <= 9; n++) {
+            if (!(bestMask & (1 << n))) {
+                undoTrail(trail);
+                g[bestR][bestC] = n;
+                const bit = 1 << n;
+                m.rows[bestR] |= bit;
+                m.cols[bestC] |= bit;
+                m.boxes[bestB] |= bit;
+                solve();
+                m.rows[bestR] &= ~bit;
+                m.cols[bestC] &= ~bit;
+                m.boxes[bestB] &= ~bit;
+                g[bestR][bestC] = 0;
+                if (count >= limit) return;
+            }
+        }
+    }
+
+    solve();
     return count;
 }
 
