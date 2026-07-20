@@ -3,6 +3,7 @@ import { CmdBase } from './CmdBase.js';
 import { ConfirmDialog } from '../dialog/ConfirmDialog.js';
 import { SelectDialog } from '../dialog/SelectDialog.js';
 import { bold, red, green, cyan, yellow, gray, CURSOR_HIDE } from '../util/sgr.js';
+import { isWide } from '../util/unicode-width.js';
 
 const SIZE = 9;
 const BOX = 3;
@@ -249,23 +250,25 @@ export class SudokuCmd extends CmdBase {
 
     _renderEmptyBoard() {
         const lines = [];
+        const counts = new Array(10).fill(0);
         lines.push(bold(cyan('  Sudoku')) + '                           ' +
             gray('[n]ew [q]uit'));
-        lines.push('  ╔═══╤═══╤═══╦═══╤═══╤═══╦═══╤═══╤═══╗');
+        lines.push('  ╔═══╤═══╤═══╦═══╤═══╤═══╦═══╤═══╤═══╗  ┌─────┐');
         for (let r = 0; r < SIZE; r++) {
             let row = '  ║';
             for (let c = 0; c < SIZE; c++) {
                 row += '   ';
                 row += (c % BOX === BOX - 1) ? '║' : '│';
             }
+            row += '  │' + this._digitPanelStr(r + 1, counts) + '│';
             lines.push(row);
             if (r % BOX === BOX - 1 && r < SIZE - 1) {
-                lines.push('  ╠═══╪═══╪═══╬═══╪═══╪═══╬═══╪═══╪═══╣');
+                lines.push('  ╠═══╪═══╪═══╬═══╪═══╪═══╬═══╪═══╪═══╣  │     │');
             } else if (r < SIZE - 1) {
-                lines.push('  ╟───┼───┼───╫───┼───┼───╫───┼───┼───╢');
+                lines.push('  ╟───┼───┼───╫───┼───┼───╫───┼───┼───╢  │     │');
             }
         }
-        lines.push('  ╚═══╧═══╧═══╩═══╧═══╧═══╩═══╧═══╧═══╝');
+        lines.push('  ╚═══╧═══╧═══╩═══╧═══╧═══╩═══╧═══╧═══╝  └─────┘');
         term.write('\x1B[2J\x1B[H');
         for (const line of lines) {
             term.write(line + '\r\n');
@@ -309,6 +312,7 @@ export class SudokuCmd extends CmdBase {
 
     _render() {
         const lines = this._buildLines();
+        this._totalLines = lines.length;
         term.write('\x1B[2J\x1B[H');
         for (const line of lines) {
             term.write(line + '\r\n');
@@ -328,6 +332,42 @@ export class SudokuCmd extends CmdBase {
             for (let dc = 0; dc < BOX; dc++)
                 if ((br + dr !== r || bc + dc !== c) && this._board[br + dr][bc + dc] === v) return true;
         return false;
+    }
+
+    _countDigits() {
+        const counts = new Array(10).fill(0);
+        for (let r = 0; r < SIZE; r++)
+            for (let c = 0; c < SIZE; c++) {
+                const v = this._board[r][c];
+                if (v > 0 && !this._hasConflict(r, c)) counts[v]++;
+            }
+        return counts;
+    }
+
+    _digitPanelStr(n, counts) {
+        const count = counts[n];
+        const numStr = String(n);
+        let visible, styled;
+        if (count === 9) {
+            visible = numStr + ' ✓';
+            styled = green(bold(visible));
+        } else if (count === 0) {
+            visible = numStr + ' ·';
+            styled = gray(visible);
+        } else {
+            visible = numStr + ' ' + count + '/9';
+            styled = gray(visible);
+        }
+        let w = 0;
+        for (const ch of visible) w += isWide(ch) ? 2 : 1;
+        return styled + ' '.repeat(Math.max(0, 5 - w));
+    }
+
+    _updateDigitRow(n) {
+        const counts = this._countDigits();
+        const displayRow = 3 + (n - 1) * 2;
+        term.write('\x1B[' + displayRow + ';42H\x1B[K');
+        term.write('│' + this._digitPanelStr(n, counts) + '│');
     }
 
     _cellStr(r, c, br, bc, auto) {
@@ -354,12 +394,13 @@ export class SudokuCmd extends CmdBase {
         const br = this._cursorRow;
         const bc = this._cursorCol;
         const auto = this._autoCheck;
+        const counts = this._countDigits();
 
         lines.push(bold(cyan('  Sudoku [' + DIFFICULTY[this._difficulty].label + ']')) +
             '    ' + yellow(_formatTime(this._timer)) +
             '    ' + gray('[g]ive up [n]ew [c]heck:' + (auto ? 'ON' : 'OFF') + ' [q]uit'));
 
-        lines.push('  ╔═══╤═══╤═══╦═══╤═══╤═══╦═══╤═══╤═══╗');
+        lines.push('  ╔═══╤═══╤═══╦═══╤═══╤═══╦═══╤═══╤═══╗  ┌─────┐');
 
         for (let r = 0; r < SIZE; r++) {
             let row = '  ║';
@@ -367,15 +408,16 @@ export class SudokuCmd extends CmdBase {
                 row += this._cellStr(r, c, br, bc, auto);
                 row += (c % BOX === BOX - 1) ? '║' : '│';
             }
+            row += '  │' + this._digitPanelStr(r + 1, counts) + '│';
             lines.push(row);
             if (r % BOX === BOX - 1 && r < SIZE - 1) {
-                lines.push('  ╠═══╪═══╪═══╬═══╪═══╪═══╬═══╪═══╪═══╣');
+                lines.push('  ╠═══╪═══╪═══╬═══╪═══╪═══╬═══╪═══╪═══╣  │     │');
             } else if (r < SIZE - 1) {
-                lines.push('  ╟───┼───┼───╫───┼───┼───╫───┼───┼───╢');
+                lines.push('  ╟───┼───┼───╫───┼───┼───╫───┼───┼───╢  │     │');
             }
         }
 
-        lines.push('  ╚═══╧═══╧═══╩═══╧═══╧═══╩═══╧═══╧═══╝');
+        lines.push('  ╚═══╧═══╧═══╩═══╧═══╧═══╩═══╧═══╧═══╝  └─────┘');
         return lines;
     }
 
@@ -383,6 +425,7 @@ export class SudokuCmd extends CmdBase {
         const br = this._cursorRow;
         const bc = this._cursorCol;
         const auto = this._autoCheck;
+        const counts = this._countDigits();
 
         let row = '  ║';
         for (let c = 0; c < SIZE; c++) {
@@ -392,7 +435,7 @@ export class SudokuCmd extends CmdBase {
 
         const displayRow = 3 + r * 2;
         term.write('\x1B[' + displayRow + ';1H\x1B[K');
-        term.write(row);
+        term.write(row + '  │' + this._digitPanelStr(r + 1, counts) + '│');
     }
 
     _checkWin() {
@@ -506,6 +549,7 @@ export class SudokuCmd extends CmdBase {
         const r = this._cursorRow;
         const c = this._cursorCol;
         if (this._given[r][c]) return;
+        const oldVal = this._board[r][c];
         this._board[r][c] = num;
 
         if (this._autoCheck && this._hasConflict(r, c)) {
@@ -515,6 +559,8 @@ export class SudokuCmd extends CmdBase {
         }
 
         this._renderRow(r);
+        if (oldVal > 0) this._updateDigitRow(oldVal);
+        if (num > 0 && num !== oldVal) this._updateDigitRow(num);
         if (this._checkWin()) this._win();
     }
 
@@ -523,9 +569,11 @@ export class SudokuCmd extends CmdBase {
         const c = this._cursorCol;
         if (this._given[r][c]) return;
         if (this._board[r][c] === 0) return;
+        const oldVal = this._board[r][c];
         this._board[r][c] = 0;
         this._errors.delete(r + ',' + c);
         this._renderRow(r);
+        this._updateDigitRow(oldVal);
     }
 
     _toggleCheck() {
@@ -551,7 +599,8 @@ export class SudokuCmd extends CmdBase {
             clearInterval(this._timerInterval);
             this._timerInterval = null;
         }
-        term.write('\r\n');
+        const bottomRow = (this._totalLines || 20) + 1;
+        term.write('\x1B[' + bottomRow + ';1H\r\n');
         this.close();
     }
 
