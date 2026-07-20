@@ -28,7 +28,7 @@ dialogs, and TSR-style widgets.
 ### Demo shell
 
 - Frame-stack command runner with rAF-based Typewriter output
-- 19 built-in commands (games, widgets, interactive tests — see below)
+- 20 built-in commands (games, widgets, interactive tests — see below)
 - Dialog framework (`MenuDialog`, `InputDialog`, `ShowDialog`) with overlay compositing
 - TSR widgets (clock, DVD logo) — draggable, position remembered
 - Tab completion for command names; command history (Up/Down)
