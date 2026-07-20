@@ -176,6 +176,223 @@ function _countSolutions(grid, limit) {
     return count;
 }
 
+function _popcount(x) {
+    let c = 0;
+    while (x) { c++; x &= x - 1; }
+    return c;
+}
+
+function _solveBasic(grid) {
+    const g = _copyGrid(grid);
+    const cands = Array.from({ length: SIZE }, () => new Uint16Array(SIZE));
+
+    for (let r = 0; r < 9; r++)
+        for (let c = 0; c < 9; c++) {
+            if (g[r][c] !== 0) continue;
+            let mask = 0;
+            for (let n = 1; n <= 9; n++) {
+                let ok = true;
+                for (let i = 0; i < 9 && ok; i++)
+                    if (g[r][i] === n || g[i][c] === n) ok = false;
+                if (ok) {
+                    const br = (r / 3 | 0) * 3, bc = (c / 3 | 0) * 3;
+                    for (let dr = 0; dr < 3 && ok; dr++)
+                        for (let dc = 0; dc < 3 && ok; dc++)
+                            if (g[br + dr][bc + dc] === n) ok = false;
+                }
+                if (ok) mask |= (1 << n);
+            }
+            cands[r][c] = mask;
+        }
+
+    function place(r, c, n) {
+        g[r][c] = n;
+        const bit = 1 << n;
+        cands[r][c] = 0;
+        for (let i = 0; i < 9; i++) { cands[r][i] &= ~bit; cands[i][c] &= ~bit; }
+        const br = (r / 3 | 0) * 3, bc = (c / 3 | 0) * 3;
+        for (let dr = 0; dr < 3; dr++)
+            for (let dc = 0; dc < 3; dc++)
+                cands[br + dr][bc + dc] &= ~bit;
+    }
+
+    let progress = true;
+    while (progress) {
+        progress = false;
+
+        for (let r = 0; r < 9; r++)
+            for (let c = 0; c < 9; c++) {
+                if (g[r][c] !== 0 || cands[r][c] === 0) continue;
+                if ((cands[r][c] & (cands[r][c] - 1)) === 0) {
+                    place(r, c, Math.log2(cands[r][c]));
+                    progress = true;
+                }
+            }
+        if (progress) continue;
+
+        for (let n = 1; n <= 9; n++) {
+            const bit = 1 << n;
+            for (let r = 0; r < 9; r++) {
+                let cnt = 0, lc = -1;
+                for (let c = 0; c < 9; c++)
+                    if (g[r][c] === 0 && (cands[r][c] & bit)) { cnt++; lc = c; }
+                if (cnt === 1) { place(r, lc, n); progress = true; }
+            }
+            if (progress) continue;
+            for (let c = 0; c < 9; c++) {
+                let cnt = 0, lr = -1;
+                for (let r = 0; r < 9; r++)
+                    if (g[r][c] === 0 && (cands[r][c] & bit)) { cnt++; lr = r; }
+                if (cnt === 1) { place(lr, c, n); progress = true; }
+            }
+            if (progress) continue;
+            for (let br = 0; br < 3; br++)
+                for (let bc = 0; bc < 3; bc++) {
+                    let cnt = 0, lr = -1, lc = -1;
+                    for (let dr = 0; dr < 3; dr++)
+                        for (let dc = 0; dc < 3; dc++) {
+                            const r = br * 3 + dr, c = bc * 3 + dc;
+                            if (g[r][c] === 0 && (cands[r][c] & bit)) { cnt++; lr = r; lc = c; }
+                        }
+                    if (cnt === 1) { place(lr, lc, n); progress = true; }
+                }
+            if (progress) continue;
+        }
+        if (progress) continue;
+
+        for (let n = 1; n <= 9; n++) {
+            const bit = 1 << n;
+            for (let br = 0; br < 3; br++)
+                for (let bc = 0; bc < 3; bc++) {
+                    let rMask = 0, cMask = 0;
+                    for (let dr = 0; dr < 3; dr++)
+                        for (let dc = 0; dc < 3; dc++) {
+                            const r = br * 3 + dr, c = bc * 3 + dc;
+                            if (g[r][c] === 0 && (cands[r][c] & bit)) {
+                                rMask |= (1 << r); cMask |= (1 << c);
+                            }
+                        }
+                    if (_popcount(rMask) === 1) {
+                        const rr = Math.log2(rMask);
+                        for (let c = 0; c < 9; c++) {
+                            if (c >= bc * 3 && c < bc * 3 + 3) continue;
+                            if (g[rr][c] === 0 && (cands[rr][c] & bit)) {
+                                cands[rr][c] &= ~bit;
+                                if (cands[rr][c] === 0) return false;
+                                progress = true;
+                            }
+                        }
+                    }
+                    if (_popcount(cMask) === 1) {
+                        const cc = Math.log2(cMask);
+                        for (let r = 0; r < 9; r++) {
+                            if (r >= br * 3 && r < br * 3 + 3) continue;
+                            if (g[r][cc] === 0 && (cands[r][cc] & bit)) {
+                                cands[r][cc] &= ~bit;
+                                if (cands[r][cc] === 0) return false;
+                                progress = true;
+                            }
+                        }
+                    }
+                }
+            if (progress) continue;
+            for (let r = 0; r < 9; r++) {
+                let bMask = 0;
+                for (let c = 0; c < 9; c++)
+                    if (g[r][c] === 0 && (cands[r][c] & bit))
+                        bMask |= (1 << (c / 3 | 0));
+                if (_popcount(bMask) === 1) {
+                    const bc = Math.log2(bMask), br = (r / 3 | 0);
+                    for (let dr = 0; dr < 3; dr++)
+                        for (let dc = 0; dc < 3; dc++) {
+                            const rr = br * 3 + dr, cc = bc * 3 + dc;
+                            if (rr === r) continue;
+                            if (g[rr][cc] === 0 && (cands[rr][cc] & bit)) {
+                                cands[rr][cc] &= ~bit;
+                                if (cands[rr][cc] === 0) return false;
+                                progress = true;
+                            }
+                        }
+                }
+            }
+            if (progress) continue;
+            for (let c = 0; c < 9; c++) {
+                let bMask = 0;
+                for (let r = 0; r < 9; r++)
+                    if (g[r][c] === 0 && (cands[r][c] & bit))
+                        bMask |= (1 << (r / 3 | 0));
+                if (_popcount(bMask) === 1) {
+                    const br = Math.log2(bMask), bc = (c / 3 | 0);
+                    for (let dr = 0; dr < 3; dr++)
+                        for (let dc = 0; dc < 3; dc++) {
+                            const rr = br * 3 + dr, cc = bc * 3 + dc;
+                            if (cc === c) continue;
+                            if (g[rr][cc] === 0 && (cands[rr][cc] & bit)) {
+                                cands[rr][cc] &= ~bit;
+                                if (cands[rr][cc] === 0) return false;
+                                progress = true;
+                            }
+                        }
+                }
+            }
+        }
+        if (progress) continue;
+
+        function nakedSubsets(cells) {
+            const uc = cells.map(([r, c]) => cands[r][c]);
+            for (let sz = 2; sz <= 4; sz++) {
+                for (let mask = 1; mask < (1 << cells.length); mask++) {
+                    if (_popcount(mask) !== sz) continue;
+                    let union = 0;
+                    for (let i = 0; i < cells.length; i++)
+                        if (mask & (1 << i)) union |= uc[i];
+                    if (_popcount(union) !== sz) continue;
+                    for (let i = 0; i < cells.length; i++) {
+                        if (mask & (1 << i)) continue;
+                        const before = uc[i];
+                        uc[i] &= ~union;
+                        if (uc[i] !== before) {
+                            const [r, c] = cells[i];
+                            cands[r][c] = uc[i];
+                            if (cands[r][c] === 0) return false;
+                            progress = true;
+                        }
+                    }
+                }
+            }
+            return true;
+        }
+
+        for (let r = 0; r < 9; r++) {
+            const cells = [];
+            for (let c = 0; c < 9; c++) if (g[r][c] === 0) cells.push([r, c]);
+            if (cells.length > 1 && !nakedSubsets(cells)) return false;
+        }
+        if (progress) continue;
+        for (let c = 0; c < 9; c++) {
+            const cells = [];
+            for (let r = 0; r < 9; r++) if (g[r][c] === 0) cells.push([r, c]);
+            if (cells.length > 1 && !nakedSubsets(cells)) return false;
+        }
+        if (progress) continue;
+        for (let br = 0; br < 3; br++)
+            for (let bc = 0; bc < 3; bc++) {
+                const cells = [];
+                for (let dr = 0; dr < 3; dr++)
+                    for (let dc = 0; dc < 3; dc++) {
+                        const r = br * 3 + dr, c = bc * 3 + dc;
+                        if (g[r][c] === 0) cells.push([r, c]);
+                    }
+                if (cells.length > 1 && !nakedSubsets(cells)) return false;
+            }
+    }
+
+    for (let r = 0; r < 9; r++)
+        for (let c = 0; c < 9; c++)
+            if (g[r][c] === 0) return false;
+    return true;
+}
+
 function _generate(difficulty) {
     const grid = _createEmpty();
     _solve(grid);
@@ -192,7 +409,8 @@ function _generate(difficulty) {
         if (removed >= toRemove) break;
         const val = grid[r][c];
         grid[r][c] = 0;
-        if (_countSolutions(grid, 2) === 1) {
+        if (_countSolutions(grid, 2) === 1 &&
+            (difficulty !== 'easy' || _solveBasic(grid))) {
             given[r][c] = false;
             removed++;
         } else {
@@ -287,6 +505,7 @@ export class SudokuCmd extends CmdBase {
         this._board = board;
         this._solution = solution;
         this._given = given;
+        this._initialBoard = _copyGrid(board);
         this._cursorRow = 4;
         this._cursorCol = 4;
 
@@ -306,7 +525,7 @@ export class SudokuCmd extends CmdBase {
         term.write('\x1B[1;1H\x1B[K');
         term.write(bold(cyan('  Sudoku [' + DIFFICULTY[this._difficulty].label + ']')) +
             '    ' + yellow(_formatTime(this._timer)) +
-            '    ' + gray('[g]ive up [n]ew [c]heck:' + (auto ? 'ON' : 'OFF') + ' [q]uit'));
+            '    ' + gray('[g]ive up [n]ew [r]estart [c]heck:' + (auto ? 'ON' : 'OFF') + ' [q]uit'));
         term.write('\x1B[u');
     }
 
@@ -406,7 +625,7 @@ export class SudokuCmd extends CmdBase {
 
         lines.push(bold(cyan('  Sudoku [' + DIFFICULTY[this._difficulty].label + ']')) +
             '    ' + yellow(_formatTime(this._timer)) +
-            '    ' + gray('[g]ive up [n]ew [c]heck:' + (auto ? 'ON' : 'OFF') + ' [q]uit'));
+            '    ' + gray('[g]ive up [n]ew [r]estart [c]heck:' + (auto ? 'ON' : 'OFF') + ' [q]uit'));
 
         lines.push('  ╔═══╤═══╤═══╦═══╤═══╤═══╦═══╤═══╤═══╗  ┌─────┐');
 
@@ -530,6 +749,7 @@ export class SudokuCmd extends CmdBase {
             if (ch === 'q') { this._quit(); return; }
             if (ch === 'g') { this._giveUpConfirm(); return; }
             if (ch === 'n') { this._newGame(); return; }
+            if (ch === 'r') { this._restart(); return; }
             if (ch === 'c') { this._toggleCheck(); return; }
         }
 
@@ -598,6 +818,26 @@ export class SudokuCmd extends CmdBase {
         this._pickDifficulty();
     }
 
+    _restart() {
+        for (let r = 0; r < SIZE; r++)
+            for (let c = 0; c < SIZE; c++)
+                this._board[r][c] = this._given[r][c] ? this._initialBoard[r][c] : 0;
+        this._completed = false;
+        this._errors.clear();
+        this._timer = 0;
+        this._autoCheck = true;
+        if (this._timerInterval) {
+            clearInterval(this._timerInterval);
+            this._timerInterval = null;
+        }
+        this._render();
+        this._timerInterval = setInterval(() => {
+            if (this._completed) return;
+            this._timer++;
+            this._updateHeader();
+        }, 1000);
+    }
+
     _quit() {
         if (this._difficultyDialog) {
             this._difficultyDialog.close();
@@ -607,8 +847,7 @@ export class SudokuCmd extends CmdBase {
             clearInterval(this._timerInterval);
             this._timerInterval = null;
         }
-        const bottomRow = (this._totalLines || 20) + 1;
-        term.write('\x1B[' + bottomRow + ';1H\r\n');
+        term.write('\n');
         this.close();
     }
 
