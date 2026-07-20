@@ -250,7 +250,7 @@ export class SudokuCmd extends CmdBase {
 
     _renderEmptyBoard() {
         const lines = [];
-        const counts = new Array(10).fill(0);
+        const counts = { counts: new Array(10).fill(0), total: new Array(10).fill(0) };
         lines.push(bold(cyan('  Sudoku')) + '                           ' +
             gray('[n]ew [q]uit'));
         lines.push('  ╔═══╤═══╤═══╦═══╤═══╤═══╦═══╤═══╤═══╗  ┌─────┐');
@@ -336,19 +336,27 @@ export class SudokuCmd extends CmdBase {
 
     _countDigits() {
         const counts = new Array(10).fill(0);
+        const total = new Array(10).fill(0);
         for (let r = 0; r < SIZE; r++)
             for (let c = 0; c < SIZE; c++) {
                 const v = this._board[r][c];
-                if (v > 0 && !this._hasConflict(r, c)) counts[v]++;
+                if (v > 0) {
+                    total[v]++;
+                    if (!this._hasConflict(r, c)) counts[v]++;
+                }
             }
-        return counts;
+        return { counts, total };
     }
 
-    _digitPanelStr(n, counts) {
+    _digitPanelStr(n, { counts, total }) {
         const count = counts[n];
+        const t = total[n];
         const numStr = String(n);
         let visible, styled;
-        if (count === 9) {
+        if (t > 0 && t > count) {
+            visible = numStr + ' ?/9';
+            styled = red(bold(visible));
+        } else if (count === 9) {
             visible = numStr + ' ✓';
             styled = green(bold(visible));
         } else if (count === 0) {
