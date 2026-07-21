@@ -31,7 +31,7 @@ export function parseCSI(data) {
  * _chars  : Array<string>  — one logical Unicode character per element
  * _cursor : number         — index into _chars (0 = before first char)
  */
-import { isWide } from '../util/unicode-width.js';
+import { isWide } from '../util/display-width.js';
 
 export class TextInputModel {
     constructor() {

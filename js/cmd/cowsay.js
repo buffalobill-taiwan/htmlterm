@@ -1,6 +1,6 @@
 import { CmdBase } from './CmdBase.js';
 import { yellow, bold, white, green } from '../util/sgr.js';
-import { displayWidth } from '../util/select-grid.js';
+import { displayWidth } from '../util/display-width.js';
 
 const fortunes = [
     '42 is the answer. But what was the question again?',

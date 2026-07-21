@@ -5,7 +5,7 @@
  * history management, and tab completion display.
  */
 import { TextInputModel, parseCSI } from './TextInputModel.js';
-import { isWide } from '../util/unicode-width.js';
+import { isWide } from '../util/display-width.js';
 
 export class LineEditor {
     constructor(term, callbacks = {}) {

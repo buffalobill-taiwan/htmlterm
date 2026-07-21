@@ -1,4 +1,5 @@
-import { _writeStr, bufWidth } from './write.js';
+import { _writeStr } from './write.js';
+import { bufWidth } from '../util/display-width.js';
 import { addDragMethods, markDirtyRows } from '../util/drag.js';
 import { OverlayZ, createEmptyBuffer, makeOverlayGetCell } from '../util/sgr.js';
 import { DEFAULT_DIALOG_WIDTH } from '../util/constants.js';

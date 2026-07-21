@@ -3,7 +3,7 @@ import { CmdBase } from './CmdBase.js';
 import { ConfirmDialog } from '../dialog/ConfirmDialog.js';
 import { SelectDialog } from '../dialog/SelectDialog.js';
 import { bold, red, green, cyan, yellow, gray, CURSOR_HIDE } from '../util/sgr.js';
-import { isWide } from '../util/unicode-width.js';
+import { displayWidth } from '../util/display-width.js';
 
 const SIZE = 9;
 const BOX = 3;
@@ -585,8 +585,7 @@ export class SudokuCmd extends CmdBase {
             visible = numStr + ' ' + count + '/9';
             styled = gray(visible);
         }
-        let w = 0;
-        for (const ch of visible) w += isWide(ch) ? 2 : 1;
+        const w = displayWidth(visible);
         return styled + ' '.repeat(Math.max(0, 5 - w));
     }
 
@@ -847,7 +846,7 @@ export class SudokuCmd extends CmdBase {
             clearInterval(this._timerInterval);
             this._timerInterval = null;
         }
-        term.write('\n');
+        term.write(this._completed ? '\x1B[23;1H' : '\x1B[21;1H');
         this.close();
     }
 

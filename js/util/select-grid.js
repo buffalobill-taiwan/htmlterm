@@ -1,5 +1,5 @@
 import { bold, green } from './sgr.js';
-import { isWide } from './unicode-width.js';
+import { displayWidth } from './display-width.js';
 
 export function defaultGridMove(data, row, col, options) {
     if (data === '\x1B[A') {
@@ -22,14 +22,6 @@ export function defaultGridMove(data, row, col, options) {
         return { row, col: col + 1 };
     }
     return { row, col };
-}
-
-export function displayWidth(s) {
-    let w = 0;
-    for (const ch of s) {
-        w += isWide(ch) ? 2 : 1;
-    }
-    return w;
 }
 
 export function defaultGridRender(renderedRef) {

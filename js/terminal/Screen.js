@@ -1,5 +1,5 @@
 import { defaultAttr, applySGR, makeCell } from '../util/sgr.js';
-import { isWide } from '../util/unicode-width.js';
+import { isWide } from '../util/display-width.js';
 import { DEFAULT_FG, DEFAULT_BG, SCROLLBACK_MAX, TAB_WIDTH } from '../util/constants.js';
 
 export class Screen {
