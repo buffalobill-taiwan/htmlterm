@@ -4,6 +4,7 @@ import { ConfirmDialog } from '../dialog/ConfirmDialog.js';
 import { SelectDialog } from '../dialog/SelectDialog.js';
 import { bold, red, green, cyan, yellow, gray, CURSOR_HIDE } from '../util/sgr.js';
 import { displayWidth } from '../util/display-width.js';
+import { VirtualBuffer } from '../util/VirtualBuffer.js';
 
 const SIZE = 9;
 const BOX = 3;
@@ -13,6 +14,13 @@ const DIFFICULTY = {
     medium: { hints: 30, label: 'Medium' },
     hard:   { hints: 24, label: 'Hard' },
 };
+
+const BOARD_W = 39;
+const BOARD_H = 19;
+const SIDEBAR_W = 7;
+const BOARD_X = 0;
+const SIDEBAR_X = 41;
+const GRID_Y = 1;
 
 function _createEmpty() {
     return Array.from({ length: SIZE }, () => Array(SIZE).fill(0));
@@ -443,10 +451,81 @@ export class SudokuCmd extends CmdBase {
         }
     }
 
+    _initVBs() {
+        this._boardVB = new VirtualBuffer(BOARD_W, BOARD_H);
+        this._sidebarVB = new VirtualBuffer(SIDEBAR_W, BOARD_H);
+        this._rootVB = new VirtualBuffer(term.cols, term.rows);
+    }
+
+    _drawHeader(vb) {
+        if (!this._difficulty) {
+            vb.writeStr(0, 0, bold(cyan('  Sudoku')) + '                           ' +
+                gray('[n]ew [q]uit'));
+        } else {
+            const auto = this._autoCheck;
+            vb.writeStr(0, 0, bold(cyan('  Sudoku [' + DIFFICULTY[this._difficulty].label + ']')) +
+                '    ' + yellow(_formatTime(this._timer)) +
+                '    ' + gray('[g]ive up [n]ew [r]estart [c]heck:' + (auto ? 'ON' : 'OFF') + ' [q]uit'));
+        }
+    }
+
+    _drawBoardBorders(vb) {
+        vb.writeStr(0, 0, '  ╔═══╤═══╤═══╦═══╤═══╤═══╦═══╤═══╤═══╗');
+        vb.writeStr(2, 0, '  ╟───┼───┼───╫───┼───┼───╫───┼───┼───╢');
+        vb.writeStr(4, 0, '  ╟───┼───┼───╫───┼───┼───╫───┼───┼───╢');
+        vb.writeStr(6, 0, '  ╠═══╪═══╪═══╬═══╪═══╪═══╬═══╪═══╪═══╣');
+        vb.writeStr(8, 0, '  ╟───┼───┼───╫───┼───┼───╫───┼───┼───╢');
+        vb.writeStr(10, 0, '  ╟───┼───┼───╫───┼───┼───╫───┼───┼───╢');
+        vb.writeStr(12, 0, '  ╠═══╪═══╪═══╬═══╪═══╪═══╬═══╪═══╪═══╣');
+        vb.writeStr(14, 0, '  ╟───┼───┼───╫───┼───┼───╫───┼───┼───╢');
+        vb.writeStr(16, 0, '  ╟───┼───┼───╫───┼───┼───╫───┼───┼───╢');
+        vb.writeStr(18, 0, '  ╚═══╧═══╧═══╩═══╧═══╧═══╩═══╧═══╧═══╝');
+    }
+
+    _drawBoardRow(vb, r) {
+        const br = this._cursorRow;
+        const bc = this._cursorCol;
+        const auto = this._autoCheck;
+        const y = 1 + r * 2;
+        let row = '║';
+        for (let c = 0; c < SIZE; c++) {
+            row += this._cellStr(r, c, br, bc, auto);
+            row += (c % BOX === BOX - 1) ? '║' : '│';
+        }
+        vb.writeStr(y, 0, '  ' + row);
+    }
+
+    _drawSidebarFrame(vb) {
+        vb.writeStr(0, 0, '┌─────┐');
+        for (let r = 0; r < SIZE; r++) {
+            vb.writeStr(2 + r * 2, 0, '│     │');
+        }
+        vb.writeStr(18, 0, '└─────┘');
+    }
+
+    _drawSidebarRow(vb, n) {
+        const counts = this._countDigits();
+        const y = 1 + (n - 1) * 2;
+        const str = this._digitPanelStr(n, counts);
+        vb.writeStr(y, 0, '│' + str + '│');
+    }
+
     _pickDifficulty() {
+        this._board = _createEmpty();
+        this._given = Array.from({ length: SIZE }, () => Array(SIZE).fill(false));
+        this._solution = _createEmpty();
+        this._cursorRow = 4;
+        this._cursorCol = 4;
+        this._autoCheck = true;
+        this._completed = false;
+        this._timer = 0;
+        this._errors = new Set();
+        this._difficulty = null;
+
         this.open();
         term.write(CURSOR_HIDE);
-        this._renderEmptyBoard();
+        this._initVBs();
+        this._render();
         const opts = ['Easy', 'Medium', 'Hard'];
         const dialog = new SelectDialog(term, {
             title: 'Sudoku',
@@ -466,32 +545,7 @@ export class SudokuCmd extends CmdBase {
         this._difficultyDialog = dialog;
     }
 
-    _renderEmptyBoard() {
-        const lines = [];
-        const counts = { counts: new Array(10).fill(0), total: new Array(10).fill(0) };
-        lines.push(bold(cyan('  Sudoku')) + '                           ' +
-            gray('[n]ew [q]uit'));
-        lines.push('  ╔═══╤═══╤═══╦═══╤═══╤═══╦═══╤═══╤═══╗  ┌─────┐');
-        for (let r = 0; r < SIZE; r++) {
-            let row = '  ║';
-            for (let c = 0; c < SIZE; c++) {
-                row += '   ';
-                row += (c % BOX === BOX - 1) ? '║' : '│';
-            }
-            row += '  │' + this._digitPanelStr(r + 1, counts) + '│';
-            lines.push(row);
-            if (r % BOX === BOX - 1 && r < SIZE - 1) {
-                lines.push('  ╠═══╪═══╪═══╬═══╪═══╪═══╬═══╪═══╪═══╣  │     │');
-            } else if (r < SIZE - 1) {
-                lines.push('  ╟───┼───┼───╫───┼───┼───╫───┼───┼───╢  │     │');
-            }
-        }
-        lines.push('  ╚═══╧═══╧═══╩═══╧═══╧═══╩═══╧═══╧═══╝  └─────┘');
-        term.write('\x1B[2J\x1B[H');
-        for (const line of lines) {
-            term.write(line + '\r\n');
-        }
-    }
+
 
     _startGame(difficulty) {
         this._difficulty = difficulty;
@@ -511,6 +565,7 @@ export class SudokuCmd extends CmdBase {
 
         this.open();
         term.write(CURSOR_HIDE);
+        this._initVBs();
         this._render();
         this._timerInterval = setInterval(() => {
             if (this._completed) return;
@@ -520,22 +575,30 @@ export class SudokuCmd extends CmdBase {
     }
 
     _updateHeader() {
-        const auto = this._autoCheck;
-        term.write('\x1B[s');
-        term.write('\x1B[1;1H\x1B[K');
-        term.write(bold(cyan('  Sudoku [' + DIFFICULTY[this._difficulty].label + ']')) +
-            '    ' + yellow(_formatTime(this._timer)) +
-            '    ' + gray('[g]ive up [n]ew [r]estart [c]heck:' + (auto ? 'ON' : 'OFF') + ' [q]uit'));
-        term.write('\x1B[u');
+        this._drawHeader(this._rootVB);
+        term.writeVB(this._rootVB);
     }
 
     _render() {
-        const lines = this._buildLines();
-        this._totalLines = lines.length;
-        term.write('\x1B[2J\x1B[H');
-        for (const line of lines) {
-            term.write(line + '\r\n');
+        this._boardVB.clear();
+        this._sidebarVB.clear();
+        this._rootVB.clear();
+
+        for (let r = 0; r < this._rootVB.height; r++)
+            this._rootVB.writeStr(r, 0, ' '.repeat(this._rootVB.width));
+
+        this._drawHeader(this._rootVB);
+        this._drawBoardBorders(this._boardVB);
+        this._drawSidebarFrame(this._sidebarVB);
+
+        for (let r = 0; r < SIZE; r++) {
+            this._drawBoardRow(this._boardVB, r);
+            this._drawSidebarRow(this._sidebarVB, r + 1);
         }
+
+        this._rootVB.embed(this._boardVB, BOARD_X, GRID_Y);
+        this._rootVB.embed(this._sidebarVB, SIDEBAR_X, GRID_Y);
+        term.writeVB(this._rootVB);
     }
 
     _hasConflict(r, c) {
@@ -590,10 +653,8 @@ export class SudokuCmd extends CmdBase {
     }
 
     _updateDigitRow(n) {
-        const counts = this._countDigits();
-        const displayRow = 3 + (n - 1) * 2;
-        term.write('\x1B[' + displayRow + ';42H\x1B[K');
-        term.write('│' + this._digitPanelStr(n, counts) + '│');
+        this._drawSidebarRow(this._sidebarVB, n);
+        term.writeVB(this._rootVB);
     }
 
     _cellStr(r, c, br, bc, auto) {
@@ -615,53 +676,10 @@ export class SudokuCmd extends CmdBase {
         return '   ';
     }
 
-    _buildLines() {
-        const lines = [];
-        const br = this._cursorRow;
-        const bc = this._cursorCol;
-        const auto = this._autoCheck;
-        const counts = this._countDigits();
-
-        lines.push(bold(cyan('  Sudoku [' + DIFFICULTY[this._difficulty].label + ']')) +
-            '    ' + yellow(_formatTime(this._timer)) +
-            '    ' + gray('[g]ive up [n]ew [r]estart [c]heck:' + (auto ? 'ON' : 'OFF') + ' [q]uit'));
-
-        lines.push('  ╔═══╤═══╤═══╦═══╤═══╤═══╦═══╤═══╤═══╗  ┌─────┐');
-
-        for (let r = 0; r < SIZE; r++) {
-            let row = '  ║';
-            for (let c = 0; c < SIZE; c++) {
-                row += this._cellStr(r, c, br, bc, auto);
-                row += (c % BOX === BOX - 1) ? '║' : '│';
-            }
-            row += '  │' + this._digitPanelStr(r + 1, counts) + '│';
-            lines.push(row);
-            if (r % BOX === BOX - 1 && r < SIZE - 1) {
-                lines.push('  ╠═══╪═══╪═══╬═══╪═══╪═══╬═══╪═══╪═══╣  │     │');
-            } else if (r < SIZE - 1) {
-                lines.push('  ╟───┼───┼───╫───┼───┼───╫───┼───┼───╢  │     │');
-            }
-        }
-
-        lines.push('  ╚═══╧═══╧═══╩═══╧═══╧═══╩═══╧═══╧═══╝  └─────┘');
-        return lines;
-    }
-
     _renderRow(r) {
-        const br = this._cursorRow;
-        const bc = this._cursorCol;
-        const auto = this._autoCheck;
-        const counts = this._countDigits();
-
-        let row = '  ║';
-        for (let c = 0; c < SIZE; c++) {
-            row += this._cellStr(r, c, br, bc, auto);
-            row += (c % BOX === BOX - 1) ? '║' : '│';
-        }
-
-        const displayRow = 3 + r * 2;
-        term.write('\x1B[' + displayRow + ';1H\x1B[K');
-        term.write(row + '  │' + this._digitPanelStr(r + 1, counts) + '│');
+        this._drawBoardRow(this._boardVB, r);
+        this._drawSidebarRow(this._sidebarVB, r + 1);
+        term.writeVB(this._rootVB);
     }
 
     _checkWin() {
@@ -692,10 +710,10 @@ export class SudokuCmd extends CmdBase {
         this._autoCheck = false;
         this._render();
         const timeStr = _formatTime(this._timer);
-        term.write('\x1B[21;1H\x1B[K');
-        term.write(bold(red('  Game Over')) + '  ' +
-            yellow('Time: ' + timeStr) + '\r\n' +
-            gray('  Press [n]ew game or [q]uit'));
+        this._rootVB.writeStr(20, 0, bold(red('  Game Over')) + '  ' +
+            yellow('Time: ' + timeStr));
+        this._rootVB.writeStr(21, 0, gray('  Press [n]ew game or [q]uit'));
+        term.writeVB(this._rootVB);
     }
 
     _win() {
@@ -705,10 +723,10 @@ export class SudokuCmd extends CmdBase {
             this._timerInterval = null;
         }
         const timeStr = _formatTime(this._timer);
-        term.write('\x1B[21;1H\x1B[K');
-        term.write(bold(green('  Congratulations!')) + '  ' +
-            yellow('Time: ' + timeStr) + '\r\n' +
-            gray('  Press [n]ew game or [q]uit'));
+        this._rootVB.writeStr(20, 0, bold(green('  Congratulations!')) + '  ' +
+            yellow('Time: ' + timeStr));
+        this._rootVB.writeStr(21, 0, gray('  Press [n]ew game or [q]uit'));
+        term.writeVB(this._rootVB);
     }
 
     _onKey(data) {
@@ -813,7 +831,6 @@ export class SudokuCmd extends CmdBase {
             clearInterval(this._timerInterval);
             this._timerInterval = null;
         }
-        term.write('\x1B[2J\x1B[H');
         this._pickDifficulty();
     }
 
@@ -846,7 +863,8 @@ export class SudokuCmd extends CmdBase {
             clearInterval(this._timerInterval);
             this._timerInterval = null;
         }
-        term.write(this._completed ? '\x1B[23;1H' : '\x1B[21;1H');
+        const row = this._completed ? 23 : 21;
+        term.write('\x1B[' + row + ';1H');
         this.close();
     }
 

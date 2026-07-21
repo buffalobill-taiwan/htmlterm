@@ -30,6 +30,7 @@ dialogs, and TSR-style widgets.
 - Frame-stack command runner with rAF-based Typewriter output
 - 20 built-in commands (games, widgets, interactive tests — see below)
 - Dialog framework (`MenuDialog`, `InputDialog`, `ShowDialog`) with overlay compositing
+- VirtualBuffer compositing abstraction for nested UI layout
 - TSR widgets (clock, DVD logo) — draggable, position remembered
 - Tab completion for command names; command history (Up/Down)
 - Long multi-line input support with proper wrapping, backspace, and cursor navigation
@@ -46,7 +47,7 @@ dialogs, and TSR-style widgets.
 | **Buffer** | 2D cell array (`{ch, fg, bg, bold, italic, …, width}`) + scrollback; CJK uses `width: 2` + continuation cell |
 | **Overlays** | Widgets (z=10), dialogs (z=100), and flash (z=200) own separate buffers; `Renderer._blendOverlays` composites at render time |
 | **Shell** | `SystemManager` (singleton) + `sys.js` (Proxy exports for cmd code) + `ShellCmd` (persistent CmdBase subclass, REPL) |
-| **Dialogs** | Buffer-based rendering in `js/dialog/`; `DialogFrame` saves/restores cursor on open/close |
+| **Dialogs** | VirtualBuffer-based layout in `js/dialog/`; `DialogFrame` saves/restores cursor on open/close |
 | **Input** | `keydown` on `document` (always captured) + hidden `<textarea>` for IME |
 | **Focus** | Automatic refocus on `keyup` (ptt.cc pattern) |
 | **Cursor** | Absolutely-positioned `<div>` with CSS `blink` animation |
@@ -93,6 +94,7 @@ Open `index.html` in a modern browser, or visit the live demo:
 | `mbti` | MBTI personality test (interactive) |
 | `quiz` | Math quiz challenge |
 | `sleep` | Wait for N seconds (default 1) |
+| `sudoku` | Play Sudoku puzzle (interactive cursor navigation) |
 | `time` | Measure execution time of a command |
 
 ### Keyboard shortcuts
@@ -119,12 +121,12 @@ js/
 ├── main.js
 ├── terminal/    Screen.js Parser.js Renderer.js terminal.js   # VT100 core
 ├── system/      sys.js system.js CmdFrame.js LineEditor.js typewriter.js TextInputModel.js
-├── util/        constants.js sgr.js unicode-width.js drag.js tokenize.js calc-expr.js select-grid.js
-├── dialog/                                        # Dialog framework
-└── cmd/                                           # Demo commands + widgets
+├── util/        constants.js sgr.js unicode-width.js display-width.js VirtualBuffer.js drag.js tokenize.js calc-expr.js select-grid.js pixel-codec.js flash-helper.js random.js
+├── dialog/      Dialog.js MenuDialog.js InputDialog.js ShowDialog.js ConfirmDialog.js write.js position.js  # Dialog framework
+└── cmd/         CmdBase.js ShellCmd.js ... + widgets/        # Demo commands + widgets
 css/style.css
 index.html
-tools/png2art.js                                   # Offline art converter
+tools/png2art.js                                          # Offline art converter
 ```
 
 ## License

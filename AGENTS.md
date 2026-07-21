@@ -46,6 +46,12 @@ ConfirmDialog + Sudoku give-up (Jul 2026): `js/dialog/ConfirmDialog.js` added �
 Yes/No dialog with ←→ navigation, used by `sudoku` give-up flow. Sudoku auto-check
 switched from solution comparison to board-state conflict detection (`_hasConflict`).
 Sudoku hint replaced with give-up (reveal full answer + Game Over).
+VirtualBuffer (Jul 2026): `js/util/VirtualBuffer.js` added — compositing abstraction
+for building UI layouts as nested cell buffers. `term.writeVB(vb, x, y)` blits a VB
+to the screen buffer. Dialog migrated from raw `_buffer[][]` + `_writeStr()` to
+VB-based layout (`this._vb`). Sudoku board/sidebar composition uses nested VBs.
+Two-layer API: low-level (`writeStr`, `setCell`, `blit`, `render`) + high-level
+(`centerRow`, `leftRow`, `rightRow`, `hline`, `embed`).
 
 ## Architecture
 
@@ -68,7 +74,7 @@ Renderer._blendOverlays(Y):
 |---|---|---|---|
 | Main buffer (Screen) | 0 | Parser + shell | `term.write()` → Parser |
 | Widget (TSR) | 10 | WidgetBase._buffer | `putc()` → fills own buffer |
-| Dialog | 100 | Dialog._buffer | `_writeStr()` → inline SGR→cell attrs |
+| Dialog | 100 | Dialog._vb (VirtualBuffer) → flattened `_buffer` | `vb.writeStr()` → inline SGR→cell attrs |
 | Flash (transient) | 200 | flash-helper.js | `screenFlash()` / `borderFlash()` / `artSequence()` |
 
 No `saveArea`/`restoreArea`, no scroll region protection. Each layer is
@@ -83,7 +89,7 @@ independent; the main buffer is never touched by overlays.
 | `Screen.js` | Cell buffer, cursor, scroll + SGR state, dirty tracking | pure data |
 | `Parser.js` | VT100 escape state machine → delegates to Screen | no DOM |
 | `Renderer.js` | Per-cell DOM grid (`cellEls[][]`), cursor element, render loop, overlay blend | DOM only |
-| `terminal.js` | Thin coordinator (~100 lines) composing the three | event wiring |
+| `terminal.js` | Thin coordinator (~100 lines) composing the three, `writeVB()` | event wiring |
 
 All four files live in `js/terminal/`.
 
@@ -256,7 +262,7 @@ User input
 | Producer | Path | Animation |
 |---|---|---|
 | **Cmd** (`this.print()`) | `CmdBase.print()` → `system.print()` → `Typewriter.enqueue()` | Animated (rAF; half=1, wide=2 frame credits) |
-| **Dialog** (`_writeStr`) | Fills `_buffer[][]` → overlay z=100 | Instant |
+| **Dialog** (`_writeStr`) | Fills `_vb` (VirtualBuffer) → flattened `_buffer` → overlay z=100 | Instant |
 | **Widget** (`putc`) | Fills `_buffer[][]` → overlay z=10 | Instant |
 | **Flash** (flash-helper) | Inline getCell → overlay z=200 | Instant (stepped via setTimeout cycle) |
 | **Shell prompt** (`showPrompt`) | `term.write(system.prompt)` (direct, no Typewriter) | Instant |
@@ -381,6 +387,9 @@ Z level.
 - `\x1B[36m` → `cell.fg = 6`
 - `\x1B[0m` → reset to defaults
 - Non-SGR chars become `_makeCell(ch, attr)` entries in `buf[y]`
+
+Dialogs use VirtualBuffer (`this._vb`) for layout composition. `_writeStr` is called
+via `vb.writeStr()`. The overlay reads a flattened copy (`this._buffer = vb.render()`).
 
 ### Custom SGR — Big mode
 
@@ -619,6 +628,8 @@ input arrives only through the callback parameter.
 ## Dialog Frame & Item Positioning (buffer-based)
 
 Dialogs render into their own `_buffer[][]` via `_writeStr()`, not `term.write()`.
+Each dialog also owns a `VirtualBuffer` (`this._vb`) for layout composition; the
+overlay callback reads from the flattened `_buffer` produced by `vb.render()`.
 
 ```js
 _t(row, s) {  // row = 0-indexed offset from dialog.y
@@ -718,7 +729,7 @@ draw() {
 - `Screen.js`: Cell buffer, cursor, scroll/SGR state, dirty tracking, overlays[]
 - `Parser.js`: VT100 escape state machine
 - `Renderer.js`: Per-cell DOM grid (`cellEls[][]`), cursor element, render loop, overlay blend, `colToHex()` color palette
-- `terminal.js`: Thin coordinator composing Screen/Parser/Renderer
+- `terminal.js`: Thin coordinator (~100 lines) composing Screen/Parser/Renderer, `writeVB()`
 
 ### `js/system/` — Shell system layer
 
@@ -738,6 +749,8 @@ draw() {
 - `constants.js`: Shared constants (`CHAR_WIDTH`, `CHAR_HEIGHT`, `TAB_WIDTH`, `CSI_INTRODUCER`, `DEFAULT_DIALOG_WIDTH`, `SCROLLBACK_MAX`)
 - `sgr.js`: SGR helpers (`defaultAttr`, `applySGR`, `makeCell`, `makeCursorCell`, color shortcuts), `createEmptyBuffer`, `isFinalByte`, `warn`, `CURSOR_HIDE`/`CURSOR_SHOW`, `OverlayZ`, `formatTime`
 - `unicode-width.js`: Font-metric `isWide(ch)` for CJK/double-width detection
+- `display-width.js`: `bufWidth(str)` — measures visible string width skipping SGR sequences (used by VirtualBuffer)
+- `VirtualBuffer.js`: Compositing abstraction — nested cell buffer with `writeStr`, `centerRow`, `leftRow`, `rightRow`, `hline`, `embed`, `render`, `blit`, `setCell`
 - `drag.js`: Shared drag helpers used by Dialog and WidgetBase
 - `tokenize.js`: Shell command tokenizer (backslash escaping, quotes)
 - `calc-expr.js`: Safe recursive-descent expression evaluator (`safeEval`)

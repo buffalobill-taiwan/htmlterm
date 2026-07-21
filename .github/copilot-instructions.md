@@ -48,11 +48,15 @@ js/
     ├── constants.js                // Shared constants (CHAR_WIDTH, CHAR_HEIGHT, etc.)
     ├── sgr.js                      // SGR helpers, color shortcuts, OverlayZ levels
     ├── unicode-width.js            // CJK double-width detection (isWide())
+    ├── display-width.js            // bufWidth() — visible string width skipping SGR
+    ├── VirtualBuffer.js            // Compositing abstraction — nested cell buffer
     ├── calc-expr.js                // Safe recursive-descent calculator
     ├── tokenize.js                 // Shell tokenizer (quotes, backslash escapes)
     ├── select-grid.js              // Grid navigation helpers for CmdBase.select()
     ├── drag.js                     // Shared drag helpers (Dialog + WidgetBase)
-    └── pixel-codec.js              // RLE + frame-diff compression (anime frames)
+    ├── pixel-codec.js              // RLE + frame-diff compression (anime frames)
+    ├── flash-helper.js             // Standalone flash utilities (no SystemManager dependency)
+    └── random.js                   // shuffle, pickRandom, pickRandomN
 ```
 
 ### CSS & Fonts
@@ -69,7 +73,7 @@ js/
 | **Screen.js** | Cell buffer `[row][col]` with `{ch, fg, bg, bold, italic, …, width}`, cursor, scrollback, SGR state, dirty tracking. Pure data — no DOM, no I/O. |
 | **Parser.js** | VT100 escape sequence state machine. Delegates actions to `screen.*` methods. No DOM, no I/O. |
 | **Renderer.js** | Pre-allocated 80×25 `<span>` grid (`cellEls[][]`), cursor `<div>`, render loop via rAF, overlay compositing (`_blendOverlays`). Dirty-row optimization: only update changed rows per frame. |
-| **terminal.js** | Thin ~100-line coordinator: composes Screen/Parser/Renderer, wires events (`onData`, `onMouse`, `onResize`), delegates public methods. |
+| **terminal.js** | Thin ~100-line coordinator: composes Screen/Parser/Renderer, wires events (`onData`, `onMouse`, `onResize`), delegates public methods, `writeVB()`. |
 
 **Key insight**: `Terminal` proxies most getters/setters/methods to `screen` and `renderer` to maintain a clean public API while keeping concerns separated.
 
@@ -92,7 +96,7 @@ Renderer._blendOverlays(rowIdx):
 |-------|---------|-------|--------|----------|--------------|
 | Main buffer | 0 | Screen (Parser writes) | `Screen._buffer[][]` | Base layer | `term.write()` → Parser |
 | Widget (TSR) | 10 | WidgetBase subclass | `_buffer[][]` | Composited over main | `putc(x, y, ch, fg, bg, …)` |
-| Dialog | 100 | Dialog subclass | `_buffer[][]` | Composited over main | `_writeStr()` (SGR parsing inline) |
+| Dialog | 100 | Dialog subclass | `_vb` (VirtualBuffer) → flattened `_buffer[][]` | Composited over main | `vb.writeStr()` (SGR parsing inline) |
 | Flash | 200 | flash-helper.js | Inline `getCell()` | Highest priority | `screenFlash()`, `borderFlash()`, `artSequence()` |
 
 **Critical**: Overlays never modify the main buffer. The main buffer is only touched by the Parser (via Screen methods). This ensures clean state separation.

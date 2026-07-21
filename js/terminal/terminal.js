@@ -54,6 +54,12 @@ export class Terminal {
 
     write(data) { this.parser.write(data); }
 
+    writeVB(vb, x = 0, y = 0) {
+        vb.blit(this.screen.buffer, x, y);
+        for (let r = y; r < Math.min(y + vb.height, this.rows); r++)
+            this.screen.markRowDirty(r);
+    }
+
     focus() {
         this._focusInput();
     }

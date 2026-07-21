@@ -26,7 +26,6 @@ export class InputDialog extends Dialog {
 
     open() {
         super.open();
-        this._showCursor();
     }
 
     _showCursor() {
@@ -34,7 +33,7 @@ export class InputDialog extends Dialog {
         const col = 1 + PREFIX.length + this._model.widthRange(0, this._model.cursor);
         const row = this._inputRow;
         if (col < this.width - 1) {
-            this._buffer[row][col] = makeCursorCell();
+            this._vb.setCell(row, col, makeCursorCell());
         }
         this.term.markRowDirty(this.y + row);
     }

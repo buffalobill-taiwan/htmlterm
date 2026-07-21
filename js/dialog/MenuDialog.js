@@ -1,5 +1,4 @@
 import { Dialog } from './Dialog.js';
-import { _writeStr } from './write.js';
 import { centeredDialogPos } from './position.js';
 import { parseCSI } from '../system/TextInputModel.js';
 
@@ -28,7 +27,7 @@ export class MenuDialog extends Dialog {
             if (idx < this.items.length) {
                 this._drawItem(idx, r);
             } else {
-                _writeStr(this._buffer, r, 0, '│' + ' '.repeat(this.width - 3), this.width);
+                this._vb.writeStr(r, 0, '│' + ' '.repeat(this.width - 3), this.width);
             }
         }
         this._drawScrollBar();
@@ -47,7 +46,7 @@ export class MenuDialog extends Dialog {
         if (sel) s += '\x1B[7m\x1B[1m';
         s += content + ' '.repeat(Math.max(0, pad));
         if (sel) s += '\x1B[0m';
-        _writeStr(this._buffer, bufRow, 0, s, this.width);
+        this._vb.writeStr(bufRow, 0, s, this.width);
     }
 
     _drawScrollBar() {
@@ -59,7 +58,7 @@ export class MenuDialog extends Dialog {
 
         if (total <= visible) {
             for (let i = 0; i < visible; i++) {
-                _writeStr(this._buffer, startRow + i, col, ' │', this.width);
+                this._vb.writeStr(startRow + i, col, ' │', this.width);
             }
             return;
         }
@@ -70,11 +69,11 @@ export class MenuDialog extends Dialog {
         for (let i = 0; i < visible; i++) {
             const idx = offset + i;
             if (idx >= total) {
-                _writeStr(this._buffer, startRow + i, col, ' │', this.width);
+                this._vb.writeStr(startRow + i, col, ' │', this.width);
                 continue;
             }
             const ch = (i === thumbRow) ? '█' : '░';
-            _writeStr(this._buffer, startRow + i, col, ch + '│', this.width);
+            this._vb.writeStr(startRow + i, col, ch + '│', this.width);
         }
     }
 
@@ -125,6 +124,7 @@ export class MenuDialog extends Dialog {
             this._drawItem(prev, 3 + prev - this.scrollOffset);
             this._drawItem(next, 3 + next - this.scrollOffset);
             this._drawScrollBar();
+            this._buffer = this._vb.render();
             this._markDirty();
         }
     }

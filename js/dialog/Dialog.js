@@ -1,8 +1,8 @@
-import { _writeStr } from './write.js';
 import { bufWidth } from '../util/display-width.js';
 import { addDragMethods, markDirtyRows } from '../util/drag.js';
-import { OverlayZ, createEmptyBuffer, makeOverlayGetCell } from '../util/sgr.js';
+import { OverlayZ, makeOverlayGetCell } from '../util/sgr.js';
 import { DEFAULT_DIALOG_WIDTH } from '../util/constants.js';
+import { VirtualBuffer } from '../util/VirtualBuffer.js';
 
 export class Dialog {
     constructor(term, opts) {
@@ -14,6 +14,7 @@ export class Dialog {
         this.x = opts.x != null ? opts.x : 0;
         this.y = opts.y != null ? opts.y : 0;
         this.h = 0;
+        this._vb = null;
         this._buffer = null;
         this._overlay = null;
         this._savePos = opts.savePos || null;
@@ -28,6 +29,7 @@ export class Dialog {
 
     open() {
         this._initBuffer();
+        this._buffer = this._vb.render();
         this._overlay = {
             y: this.y,
             x: this.x,
@@ -50,6 +52,7 @@ export class Dialog {
         this._markDirty();
         this.term.removeOverlay(this._overlay);
         this._overlay = null;
+        this._vb = null;
         this._buffer = null;
     }
 
@@ -61,6 +64,7 @@ export class Dialog {
 
     refreshContent() {
         this._renderContent();
+        this._buffer = this._vb.render();
         this._markDirty();
     }
 
@@ -71,7 +75,7 @@ export class Dialog {
     _bufWidth(str) { return bufWidth(str); }
 
     _t(row, s) {
-        _writeStr(this._buffer, row, 0, s, this.width);
+        this._vb.writeStr(row, 0, s, this.width);
     }
 
     _centerRow(row, content) {
@@ -79,13 +83,13 @@ export class Dialog {
         const pad = Math.max(0, W - 2 - this._bufWidth(content));
         const leftPad = Math.floor(pad / 2);
         const rightPad = Math.ceil(pad / 2);
-        _writeStr(this._buffer, row, 0, '│' + ' '.repeat(leftPad) + content + ' '.repeat(rightPad) + '│', W);
+        this._vb.writeStr(row, 0, '│' + ' '.repeat(leftPad) + content + ' '.repeat(rightPad) + '│', W);
     }
 
     _leftRow(row, content) {
         const W = this.width;
         const pad = Math.max(0, W - 2 - this._bufWidth(content));
-        _writeStr(this._buffer, row, 0, '│' + content + ' '.repeat(pad) + '│', W);
+        this._vb.writeStr(row, 0, '│' + content + ' '.repeat(pad) + '│', W);
     }
 
     _drawFrame() {
@@ -107,6 +111,6 @@ export class Dialog {
     _renderContent() {}
 
     _initBuffer() {
-        this._buffer = createEmptyBuffer(this.width, this.h);
+        this._vb = new VirtualBuffer(this.width, this.h);
     }
 }
