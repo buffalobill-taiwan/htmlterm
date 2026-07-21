@@ -4,6 +4,7 @@ export class Typewriter {
     constructor(term) {
         this.term = term;
         this._queue = [];
+        this._head = 0;
         this._rafId = null;
         this._drainCallbacks = [];
         this._active = false;
@@ -42,11 +43,13 @@ export class Typewriter {
             this._rafId = null;
         }
         let out = '';
-        for (const item of this._queue) {
+        for (let i = this._head; i < this._queue.length; i++) {
+            const item = this._queue[i];
             if (item.type === 'seq') out += item.text;
             else out += item.ch;
         }
         this._queue = [];
+        this._head = 0;
         this._active = false;
         if (out) this.term.write(out);
         this._flushDrain();
@@ -64,6 +67,7 @@ export class Typewriter {
     dispose() {
         if (this._rafId) cancelAnimationFrame(this._rafId);
         this._queue = [];
+        this._head = 0;
         this._active = false;
     }
 
@@ -115,24 +119,26 @@ export class Typewriter {
         this._accumulator += elapsed;
 
         let out = '';
-        while (this._accumulator >= 0 && this._queue.length) {
-            const item = this._queue[0];
+        while (this._head < this._queue.length) {
+            const item = this._queue[this._head];
             const delay = item.type === 'seq' ? 0
                 : (item.wide ? this._speed.wide : this._speed.half);
 
             if (delay > this._accumulator) break;
 
             this._accumulator -= delay;
-            this._queue.shift();
+            this._head++;
             if (item.type === 'seq') out += item.text;
             else out += item.ch;
         }
 
         if (out) this.term.write(out);
 
-        if (this._queue.length) {
+        if (this._head < this._queue.length) {
             this._rafId = requestAnimationFrame(t => this._tick(t));
         } else {
+            this._queue = [];
+            this._head = 0;
             this._active = false;
             this._rafId = null;
             this._flushDrain();
