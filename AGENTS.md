@@ -12,7 +12,7 @@ Live demo: <https://buffalobill-taiwan.github.io/htmlterm/>
 | Terminal core (Screen/Parser/Renderer) | Complete |
 | Overlay compositing (widgets + dialogs) | Complete |
 | Frame-stack shell + Typewriter | Complete |
-| Demo commands | 20 registered (see Command Architecture) |
+| Demo commands | 21 registered (see Command Architecture) |
 | Automated tests | Excluded — manual testing only |
 | CI | Excluded — not planned |
 
@@ -464,18 +464,20 @@ js/cmd/
 ├── flash.js           Flash       — screen/border/art flash; `--border`, `--art` flags; Ctrl+C abort (buffer overlay)
 ├── art.js             Art         — async pixel-art renderer (random artwork)
 ├── anime.js           Anime       — play 124-frame animation (rAF + buffer overlay, pixel-codec)
+├── minesweeper.js     MinesweeperCmd — Minesweeper game with 2×1 fullwidth cells, three difficulty levels, screen-clear on start
 ├── sleep.js           Sleep       — wait N seconds; Ctrl+C abort
 ├── time.js            TimeCmd     — measure execution time of a command
 ├── sudoku.js          Sudoku      — play Sudoku puzzle (custom _onKey, grid rendering, auto-check, timer)
+├── minesweeper.js     MinesweeperCmd — Minesweeper game (2×1 fullwidth cells, backtracking mine gen, BFS reveal, first-click safe)
 ├── art/               Static pixel data modules (adam, blacklotus, glaneuses, anime, …)
 └── widgets/
     ├── ClockWidget.js
     └── DVDWidget.js
 ```
 
-**20 registered commands:** `5willow`, `anime`, `art`, `ascii`, `astrology`, `calc`, `clear`, `clock`,
+**21 registered commands:** `5willow`, `anime`, `art`, `ascii`, `astrology`, `calc`, `clear`, `clock`,
 `cowsay`, `date`, `dvd`, `echo`, `flash`, `help`, `menu`,
-`mbti`, `quiz`, `sleep`, `sudoku`, `time`
+`mbti`, `minesweeper`, `quiz`, `sleep`, `sudoku`, `time`
 
 **CmdBase contract:**
 

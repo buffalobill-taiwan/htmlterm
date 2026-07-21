@@ -22,4 +22,5 @@ export { Sleep } from './sleep.js';
 export { TimeCmd } from './time.js';
 export { FiveWillow } from './5willow.js';
 export { SudokuCmd } from './sudoku.js';
+export { MinesweeperCmd } from './minesweeper.js';
 
