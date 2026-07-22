@@ -381,8 +381,8 @@ export class TetrisCmd extends CmdBase {
                         this._board[ny][nx] = PIECE_BG[type];
                 }
 
-        const isTSpinFull = this._lastWasRotation && _isTSpin(this._board, type, x, y);
-        const isTSpinM = this._lastWasRotation && _isTSpinMini(this._board, type, x, y);
+        const isTSpinFull = this._lastWasRotation && _isTSpin(this._board, type, rot, x, y);
+        const isTSpinM = this._lastWasRotation && _isTSpinMini(this._board, type, rot, x, y);
 
         const fullRows = [];
         for (let r = 0; r < ROWS; r++)
