@@ -23,4 +23,5 @@ export { TimeCmd } from './time.js';
 export { FiveWillow } from './5willow.js';
 export { SudokuCmd } from './sudoku.js';
 export { MinesweeperCmd } from './minesweeper.js';
+export { TetrisCmd } from './tetris.js';
 

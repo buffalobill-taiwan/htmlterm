@@ -12,7 +12,7 @@ Live demo: <https://buffalobill-taiwan.github.io/htmlterm/>
 | Terminal core (Screen/Parser/Renderer) | Complete |
 | Overlay compositing (widgets + dialogs) | Complete |
 | Frame-stack shell + Typewriter | Complete |
-| Demo commands | 21 registered (see Command Architecture) |
+| Demo commands | 22 registered (see Command Architecture) |
 | Automated tests | Excluded — manual testing only |
 | CI | Excluded — not planned |
 
@@ -52,6 +52,10 @@ to the screen buffer. Dialog migrated from raw `_buffer[][]` + `_writeStr()` to
 VB-based layout (`this._vb`). Sudoku board/sidebar composition uses nested VBs.
 Two-layer API: low-level (`writeStr`, `setCell`, `blit`, `render`) + high-level
 (`centerRow`, `leftRow`, `rightRow`, `hline`, `embed`).
+Tetris (Jul 2026): `js/cmd/tetris.js` added — full Tetris game with SRS rotation
+system, wall kicks, T-Spin/T-Spin Mini detection, ghost piece, hold, combo,
+back-to-back bonus, lock delay, line-clear flash animation, three difficulty
+levels. 2×1 cell rendering via VirtualBuffer `setCell()` with colored backgrounds.
 
 ## Architecture
 
@@ -468,6 +472,7 @@ js/cmd/
 ├── sleep.js           Sleep       — wait N seconds; Ctrl+C abort
 ├── time.js            TimeCmd     — measure execution time of a command
 ├── sudoku.js          Sudoku      — play Sudoku puzzle (custom _onKey, grid rendering, auto-check, timer)
+├── tetris.js          Tetris      — play Tetris (SRS rotation, wall kicks, T-Spin, ghost, hold, combo, B2B, lock delay, line-flash)
 ├── minesweeper.js     MinesweeperCmd — Minesweeper game (2×1 fullwidth cells, backtracking mine gen, BFS reveal, first-click safe)
 ├── art/               Static pixel data modules (adam, blacklotus, glaneuses, anime, …)
 └── widgets/
@@ -475,9 +480,9 @@ js/cmd/
     └── DVDWidget.js
 ```
 
-**21 registered commands:** `5willow`, `anime`, `art`, `ascii`, `astrology`, `calc`, `clear`, `clock`,
+**22 registered commands:** `5willow`, `anime`, `art`, `ascii`, `astrology`, `calc`, `clear`, `clock`,
 `cowsay`, `date`, `dvd`, `echo`, `flash`, `help`, `menu`,
-`mbti`, `minesweeper`, `quiz`, `sleep`, `sudoku`, `time`
+`mbti`, `minesweeper`, `quiz`, `sleep`, `sudoku`, `tetris`, `time`
 
 **CmdBase contract:**
 
@@ -781,6 +786,7 @@ draw() {
 - `art.js` + `art/*.js`: Pixel-art renderer and static artwork data; exports `ARTWORKS` for reuse by `flash --art`
 - `anime.js`: 124-frame animation player (rAF + buffer overlay, pixel-codec)
 - `sudoku.js`: Sudoku puzzle game (backtracking generator, grid rendering, custom `_onKey`, auto-check, timer)
+- `tetris.js`: Tetris game (SRS rotation, wall kicks, T-Spin detection, ghost piece, hold, combo, B2B, lock delay, line-clear flash, 2×1 cell rendering)
 
 ## Command Development Templates
 

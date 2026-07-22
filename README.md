@@ -28,7 +28,7 @@ dialogs, and TSR-style widgets.
 ### Demo shell
 
 - Frame-stack command runner with rAF-based Typewriter output
-- 21 built-in commands (games, widgets, interactive tests — see below)
+- 22 built-in commands (games, widgets, interactive tests — see below)
 - Dialog framework (`MenuDialog`, `InputDialog`, `ShowDialog`) with overlay compositing
 - VirtualBuffer compositing abstraction for nested UI layout
 - TSR widgets (clock, DVD logo) — draggable, position remembered
@@ -95,6 +95,7 @@ Open `index.html` in a modern browser, or visit the live demo:
 | `quiz` | Math quiz challenge |
 | `sleep` | Wait for N seconds (default 1) |
 | `sudoku` | Play Sudoku puzzle (interactive cursor navigation) |
+| `tetris` | Play Tetris (SRS rotation, T-Spin, ghost piece, hold, line-clear flash) |
 | `time` | Measure execution time of a command |
 
 ### Keyboard shortcuts
