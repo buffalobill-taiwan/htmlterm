@@ -2,3 +2,5 @@
 node_modules/
 *.log
 .codegraph/
+.agents/
+.codex/
