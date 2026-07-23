@@ -167,21 +167,31 @@ function _clearLines(board) {
     return full.length;
 }
 
-function _drawPreviewVB(vb, ry, rx, type, innerW, innerH) {
+function _drawPreviewVB(vb, ry, rx, type, innerW, innerH, cells) {
     const shape = SHAPES[type][0];
-    const bg = PIECE_BG[type];
     const pieceW = shape[0].length * 2;
     const pieceH = shape.length;
     const ox = Math.round((innerW - pieceW) / 2);
     const oy = Math.round((innerH - pieceH) / 2);
+    let idx = 0;
     for (let r = 0; r < shape.length; r++)
         for (let c = 0; c < shape[r].length; c++) {
-            const ch = shape[r][c] ? '\u2588' : ' ';
-            const fg = shape[r][c] ? PIECE_COLORS[type] : 0;
-            const bgr = shape[r][c] ? bg : 0;
-            vb.setCell(ry + oy + r, rx + ox + c * 2, { ch, fg, bg: bgr, bold: false, dim: false, italic: false, underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: 1 });
-            vb.setCell(ry + oy + r, rx + ox + c * 2 + 1, { ch, fg, bg: bgr, bold: false, dim: false, italic: false, underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: 1 });
+            const cell = cells[idx++];
+            vb.setCell(ry + oy + r, rx + ox + c * 2, cell);
+            vb.setCell(ry + oy + r, rx + ox + c * 2 + 1, cell);
         }
+}
+
+function _buildPreviewCells(type) {
+    const shape = SHAPES[type][0];
+    const bg = PIECE_BG[type], fg = PIECE_COLORS[type];
+    const cells = [];
+    for (let r = 0; r < shape.length; r++)
+        for (let c = 0; c < shape[r].length; c++) {
+            const filled = shape[r][c];
+            cells.push({ ch: filled ? '\u2588' : ' ', fg: filled ? fg : 0, bg: filled ? bg : 0, bold: false, dim: false, italic: false, underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: 1 });
+        }
+    return cells;
 }
 
 export class TetrisCmd extends CmdBase {
@@ -237,7 +247,7 @@ export class TetrisCmd extends CmdBase {
         this._backToBack = false;
         this._holdType = null;
         this._holdUsed = false;
-        this._nextQueue = [..._bag(), ..._bag()];
+        this._nextQueue = [..._bag(), ..._bag(), ..._bag()];
         this._current = null;
         this._completed = false;
         this._paused = false;
@@ -258,6 +268,29 @@ export class TetrisCmd extends CmdBase {
         this._rootVB = new VirtualBuffer(term.cols, term.rows);
         this._boardVB = new VirtualBuffer(BOARD_W, BOARD_H);
         this._sidebarVB = new VirtualBuffer(SIDEBAR_W, BOARD_H);
+        this._pauseFrameVB = new VirtualBuffer(14, 5);
+        this._pauseInnerVB = new VirtualBuffer(12, 3);
+        this._emptyLine = ' '.repeat(this._rootVB.width);
+
+        const cell = (ch, fg, bg, bold, dim) => ({ ch, fg, bg, bold, dim, italic: false, underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: 1 });
+        this._cellEmpty = cell(' ', 0, 0, false, false);
+        this._cellBorder = cell('\u2551', 8, 0, false, false);
+        this._cellGhostL = cell('\u2591', 8, 0, false, true);
+        this._cellGhostR = cell('\u2591', 8, 0, false, true);
+
+        this._boardPalette = new Array(256);
+        for (let i = 0; i < 256; i++)
+            this._boardPalette[i] = cell('\u2588', i, i, true, false);
+
+        this._curCells = {};
+        for (const type of Object.keys(PIECE_COLORS)) {
+            const fg = PIECE_COLORS[type], bg = PIECE_BG[type];
+            this._curCells[type] = [cell('\u2588', fg, bg, true, false), cell('\u2588', fg, bg, true, false)];
+        }
+
+        this._previewCells = {};
+        for (const type of Object.keys(PIECE_COLORS))
+            this._previewCells[type] = _buildPreviewCells(type);
 
         this._spawn();
         this._render();
@@ -265,7 +298,7 @@ export class TetrisCmd extends CmdBase {
     }
 
     _nextType() {
-        if (this._nextQueue.length < 14)
+        if (this._nextQueue.length < 21)
             this._nextQueue.push(..._bag());
         return this._nextQueue.shift();
     }
@@ -612,7 +645,7 @@ export class TetrisCmd extends CmdBase {
     _render() {
         this._rootVB.clear();
         for (let r = 0; r < this._rootVB.height; r++)
-            this._rootVB.writeStr(r, 0, ' '.repeat(this._rootVB.width));
+            this._rootVB.writeStr(r, 0, this._emptyLine);
         this._renderSidebar();
         this._renderBoard();
     }
@@ -631,14 +664,14 @@ export class TetrisCmd extends CmdBase {
         vb.writeStr(6, 0, '└──────────────┘');
 
         if (this._nextQueue.length > 0)
-            _drawPreviewVB(vb, 2, 1, this._nextQueue[0], 14, 4);
+            _drawPreviewVB(vb, 2, 1, this._nextQueue[0], 14, 4, this._previewCells[this._nextQueue[0]]);
 
         vb.writeStr(7, 0, '┌──── Hold ────┐');
         for (let r = 0; r < 4; r++) vb.writeStr(8 + r, 0, '│              │');
         vb.writeStr(12, 0, '└──────────────┘');
 
         if (this._holdType)
-            _drawPreviewVB(vb, 8, 1, this._holdType, 14, 4);
+            _drawPreviewVB(vb, 8, 1, this._holdType, 14, 4, this._previewCells[this._holdType]);
 
         vb.writeStr(13, 0, gray('\u2500'.repeat(16)));
 
@@ -665,53 +698,57 @@ export class TetrisCmd extends CmdBase {
         const vb = this._boardVB;
         vb.clear();
 
+        const ec = this._cellEmpty;
         for (let r = 0; r < BOARD_H; r++)
             for (let c = 0; c < BOARD_W; c++)
-                vb.setCell(r, c, { ch: ' ', fg: 0, bg: 0, bold: false, dim: false, italic: false, underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: 1 });
+                vb.setCell(r, c, ec);
 
+        const pal = this._boardPalette;
         for (let r = 0; r < ROWS; r++)
             for (let c = 0; c < COLS; c++) {
                 const v = this._board[r][c];
                 if (v !== 0) {
                     const flash = this._clearingRows && this._clearingRows.includes(r) && this._clearFlashCount % 2 === 1;
-                    const bg = v, fg = flash ? 15 : v;
-                    vb.setCell(1 + r, 1 + c * 2, { ch: '\u2588', fg, bg, bold: true, dim: false, italic: false, underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: 1 });
-                    vb.setCell(1 + r, 2 + c * 2, { ch: '\u2588', fg, bg, bold: true, dim: false, italic: false, underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: 1 });
+                    const cell = flash ? pal[15] : pal[v];
+                    vb.setCell(1 + r, 1 + c * 2, cell);
+                    vb.setCell(1 + r, 2 + c * 2, cell);
                 }
             }
 
         if (this._current && !this._completed && !this._paused) {
             const { type, rot, x, y } = this._current;
             const shape = SHAPES[type][rot];
-            const bg = PIECE_BG[type], fg = PIECE_COLORS[type];
+            const [cl, cr] = this._curCells[type];
             for (let r = 0; r < shape.length; r++)
                 for (let c = 0; c < shape[r].length; c++)
                     if (shape[r][c]) {
                         const ny = y + r, nx = x + c;
                         if (ny >= 0 && ny < ROWS) {
-                            vb.setCell(1 + ny, 1 + nx * 2, { ch: '\u2588', fg, bg, bold: true, dim: false, italic: false, underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: 1 });
-                            vb.setCell(1 + ny, 2 + nx * 2, { ch: '\u2588', fg, bg, bold: true, dim: false, italic: false, underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: 1 });
+                            vb.setCell(1 + ny, 1 + nx * 2, cl);
+                            vb.setCell(1 + ny, 2 + nx * 2, cr);
                         }
                     }
 
             const gy = _ghostY(this._board, type, rot, x, y);
             if (gy !== y) {
+                const gl = this._cellGhostL, gr = this._cellGhostR;
                 for (let r = 0; r < shape.length; r++)
                     for (let c = 0; c < shape[r].length; c++)
                         if (shape[r][c]) {
                             const ny = gy + r, nx = x + c;
                             if (ny >= 0 && ny < ROWS && this._board[ny][nx] === 0) {
-                                vb.setCell(1 + ny, 1 + nx * 2, { ch: '\u2591', fg: 8, bg: 0, bold: false, dim: true, italic: false, underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: 1 });
-                                vb.setCell(1 + ny, 2 + nx * 2, { ch: '\u2591', fg: 8, bg: 0, bold: false, dim: true, italic: false, underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: 1 });
+                                vb.setCell(1 + ny, 1 + nx * 2, gl);
+                                vb.setCell(1 + ny, 2 + nx * 2, gr);
                             }
                         }
             }
         }
 
+        const bd = this._cellBorder;
         vb.writeStr(0, 0, '\x1B[90m\u2554' + '\u2550'.repeat(BOARD_W - 2) + '\u2557');
         for (let r = 1; r < BOARD_H - 1; r++) {
-            vb.setCell(r, 0, { ch: '\u2551', fg: 8, bg: 0, bold: false, dim: false, italic: false, underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: 1 });
-            vb.setCell(r, BOARD_W - 1, { ch: '\u2551', fg: 8, bg: 0, bold: false, dim: false, italic: false, underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: 1 });
+            vb.setCell(r, 0, bd);
+            vb.setCell(r, BOARD_W - 1, bd);
         }
         vb.writeStr(BOARD_H - 1, 0, '\x1B[90m\u255A' + '\u2550'.repeat(BOARD_W - 2) + '\u255D');
 
@@ -729,7 +766,8 @@ export class TetrisCmd extends CmdBase {
         const ox = Math.floor((BOARD_W - fw) / 2);
         const oy = Math.floor((BOARD_H - fh) / 2);
 
-        const frame = new VirtualBuffer(fw, fh);
+        const frame = this._pauseFrameVB;
+        frame.clear();
         const bc = { fg: 11, bg: 0, bold: true, dim: false, italic: false, underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: 1 };
         frame.setCell(0, 0, { ...bc, ch: '\u2554' });
         for (let c = 1; c < fw - 1; c++) frame.setCell(0, c, { ...bc, ch: '\u2550' });
@@ -742,10 +780,12 @@ export class TetrisCmd extends CmdBase {
         for (let c = 1; c < fw - 1; c++) frame.setCell(fh - 1, c, { ...bc, ch: '\u2550' });
         frame.setCell(fh - 1, fw - 1, { ...bc, ch: '\u255D' });
 
-        const inner = new VirtualBuffer(cw, ch);
+        const inner = this._pauseInnerVB;
+        inner.clear();
+        const ic = { ch: ' ', fg: 0, bg: 0, bold: false, dim: false, italic: false, underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: 1 };
         for (let r = 0; r < ch; r++)
             for (let c = 0; c < cw; c++)
-                inner.setCell(r, c, { ch: ' ', fg: 0, bg: 0, bold: false, dim: false, italic: false, underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: 1 });
+                inner.setCell(r, c, ic);
         inner.writeStr(1, 2, '\x1B[1;37;44mPAUSED!\x1B[0m');
 
         frame.embed(inner, 1, 1);
