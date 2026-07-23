@@ -5,13 +5,14 @@ import { createEmptyBuffer, makeOverlayGetCell, makeCell, defaultAttr } from '..
 import { startBufferAnimation } from '../system/RAFAnimationHelper.js';
 
 function toCells(pixels, cols, termRows, pixelRows) {
+    const attr = defaultAttr();
     const frameBuf = new Array(termRows);
     for (let ty = 0; ty < termRows; ty++) {
         const row = new Array(cols);
         for (let x = 0; x < cols; x++) {
-            const fg = pixels[ty * 2 * cols + x];
-            const bg = (ty * 2 + 1) < pixelRows ? pixels[(ty * 2 + 1) * cols + x] : 0;
-            row[x] = makeCell('▀', { ...defaultAttr(), fg, bg }, 1);
+            attr.fg = pixels[ty * 2 * cols + x];
+            attr.bg = (ty * 2 + 1) < pixelRows ? pixels[(ty * 2 + 1) * cols + x] : 0;
+            row[x] = makeCell('▀', attr, 1);
         }
         frameBuf[ty] = row;
     }
@@ -78,7 +79,7 @@ export class AnimeCmd extends CmdBase {
             (ts, loopFrameIdx) => {
                 frameIdx = (frameIdx + 1) % cellFrames.length;
                 copyFrame(frameIdx);
-                term.markAllDirty();
+                for (let r = oy; r < oy + overlayH; r++) term.markRowDirty(r);
             },
             {
                 y: oy,

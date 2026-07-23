@@ -79,15 +79,16 @@ export function artSequence(cmd, term, artworks) {
         const ox = Math.floor((term.cols - cols) / 2);
         const oy = Math.floor((term.rows - cellRows) / 2);
 
+        const attr = defaultAttr();
         ov = {
             y: oy, x: ox, h: cellRows, w: cols,
             z: OverlayZ.FLASH,
             owner: null,
             getCell: (relY, relX) => {
                 const py = relY * 2;
-                const fg = pixels[py * cols + relX];
-                const bg = py + 1 < artRows ? pixels[(py + 1) * cols + relX] : 0;
-                return makeCell('▀', { ...defaultAttr(), fg, bg }, 1);
+                attr.fg = pixels[py * cols + relX];
+                attr.bg = py + 1 < artRows ? pixels[(py + 1) * cols + relX] : 0;
+                return makeCell('▀', attr, 1);
             },
         };
         term.addOverlay(ov);

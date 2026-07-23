@@ -16,6 +16,13 @@ export class Renderer {
         this.cursorEl = null;
         this._lastCursor = null;
 
+        // Reused objects to avoid per-frame allocations
+        this._swapFg = 0;
+        this._swapBg = 0;
+        this._classParts = [];
+        this._classCache = new Map();
+        this._blendRow = null;
+
         this._initDOM();
         this._initScrollIndicator();
     }
@@ -91,11 +98,15 @@ export class Renderer {
         screen.dirtyRows.clear();
     }
 
+    // Inline helper: swaps fg/bg if cell.inverse, writes to reused objects
     _swapInverse(fg, bg, cell) {
         if (cell.inverse) {
-            return { fg: bg, bg: fg };
+            this._swapFg = bg;
+            this._swapBg = fg;
+        } else {
+            this._swapFg = fg;
+            this._swapBg = bg;
         }
-        return { fg, bg };
     }
 
     _renderRow(rowIdx) {
@@ -128,7 +139,9 @@ export class Renderer {
 
             span.textContent = cell.ch || ' ';
 
-            let { fg, bg } = this._swapInverse(cell.fg, cell.bg, cell);
+            this._swapInverse(cell.fg, cell.bg, cell);
+            let fg = this._swapFg;
+            let bg = this._swapBg;
             if (cell.bold && typeof fg === 'number' && fg < 8) fg += 8;
 
             span.className = this._spanClass(fg, bg, cell.italic, cell.underline, cell.crossedOut, cell.blink, cell.dim);
@@ -152,41 +165,59 @@ export class Renderer {
         const ovs = this.screen.overlays;
         if (!ovs || !ovs.length) return baseRow;
 
-        let blended = null;
+        let modified = false;
         for (const ov of ovs) {
             if (displayRow >= ov.y && displayRow < ov.y + ov.h) {
-                if (!blended) blended = baseRow.map(c => ({ ...c }));
                 const relRow = displayRow - ov.y;
                 const x0 = ov.x;
                 const w = ov.w || (this.screen.cols - x0);
-                for (let c = x0; c < x0 + w && c < blended.length; c++) {
+                for (let c = x0; c < x0 + w && c < baseRow.length; c++) {
                     const ovCell = ov.getCell(relRow, c - x0);
                     if (!ovCell) continue;
                     if (ovCell.width === 0) continue;
-                    const prev = blended[c];
+                    if (!modified) {
+                        let blendRow = this._blendRow;
+                        if (!blendRow || blendRow.length !== baseRow.length) {
+                            blendRow = baseRow.slice();
+                            this._blendRow = blendRow;
+                        } else {
+                            for (let i = 0; i < baseRow.length; i++) blendRow[i] = baseRow[i];
+                        }
+                        baseRow = blendRow;
+                        modified = true;
+                    }
                     if (ovCell.width === 2) {
-                        blended[c] = { ...ovCell, width: 1, _clipRight: true };
-                        if (c + 1 < blended.length) {
-                            blended[c + 1] = { ...ovCell, width: 1, _clipLeft: true };
+                        baseRow[c] = { ...ovCell, width: 1, _clipRight: true };
+                        if (c + 1 < baseRow.length) {
+                            baseRow[c + 1] = { ...ovCell, width: 1, _clipLeft: true };
                         }
                         continue;
                     }
-                    blended[c] = ovCell;
-                    if (c > 0 && blended[c - 1] && blended[c - 1].width === 2) {
-                        blended[c - 1] = { ...blended[c - 1], width: 1, _clipRight: true };
-                    }
-                    if (c + 1 < blended.length && blended[c + 1] && blended[c + 1].width === 0) {
-                        blended[c + 1] = {
-                            ...blended[c + 1],
-                            ch: prev.ch,
-                            width: 1,
-                            _clipLeft: true,
+                    const prev = baseRow[c];
+                    if (prev && prev.width >= 2) {
+                        baseRow[c] = {
+                            ch: ovCell.ch, fg: ovCell.fg, bg: ovCell.bg,
+                            bold: ovCell.bold, dim: ovCell.dim, italic: ovCell.italic,
+                            underline: ovCell.underline, blink: ovCell.blink,
+                            inverse: ovCell.inverse, conceal: ovCell.conceal,
+                            crossedOut: ovCell.crossedOut, width: 1, _clipRight: true,
                         };
+                        if (c + 1 < baseRow.length) {
+                            baseRow[c + 1] = {
+                                ch: prev.ch, fg: prev.fg, bg: prev.bg,
+                                bold: prev.bold, dim: prev.dim, italic: prev.italic,
+                                underline: prev.underline, blink: prev.blink,
+                                inverse: prev.inverse, conceal: prev.conceal,
+                                crossedOut: prev.crossedOut, width: 1, _clipLeft: true,
+                            };
+                        }
+                    } else {
+                        baseRow[c] = ovCell;
                     }
                 }
             }
         }
-        return blended || baseRow;
+        return baseRow;
     }
 
     _getDataRow(displayRow) {
@@ -205,7 +236,19 @@ export class Renderer {
     }
 
     _spanClass(fg, bg, italic, underline, crossedOut, blink, dim) {
-        const parts = [];
+        if (!italic && !underline && !crossedOut && !blink && !dim &&
+            typeof fg === 'number' && fg <= 255 &&
+            typeof bg === 'number' && bg <= 255) {
+            const key = fg * 256 + bg;
+            let s = this._classCache.get(key);
+            if (s === undefined) {
+                s = 'q' + fg + ' b' + bg;
+                this._classCache.set(key, s);
+            }
+            return s;
+        }
+        const parts = this._classParts;
+        parts.length = 0;
         if (typeof fg === 'number' && fg <= 255) parts.push('q' + fg);
         else parts.push('qhi');
         if (typeof bg === 'number' && bg <= 255) parts.push('b' + bg);
@@ -215,7 +258,9 @@ export class Renderer {
         if (crossedOut) parts.push('s');
         if (blink) parts.push('blink');
         if (dim) parts.push('dim');
-        return parts.join(' ');
+        const s = parts.join(' ');
+        parts.length = 0;
+        return s;
     }
 
     _renderCursor() {
@@ -224,9 +269,12 @@ export class Renderer {
             || screen.curX < 0 || screen.curX >= screen.cols;
 
         const cell = hidden ? null : screen.getCellAt(screen.curX, screen.curY);
-        const { fg: rawFg, bg: rawBg } = cell
-            ? this._swapInverse(cell.fg, cell.bg, cell)
-            : { fg: 0, bg: 0 };
+        let rawFg = 0, rawBg = 0;
+        if (cell) {
+            this._swapInverse(cell.fg, cell.bg, cell);
+            rawFg = this._swapFg;
+            rawBg = this._swapBg;
+        }
 
         const next = hidden ? null : {
             x: screen.curX, y: screen.curY,

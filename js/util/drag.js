@@ -40,8 +40,10 @@ export function addDragMethods(obj, term, { getX, getY, setX, setY, getW, getH, 
             for (let r = getY(); r < getY() + getH(); r++) term.markRowDirty(r);
             setX(newX); setY(newY);
             const ov = getOverlay();
-            if (ov) { ov.x = newX; ov.y = newY; }
-            for (let r = getY(); r < getY() + getH(); r++) term.markRowDirty(r);
+            if (ov) {
+                ov.x = newX; ov.y = newY;
+            }
+            for (let r = newY; r < newY + getH(); r++) term.markRowDirty(r);
         }
     };
     obj.endDrag = () => {

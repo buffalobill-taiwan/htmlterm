@@ -15,8 +15,11 @@ export class VirtualBuffer {
     }
 
     clear() {
-        this._buffer = createEmptyBuffer(this.width, this.height);
-        this._children = [];
+        for (let r = 0; r < this.height; r++) {
+            const row = this._buffer[r];
+            for (let c = 0; c < this.width; c++) row[c] = null;
+        }
+        this._children.length = 0;
     }
 
     getCell(y, x) {
@@ -55,7 +58,7 @@ export class VirtualBuffer {
     }
 
     render() {
-        const result = this._buffer.map(row => row.map(c => c ? { ...c } : null));
+        const result = this._buffer.map(row => row.slice());
 
         for (const { vb, x: ox, y: oy } of this._children) {
             const childCells = vb.render();
@@ -67,7 +70,7 @@ export class VirtualBuffer {
                 for (let cx = 0; cx < srcRow.length; cx++) {
                     const dx = ox + cx;
                     if (dx >= this.width) break;
-                    if (srcRow[cx]) dstRow[dx] = { ...srcRow[cx] };
+                    if (srcRow[cx]) dstRow[dx] = srcRow[cx];
                 }
             }
         }
@@ -76,17 +79,19 @@ export class VirtualBuffer {
     }
 
     blit(destBuffer, destX, destY) {
-        const cells = this.render();
-        for (let y = 0; y < cells.length; y++) {
-            const dy = destY + y;
+        for (let r = 0; r < this.height; r++) {
+            const dy = destY + r;
             if (dy < 0 || dy >= destBuffer.length) continue;
-            const srcRow = cells[y];
+            const srcRow = this._buffer[r];
             const dstRow = destBuffer[dy];
-            for (let x = 0; x < srcRow.length; x++) {
-                const dx = destX + x;
+            for (let c = 0; c < this.width; c++) {
+                const dx = destX + c;
                 if (dx < 0 || dx >= dstRow.length) continue;
-                if (srcRow[x]) dstRow[dx] = { ...srcRow[x] };
+                if (srcRow[c]) dstRow[dx] = srcRow[c];
             }
+        }
+        for (const { vb, x: ox, y: oy } of this._children) {
+            vb.blit(destBuffer, destX + ox, destY + oy);
         }
     }
 }
