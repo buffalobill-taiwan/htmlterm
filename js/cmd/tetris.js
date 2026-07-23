@@ -194,6 +194,68 @@ function _buildPreviewCells(type) {
     return cells;
 }
 
+/** Pre-render all static sidebar text into cell arrays (one-time cost). */
+function _buildStaticSidebar() {
+    const vb = new VirtualBuffer(SIDEBAR_W, BOARD_H);
+    vb.writeStr(0, 0, bold(cyan('  Tetris')));
+    vb.writeStr(1, 0, '┌──── Next ────┐');
+    for (let r = 0; r < 4; r++) vb.writeStr(2 + r, 0, '│              │');
+    vb.writeStr(6, 0, '└──────────────┘');
+    vb.writeStr(7, 0, '┌──── Hold ────┐');
+    for (let r = 0; r < 4; r++) vb.writeStr(8 + r, 0, '│              │');
+    vb.writeStr(12, 0, '└──────────────┘');
+    vb.writeStr(13, 0, gray('\u2500'.repeat(16)));
+    // Rows 14–16 are dynamic (score/level/lines) — leave null
+    vb.writeStr(17, 0, gray('\u2500'.repeat(16)));
+    vb.writeStr(18, 0, gray(' \u2190\u2191\u2193\u2192 Move'));
+    vb.writeStr(19, 0, gray(' Space  Drop'));
+    vb.writeStr(20, 0, gray(' H Hold  P Pause'));
+    vb.writeStr(21, 0, gray(' Q Quit'));
+    // Snapshot: for each row, store only up to the last non-null cell
+    const snapshot = [];
+    for (let r = 0; r < BOARD_H; r++) {
+        const row = vb._buffer[r];
+        let end = row.length;
+        while (end > 0 && row[end - 1] === null) end--;
+        snapshot.push(row.slice(0, end));
+    }
+    return snapshot;
+}
+
+/** Pre-build pause frame border cells (yellow double-line box). */
+function _buildPauseFrame(fw, fh) {
+    const bc = (ch) => ({ ch, fg: 11, bg: 0, bold: true, dim: false, italic: false, underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: 1 });
+    const cells = [];
+    for (let r = 0; r < fh; r++) {
+        const row = new Array(fw).fill(null);
+        if (r === 0) {
+            row[0] = bc('\u2554');
+            for (let c = 1; c < fw - 1; c++) row[c] = bc('\u2550');
+            row[fw - 1] = bc('\u2557');
+        } else if (r === fh - 1) {
+            row[0] = bc('\u255A');
+            for (let c = 1; c < fw - 1; c++) row[c] = bc('\u2550');
+            row[fw - 1] = bc('\u255D');
+        } else {
+            row[0] = bc('\u2551');
+            row[fw - 1] = bc('\u2551');
+        }
+        cells.push(row);
+    }
+    return cells;
+}
+
+/** Pre-build pause inner content cells (background + "PAUSED!" text). */
+function _buildPauseInner(cw, ch) {
+    const vb = new VirtualBuffer(cw, ch);
+    const empty = { ch: ' ', fg: 0, bg: 0, bold: false, dim: false, italic: false, underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: 1 };
+    for (let r = 0; r < ch; r++)
+        for (let c = 0; c < cw; c++)
+            vb._buffer[r][c] = empty;
+    vb.writeStr(1, 2, '\x1B[1;37;44mPAUSED!\x1B[0m');
+    return vb._buffer.map(row => row.slice());
+}
+
 export class TetrisCmd extends CmdBase {
     execute(args) {
         const p = this.parseArgs(args, {
@@ -260,37 +322,69 @@ export class TetrisCmd extends CmdBase {
         this._clearingRows = null;
         this._clearFlashCount = 0;
         this._flashTimeout = null;
+        this._prevScore = -1;
+        this._prevLevel = -1;
+        this._prevLines = -1;
+        this._prevNextType = null;
+        this._prevHoldType = null;
 
         this.open();
         term.write('\x1B[2J\x1B[1;1H');
         term.write(CURSOR_HIDE);
 
-        this._rootVB = new VirtualBuffer(term.cols, term.rows);
-        this._boardVB = new VirtualBuffer(BOARD_W, BOARD_H);
-        this._sidebarVB = new VirtualBuffer(SIDEBAR_W, BOARD_H);
-        this._pauseFrameVB = new VirtualBuffer(14, 5);
-        this._pauseInnerVB = new VirtualBuffer(12, 3);
-        this._emptyLine = ' '.repeat(this._rootVB.width);
-
-        const cell = (ch, fg, bg, bold, dim) => ({ ch, fg, bg, bold, dim, italic: false, underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: 1 });
-        this._cellEmpty = cell(' ', 0, 0, false, false);
-        this._cellBorder = cell('\u2551', 8, 0, false, false);
-        this._cellGhostL = cell('\u2591', 8, 0, false, true);
-        this._cellGhostR = cell('\u2591', 8, 0, false, true);
-
-        this._boardPalette = new Array(256);
-        for (let i = 0; i < 256; i++)
-            this._boardPalette[i] = cell('\u2588', i, i, true, false);
-
-        this._curCells = {};
-        for (const type of Object.keys(PIECE_COLORS)) {
-            const fg = PIECE_COLORS[type], bg = PIECE_BG[type];
-            this._curCells[type] = [cell('\u2588', fg, bg, true, false), cell('\u2588', fg, bg, true, false)];
+        if (!this._rootVB) {
+            this._rootVB = new VirtualBuffer(term.cols, term.rows);
+            this._boardVB = new VirtualBuffer(BOARD_W, BOARD_H);
+            this._sidebarVB = new VirtualBuffer(SIDEBAR_W, BOARD_H);
+            this._pauseFrameVB = new VirtualBuffer(14, 5);
+            this._pauseInnerVB = new VirtualBuffer(12, 3);
         }
 
-        this._previewCells = {};
-        for (const type of Object.keys(PIECE_COLORS))
-            this._previewCells[type] = _buildPreviewCells(type);
+        const cell = (ch, fg, bg, bld, dim) => ({ ch, fg, bg, bold: bld, dim, italic: false, underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: 1 });
+
+        if (!this._cellEmpty) {
+            this._cellEmpty = cell(' ', 0, 0, false, false);
+            this._cellBorder = cell('\u2551', 8, 0, false, false);
+            this._cellGhostL = cell('\u2591', 8, 0, false, true);
+            this._cellGhostR = cell('\u2591', 8, 0, false, true);
+
+            this._boardPalette = new Array(256);
+            for (let i = 0; i < 256; i++)
+                this._boardPalette[i] = cell('\u2588', i, i, true, false);
+
+            this._curCells = {};
+            for (const type of Object.keys(PIECE_COLORS)) {
+                const fg = PIECE_COLORS[type], bg = PIECE_BG[type];
+                this._curCells[type] = [cell('\u2588', fg, bg, true, false), cell('\u2588', fg, bg, true, false)];
+            }
+
+            this._previewCells = {};
+            for (const type of Object.keys(PIECE_COLORS))
+                this._previewCells[type] = _buildPreviewCells(type);
+        }
+
+        // Pre-render static sidebar cells (only once)
+        if (!this._sidebarStatic) {
+            this._sidebarStatic = _buildStaticSidebar();
+            this._pauseFrameCells = _buildPauseFrame(14, 5);
+            this._pauseInnerCells = _buildPauseInner(12, 3);
+        }
+
+        // Pre-render static board border cells (only once)
+        if (!this._borderTop) {
+            const bvb = new VirtualBuffer(BOARD_W, 1);
+            bvb.writeStr(0, 0, '\x1B[90m\u2554' + '\u2550'.repeat(BOARD_W - 2) + '\u2557');
+            this._borderTop = bvb._buffer[0].slice();
+            bvb.writeStr(0, 0, '\x1B[90m\u255A' + '\u2550'.repeat(BOARD_W - 2) + '\u255D');
+            this._borderBottom = bvb._buffer[0].slice();
+        }
+
+        // Pre-render root empty-line cells (only once)
+        if (!this._emptyLineCells) {
+            const elvb = new VirtualBuffer(this._rootVB.width, 1);
+            elvb.writeStr(0, 0, ' '.repeat(this._rootVB.width));
+            this._emptyLineCells = elvb._buffer[0].slice();
+        }
 
         this._spawn();
         this._render();
@@ -643,66 +737,83 @@ export class TetrisCmd extends CmdBase {
     }
 
     _render() {
-        this._rootVB.clear();
-        for (let r = 0; r < this._rootVB.height; r++)
-            this._rootVB.writeStr(r, 0, this._emptyLine);
+        const rootBuf = this._rootVB._buffer;
+        const elc = this._emptyLineCells;
+        for (let r = 0; r < this._rootVB.height; r++) {
+            const row = rootBuf[r];
+            for (let c = 0; c < row.length; c++) row[c] = elc[c];
+        }
+        this._rootVB._children.length = 0;
+        this._prevScore = -1;
+        this._prevLevel = -1;
+        this._prevLines = -1;
+        this._prevNextType = null;
+        this._prevHoldType = null;
         this._renderSidebar();
         this._renderBoard();
     }
 
     _renderSidebar() {
         const vb = this._sidebarVB;
-        vb.clear();
+        const buf = vb._buffer;
+        const ss = this._sidebarStatic;
 
-        vb.writeStr(0, 0, bold(cyan('  Tetris')));
+        // Restore static cells from cache (no writeStr, no new objects)
+        for (let r = 0; r < ss.length; r++) {
+            const srcRow = ss[r];
+            const dstRow = buf[r];
+            for (let c = 0; c < srcRow.length; c++) dstRow[c] = srcRow[c];
+            // Null out remaining columns
+            for (let c = srcRow.length; c < vb.width; c++) dstRow[c] = null;
+        }
+        vb._children.length = 0;
+
+        // Difficulty label (only once per game, but it's 1 writeStr — acceptable)
         if (this._difficulty) {
             vb.writeStr(0, 11, gray(DIFFICULTY[this._difficulty].label));
         }
 
-        vb.writeStr(1, 0, '┌──── Next ────┐');
-        for (let r = 0; r < 4; r++) vb.writeStr(2 + r, 0, '│              │');
-        vb.writeStr(6, 0, '└──────────────┘');
+        // Dynamic: Next piece preview
+        const nextType = this._nextQueue.length > 0 ? this._nextQueue[0] : null;
+        if (nextType)
+            _drawPreviewVB(vb, 2, 1, nextType, 14, 4, this._previewCells[nextType]);
 
-        if (this._nextQueue.length > 0)
-            _drawPreviewVB(vb, 2, 1, this._nextQueue[0], 14, 4, this._previewCells[this._nextQueue[0]]);
-
-        vb.writeStr(7, 0, '┌──── Hold ────┐');
-        for (let r = 0; r < 4; r++) vb.writeStr(8 + r, 0, '│              │');
-        vb.writeStr(12, 0, '└──────────────┘');
-
+        // Dynamic: Hold piece preview
         if (this._holdType)
             _drawPreviewVB(vb, 8, 1, this._holdType, 14, 4, this._previewCells[this._holdType]);
 
-        vb.writeStr(13, 0, gray('\u2500'.repeat(16)));
-
-        vb.writeStr(14, 0, ' Score  ' + bold(yellow(String(this._score).padStart(8))));
-        vb.writeStr(15, 0, ' Level  ' + bold(yellow(String(this._level).padStart(8))));
-        vb.writeStr(16, 0, ' Lines  ' + bold(yellow(String(this._lines).padStart(8))));
-
-        vb.writeStr(17, 0, gray('\u2500'.repeat(16)));
-
-        vb.writeStr(18, 0, gray(' \u2190\u2191\u2193\u2192 Move'));
-        vb.writeStr(19, 0, gray(' Space  Drop'));
-        vb.writeStr(20, 0, gray(' H Hold  P Pause'));
-        vb.writeStr(21, 0, gray(' Q Quit'));
-
-        if (this._completed) {
-            const msg = bold(red(' GAME OVER '));
-            vb.writeStr(10, 1, msg);
-            vb.writeStr(11, 1, gray('[n]ew [q]uit'));
+        // Dynamic: Score / Level / Lines — only writeStr when value changed
+        if (this._score !== this._prevScore) {
+            vb.writeStr(14, 0, ' Score  ' + bold(yellow(String(this._score).padStart(8))));
+            this._prevScore = this._score;
+        }
+        if (this._level !== this._prevLevel) {
+            vb.writeStr(15, 0, ' Level  ' + bold(yellow(String(this._level).padStart(8))));
+            this._prevLevel = this._level;
+        }
+        if (this._lines !== this._prevLines) {
+            vb.writeStr(16, 0, ' Lines  ' + bold(yellow(String(this._lines).padStart(8))));
+            this._prevLines = this._lines;
         }
 
+        if (this._completed) {
+            vb.writeStr(10, 1, bold(red(' GAME OVER ')));
+            vb.writeStr(11, 1, gray('[n]ew [q]uit'));
+        }
     }
 
     _renderBoard() {
         const vb = this._boardVB;
-        vb.clear();
+        const buf = vb._buffer;
 
+        // Fill board area with empty cells (reuse pre-allocated cell)
         const ec = this._cellEmpty;
-        for (let r = 0; r < BOARD_H; r++)
-            for (let c = 0; c < BOARD_W; c++)
-                vb.setCell(r, c, ec);
+        for (let r = 0; r < BOARD_H; r++) {
+            const row = buf[r];
+            for (let c = 0; c < BOARD_W; c++) row[c] = ec;
+        }
 
+        // Board locked pieces
         const pal = this._boardPalette;
         for (let r = 0; r < ROWS; r++)
             for (let c = 0; c < COLS; c++) {
@@ -710,11 +821,12 @@ export class TetrisCmd extends CmdBase {
                 if (v !== 0) {
                     const flash = this._clearingRows && this._clearingRows.includes(r) && this._clearFlashCount % 2 === 1;
                     const cell = flash ? pal[15] : pal[v];
-                    vb.setCell(1 + r, 1 + c * 2, cell);
-                    vb.setCell(1 + r, 2 + c * 2, cell);
+                    buf[1 + r][1 + c * 2] = cell;
+                    buf[1 + r][2 + c * 2] = cell;
                 }
             }
 
+        // Current piece + ghost
         if (this._current && !this._completed && !this._paused) {
             const { type, rot, x, y } = this._current;
             const shape = SHAPES[type][rot];
@@ -724,8 +836,8 @@ export class TetrisCmd extends CmdBase {
                     if (shape[r][c]) {
                         const ny = y + r, nx = x + c;
                         if (ny >= 0 && ny < ROWS) {
-                            vb.setCell(1 + ny, 1 + nx * 2, cl);
-                            vb.setCell(1 + ny, 2 + nx * 2, cr);
+                            buf[1 + ny][1 + nx * 2] = cl;
+                            buf[1 + ny][2 + nx * 2] = cr;
                         }
                     }
 
@@ -737,24 +849,30 @@ export class TetrisCmd extends CmdBase {
                         if (shape[r][c]) {
                             const ny = gy + r, nx = x + c;
                             if (ny >= 0 && ny < ROWS && this._board[ny][nx] === 0) {
-                                vb.setCell(1 + ny, 1 + nx * 2, gl);
-                                vb.setCell(1 + ny, 2 + nx * 2, gr);
+                                buf[1 + ny][1 + nx * 2] = gl;
+                                buf[1 + ny][2 + nx * 2] = gr;
                             }
                         }
             }
         }
 
-        const bd = this._cellBorder;
-        vb.writeStr(0, 0, '\x1B[90m\u2554' + '\u2550'.repeat(BOARD_W - 2) + '\u2557');
-        for (let r = 1; r < BOARD_H - 1; r++) {
-            vb.setCell(r, 0, bd);
-            vb.setCell(r, BOARD_W - 1, bd);
+        // Borders from pre-rendered caches (no writeStr, no new cells)
+        const topRow = buf[0], btmRow = buf[BOARD_H - 1];
+        const bt = this._borderTop, bb = this._borderBottom;
+        for (let c = 0; c < BOARD_W; c++) {
+            topRow[c] = bt[c];
+            btmRow[c] = bb[c];
         }
-        vb.writeStr(BOARD_H - 1, 0, '\x1B[90m\u255A' + '\u2550'.repeat(BOARD_W - 2) + '\u255D');
+        const bd = this._cellBorder;
+        for (let r = 1; r < BOARD_H - 1; r++) {
+            buf[r][0] = bd;
+            buf[r][BOARD_W - 1] = bd;
+        }
 
         if (this._paused) this._renderPauseOverlay(vb);
 
-        this._rootVB._children = [];
+        // Reuse children array instead of creating new one
+        this._rootVB._children.length = 0;
         this._rootVB.embed(this._sidebarVB, SIDEBAR_X, BOARD_Y);
         this._rootVB.embed(this._boardVB, BOARD_X, BOARD_Y);
         term.writeVB(this._rootVB);
@@ -762,31 +880,28 @@ export class TetrisCmd extends CmdBase {
 
     _renderPauseOverlay(vb) {
         const fw = 14, fh = 5;
-        const cw = 12, ch = 3;
         const ox = Math.floor((BOARD_W - fw) / 2);
         const oy = Math.floor((BOARD_H - fh) / 2);
 
+        // Restore frame cells from pre-built cache (no spreads, no new objects)
         const frame = this._pauseFrameVB;
-        frame.clear();
-        const bc = { fg: 11, bg: 0, bold: true, dim: false, italic: false, underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: 1 };
-        frame.setCell(0, 0, { ...bc, ch: '\u2554' });
-        for (let c = 1; c < fw - 1; c++) frame.setCell(0, c, { ...bc, ch: '\u2550' });
-        frame.setCell(0, fw - 1, { ...bc, ch: '\u2557' });
-        for (let r = 1; r < fh - 1; r++) {
-            frame.setCell(r, 0, { ...bc, ch: '\u2551' });
-            frame.setCell(r, fw - 1, { ...bc, ch: '\u2551' });
+        const frameBuf = frame._buffer;
+        const fc = this._pauseFrameCells;
+        for (let r = 0; r < fh; r++) {
+            const srcRow = fc[r], dstRow = frameBuf[r];
+            for (let c = 0; c < fw; c++) dstRow[c] = srcRow[c];
         }
-        frame.setCell(fh - 1, 0, { ...bc, ch: '\u255A' });
-        for (let c = 1; c < fw - 1; c++) frame.setCell(fh - 1, c, { ...bc, ch: '\u2550' });
-        frame.setCell(fh - 1, fw - 1, { ...bc, ch: '\u255D' });
+        frame._children.length = 0;
 
+        // Restore inner cells from pre-built cache
         const inner = this._pauseInnerVB;
-        inner.clear();
-        const ic = { ch: ' ', fg: 0, bg: 0, bold: false, dim: false, italic: false, underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: 1 };
-        for (let r = 0; r < ch; r++)
-            for (let c = 0; c < cw; c++)
-                inner.setCell(r, c, ic);
-        inner.writeStr(1, 2, '\x1B[1;37;44mPAUSED!\x1B[0m');
+        const innerBuf = inner._buffer;
+        const ic = this._pauseInnerCells;
+        for (let r = 0; r < 3; r++) {
+            const srcRow = ic[r], dstRow = innerBuf[r];
+            for (let c = 0; c < 12; c++) dstRow[c] = srcRow[c];
+        }
+        inner._children.length = 0;
 
         frame.embed(inner, 1, 1);
         vb.embed(frame, ox, oy);

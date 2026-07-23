@@ -56,6 +56,12 @@ Tetris (Jul 2026): `js/cmd/tetris.js` added — full Tetris game with SRS rotati
 system, wall kicks, T-Spin/T-Spin Mini detection, ghost piece, hold, combo,
 back-to-back bonus, lock delay, line-clear flash animation, three difficulty
 levels. 2×1 cell rendering via VirtualBuffer `setCell()` with colored backgrounds.
+Tetris GC optimization (Jul 2026): Per-frame object allocations eliminated — static
+sidebar text, board borders, pause overlay cells pre-rendered once at init into
+cached cell arrays; `_renderSidebar` copies cached cells instead of calling
+`writeStr()` (~200 cell objects saved per frame); score/level/lines only re-rendered
+when values change; `_children` array reused via `.length = 0` instead of `= []`;
+VB buffers and palettes persist across games (singleton instance reuse).
 
 ## Architecture
 
