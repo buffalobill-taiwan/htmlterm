@@ -660,7 +660,6 @@ export class TetrisCmd extends CmdBase {
             vb.writeStr(11, 1, gray('[n]ew [q]uit'));
         }
 
-        this._rootVB.embed(this._sidebarVB, SIDEBAR_X, BOARD_Y);
     }
 
     _renderBoard() {
@@ -717,6 +716,8 @@ export class TetrisCmd extends CmdBase {
         }
         vb.writeStr(BOARD_H - 1, 0, '\u255A' + '\u2550'.repeat(BOARD_W - 2) + '\u255D');
 
+        this._rootVB._children = [];
+        this._rootVB.embed(this._sidebarVB, SIDEBAR_X, BOARD_Y);
         this._rootVB.embed(this._boardVB, BOARD_X, BOARD_Y);
         term.writeVB(this._rootVB);
     }
