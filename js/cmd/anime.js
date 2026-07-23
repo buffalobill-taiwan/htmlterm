@@ -34,11 +34,12 @@ export class AnimeCmd extends CmdBase {
 
         // Decode all frames
         let prevFrame = decodeRLE(rle0, cols * rows);
-        const cellFrames = [toCells(prevFrame, cols, termRows, rows)];
+        let cellFrames = [toCells(prevFrame, cols, termRows, rows)];
         for (const diff of diffs) {
             applyDiff(prevFrame, diff);
             cellFrames.push(toCells(prevFrame, cols, termRows, rows));
         }
+        prevFrame = null;
 
         // Create hint row
         const hintText = 'Press Ctrl+C to stop';
@@ -87,6 +88,7 @@ export class AnimeCmd extends CmdBase {
                 w: cols,
                 h: overlayH,
                 frameDuration: 1000 / 30,  // 30fps
+                onCleanup: () => { cellFrames = null; },
             }
         );
     }
