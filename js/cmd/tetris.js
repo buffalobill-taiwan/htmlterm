@@ -89,8 +89,8 @@ const KICKS_I = {
     '0>3': [[0,0],[-1,0],[2,0],[-1,2],[2,-1]],
 };
 
-const PIECE_COLORS = { I: 14, O: 11, T: 5, S: 2, Z: 1, J: 4, L: 3 };
-const PIECE_BG = { I: 4, O: 6, T: 5, S: 2, Z: 1, J: 4, L: 3 };
+const PIECE_COLORS = { I: 51, O: 226, T: 129, S: 34, Z: 196, J: 21, L: 214 };
+const PIECE_BG = { I: 51, O: 226, T: 129, S: 34, Z: 196, J: 21, L: 214 };
 
 function _fmtTime(sec) {
     const m = Math.floor(sec / 60), s = sec % 60;
@@ -708,12 +708,12 @@ export class TetrisCmd extends CmdBase {
             }
         }
 
-        vb.writeStr(0, 0, '\u2554' + '\u2550'.repeat(BOARD_W - 2) + '\u2557');
+        vb.writeStr(0, 0, '\x1B[90m\u2554' + '\u2550'.repeat(BOARD_W - 2) + '\u2557');
         for (let r = 1; r < BOARD_H - 1; r++) {
             vb.setCell(r, 0, { ch: '\u2551', fg: 8, bg: 0, bold: false, dim: false, italic: false, underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: 1 });
             vb.setCell(r, BOARD_W - 1, { ch: '\u2551', fg: 8, bg: 0, bold: false, dim: false, italic: false, underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: 1 });
         }
-        vb.writeStr(BOARD_H - 1, 0, '\u255A' + '\u2550'.repeat(BOARD_W - 2) + '\u255D');
+        vb.writeStr(BOARD_H - 1, 0, '\x1B[90m\u255A' + '\u2550'.repeat(BOARD_W - 2) + '\u255D');
 
         if (this._paused) this._renderPauseOverlay(vb);
 

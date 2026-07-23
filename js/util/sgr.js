@@ -58,10 +58,22 @@ export const bold = _sgrStyle([1]);
 export const red = _sgrStyle([31]);
 export const green = _sgrStyle([32]);
 export const yellow = _sgrStyle([33]);
+export const blue = _sgrStyle([34]);
 export const magenta = _sgrStyle([35]);
 export const cyan = _sgrStyle([36]);
 export const white = _sgrStyle([37]);
 export const gray = _sgrStyle([90]);
+export const brightRed = _sgrStyle([91]);
+export const brightGreen = _sgrStyle([92]);
+export const brightYellow = _sgrStyle([93]);
+export const brightBlue = _sgrStyle([94]);
+export const brightMagenta = _sgrStyle([95]);
+export const brightCyan = _sgrStyle([96]);
+export const gold = _sgrStyle([38, 5, 220]);
+export const orange = _sgrStyle([38, 5, 214]);
+export const coral = _sgrStyle([38, 5, 209]);
+export const turquoise = _sgrStyle([38, 5, 80]);
+export const orchid = _sgrStyle([38, 5, 170]);
 
 export function sgr(...params) { return _sgrStyle(params); }
 
