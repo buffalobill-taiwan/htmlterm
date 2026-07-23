@@ -349,15 +349,12 @@ export class TetrisCmd extends CmdBase {
 
     _hardDrop() {
         if (!this._current) return;
-        let dropped = 0;
-        while (this._move(0, 1)) dropped++;
-        this._score += dropped * 2;
+        while (this._move(0, 1));
         this._lock();
     }
 
     _softDrop() {
         if (this._move(0, 1)) {
-            this._score += 1;
             if (!this._fitsCurrent(0, 1)) this._startLockTimer();
             this._renderBoard();
         }
@@ -378,7 +375,7 @@ export class TetrisCmd extends CmdBase {
                 if (shape[r][c]) {
                     const ny = y + r, nx = x + c;
                     if (ny >= 0 && ny < ROWS && nx >= 0 && nx < COLS)
-                        this._board[ny][nx] = PIECE_BG[type];
+                        this._board[ny][nx] = PIECE_COLORS[type];
                 }
 
         const isTSpinFull = this._lastWasRotation && _isTSpin(this._board, type, rot, x, y);
