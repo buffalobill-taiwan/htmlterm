@@ -167,16 +167,20 @@ function _clearLines(board) {
     return full.length;
 }
 
-function _drawPreviewVB(vb, ry, rx, type) {
+function _drawPreviewVB(vb, ry, rx, type, innerW, innerH) {
     const shape = SHAPES[type][0];
     const bg = PIECE_BG[type];
+    const pieceW = shape[0].length * 2;
+    const pieceH = shape.length;
+    const ox = Math.round((innerW - pieceW) / 2);
+    const oy = Math.round((innerH - pieceH) / 2);
     for (let r = 0; r < shape.length; r++)
         for (let c = 0; c < shape[r].length; c++) {
             const ch = shape[r][c] ? '\u2588' : ' ';
             const fg = shape[r][c] ? PIECE_COLORS[type] : 0;
             const bgr = shape[r][c] ? bg : 0;
-            vb.setCell(ry + r, rx + c * 2, { ch, fg, bg: bgr, bold: false, dim: false, italic: false, underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: 1 });
-            vb.setCell(ry + r, rx + c * 2 + 1, { ch, fg, bg: bgr, bold: false, dim: false, italic: false, underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: 1 });
+            vb.setCell(ry + oy + r, rx + ox + c * 2, { ch, fg, bg: bgr, bold: false, dim: false, italic: false, underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: 1 });
+            vb.setCell(ry + oy + r, rx + ox + c * 2 + 1, { ch, fg, bg: bgr, bold: false, dim: false, italic: false, underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: 1 });
         }
 }
 
@@ -527,7 +531,7 @@ export class TetrisCmd extends CmdBase {
         this._paused = !this._paused;
         if (this._paused) this._stopTimers();
         else this._startTimers();
-        this._renderSidebar();
+        this._render();
     }
 
     _gameOver() {
@@ -627,14 +631,14 @@ export class TetrisCmd extends CmdBase {
         vb.writeStr(6, 0, '└──────────────┘');
 
         if (this._nextQueue.length > 0)
-            _drawPreviewVB(vb, 2, 3, this._nextQueue[0]);
+            _drawPreviewVB(vb, 2, 1, this._nextQueue[0], 14, 4);
 
         vb.writeStr(7, 0, '┌──── Hold ────┐');
         for (let r = 0; r < 4; r++) vb.writeStr(8 + r, 0, '│              │');
         vb.writeStr(12, 0, '└──────────────┘');
 
         if (this._holdType)
-            _drawPreviewVB(vb, 8, 3, this._holdType);
+            _drawPreviewVB(vb, 8, 1, this._holdType, 14, 4);
 
         vb.writeStr(13, 0, gray('\u2500'.repeat(16)));
 
@@ -649,9 +653,7 @@ export class TetrisCmd extends CmdBase {
         vb.writeStr(20, 0, gray(' H Hold  P Pause'));
         vb.writeStr(21, 0, gray(' Q Quit'));
 
-        if (this._paused) {
-            vb.writeStr(10, 2, bold(yellow(' PAUSED ')));
-        } else if (this._completed) {
+        if (this._completed) {
             const msg = bold(red(' GAME OVER '));
             vb.writeStr(10, 1, msg);
             vb.writeStr(11, 1, gray('[n]ew [q]uit'));
@@ -713,10 +715,41 @@ export class TetrisCmd extends CmdBase {
         }
         vb.writeStr(BOARD_H - 1, 0, '\u255A' + '\u2550'.repeat(BOARD_W - 2) + '\u255D');
 
+        if (this._paused) this._renderPauseOverlay(vb);
+
         this._rootVB._children = [];
         this._rootVB.embed(this._sidebarVB, SIDEBAR_X, BOARD_Y);
         this._rootVB.embed(this._boardVB, BOARD_X, BOARD_Y);
         term.writeVB(this._rootVB);
+    }
+
+    _renderPauseOverlay(vb) {
+        const fw = 14, fh = 5;
+        const cw = 12, ch = 3;
+        const ox = Math.floor((BOARD_W - fw) / 2);
+        const oy = Math.floor((BOARD_H - fh) / 2);
+
+        const frame = new VirtualBuffer(fw, fh);
+        const bc = { fg: 11, bg: 0, bold: true, dim: false, italic: false, underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: 1 };
+        frame.setCell(0, 0, { ...bc, ch: '\u2554' });
+        for (let c = 1; c < fw - 1; c++) frame.setCell(0, c, { ...bc, ch: '\u2550' });
+        frame.setCell(0, fw - 1, { ...bc, ch: '\u2557' });
+        for (let r = 1; r < fh - 1; r++) {
+            frame.setCell(r, 0, { ...bc, ch: '\u2551' });
+            frame.setCell(r, fw - 1, { ...bc, ch: '\u2551' });
+        }
+        frame.setCell(fh - 1, 0, { ...bc, ch: '\u255A' });
+        for (let c = 1; c < fw - 1; c++) frame.setCell(fh - 1, c, { ...bc, ch: '\u2550' });
+        frame.setCell(fh - 1, fw - 1, { ...bc, ch: '\u255D' });
+
+        const inner = new VirtualBuffer(cw, ch);
+        for (let r = 0; r < ch; r++)
+            for (let c = 0; c < cw; c++)
+                inner.setCell(r, c, { ch: ' ', fg: 0, bg: 0, bold: false, dim: false, italic: false, underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: 1 });
+        inner.writeStr(1, 2, '\x1B[1;37;44mPAUSED!\x1B[0m');
+
+        frame.embed(inner, 1, 1);
+        vb.embed(frame, ox, oy);
     }
 
     _quit() {
