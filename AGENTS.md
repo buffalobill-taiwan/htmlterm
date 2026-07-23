@@ -627,6 +627,129 @@ input arrives only through the callback parameter.
   be implemented. `cd`/`pwd` may still be added as purely virtual path state
   (CWD string only) for prompt/UX purposes.
 
+## Buffer & Memory Management
+
+The render loop runs at 60fps (rAF). Every allocation inside the hot path
+(_renderRow → _blendOverlays → _spanClass → _swapInverse) compounds to
+~55K cell reads/sec × 60fps = 3.3M operations/sec. Patterns below keep
+the render loop near zero GC pressure.
+
+### Reused objects in Renderer
+
+| Object | Lifetime | Purpose |
+|---|---|---|
+| `_blendRow` | Permanent; grows once, never shrinks | Reused across all rows in `_blendOverlays`. Element-by-element copy (`.slice()` on first use, then direct assignment) — no `.map()` |
+| `_swapFg` / `_swapBg` | Per-cell write target | `_swapInverse()` writes to these properties instead of returning `{fg, bg}` — eliminates ~3.3M small objects/sec |
+| `_classParts` | Per-call, length reset to 0 | Reused array for building CSS class strings with SGR flags. Avoids per-cell `[]` + `.join()` allocation |
+| `_classCache` | Permanent Map | Keyed on `fg * 256 + bg` for cells without SGR flags. ~65K entries max. Cache hit skips string concatenation + `.join()` entirely |
+
+**Rule:** The render hot path must not allocate objects, arrays, or strings on
+every cell. Reuse instance properties (`this._foo`) for per-frame scratch data.
+
+### Cell objects — immutable after placement
+
+Cell objects (`{ ch, fg, bg, bold, dim, italic, underline, blink, inverse,
+conceal, crossedOut, width }`) are created once and never mutated after being
+placed in a buffer. The Renderer reads them directly — no defensive copies.
+
+```js
+// ✗ Bad — allocates a new object per cell per frame
+buffer[y][x] = { ...cellAttrs, ch: char };
+
+// ✓ Good — create once, place reference
+const cell = makeCell(char, attr, 1);
+buffer[y][x] = cell;
+```
+
+Exception: `_blendOverlays` creates clip cells (`{ ...ovCell, width:1, _clipRight:true }`)
+when a wide-char overlay cell covers half of a base wide-char pair. These are
+unavoidable (need distinct `width`/`_clipRight` properties) but only created for
+actual overlay coverage, not every cell.
+
+### VirtualBuffer — in-place operations
+
+| Method | Anti-pattern | Correct pattern |
+|---|---|---|
+| `clear()` | `this._buffer = createEmptyBuffer(w, h)` | Null cells in-place: `for row: for col: row[col] = null` — reuses row arrays |
+| `render()` | `row.map(c => c ? { ...c } : null)` | `row.slice()` — shallow copy is sufficient since cells are immutable |
+| `blit(dest)` | `const tmp = this.render(); ... tmp[y][x]` | Write directly to `destBuffer` — skip intermediate `render()` allocation |
+
+**Rule:** Prefer in-place mutation of existing arrays over creating new ones.
+`createEmptyBuffer()` is expensive (2,000+ cell slots for a typical dialog);
+reuse the buffer and null individual cells instead.
+
+### RAF animation — closure lifecycle
+
+RAF animations (`startBufferAnimation`) create closures that capture local
+variables from `execute()`. When the animation stops (Ctrl+C), the RAF loop
+cancels, but **V8 may not immediately GC the closure chain**. Large objects
+captured by these closures (e.g., pre-decoded frame arrays) can remain in
+memory for seconds or until a major GC.
+
+**Required pattern — `onCleanup` callback:**
+
+```js
+async execute(args) {
+    // Large data — ~33MB for 124 pre-decoded frames
+    let cellFrames = decodeAllFrames(data);
+
+    const animation = startBufferAnimation(
+        this, getCell,
+        (ts, frameIdx) => { /* uses cellFrames */ },
+        {
+            y, x, w, h,
+            frameDuration: 1000 / 30,
+            onCleanup: () => { cellFrames = null; },  // ← breaks closure chain
+        }
+    );
+}
+```
+
+Without `onCleanup`, the closure chain `RAFAnimationManager.start → loop →
+updateFn → copyFrame → cellFrames` keeps the entire array alive. V8's async
+Promise scope does not promptly release these references. Setting `cellFrames
+= null` explicitly dereferences the data, allowing GC to reclaim it.
+
+**Rule:** Any RAF animation command with a large data structure (frame arrays,
+pixel buffers, pre-computed lookup tables) MUST null it out via `onCleanup`.
+
+### Dirty-row tracking — per-overlay, not markAllDirty
+
+`term.markAllDirty()` forces the Renderer to re-blend and re-render every
+row — even rows no overlay touches. For overlays covering a subset of rows,
+mark only the affected rows:
+
+```js
+// ✓ Good — only 34 rows re-rendered (overlay height)
+for (let r = oy; r < oy + overlayH; r++) term.markRowDirty(r);
+
+// ✗ Bad — all 25 rows re-rendered, most unchanged
+term.markAllDirty();
+```
+
+**Exception:** `markAllDirty()` is correct when the entire screen changes
+(e.g., after a resize, scroll, or terminal write). Use it for global state
+changes, not per-overlay updates.
+
+### Mergeable overlay buffers — no per-frame copy
+
+When an overlay's cell buffer is modified in-place by the command (e.g.,
+`WidgetBase.putc()` fills its own `_buffer`), the overlay's `getCell`
+callback should return direct references to the buffer — no `.map()` or
+`.slice()` per frame:
+
+```js
+// ✓ Good — getCell returns direct buffer reference
+const getCell = makeOverlayGetCell(() => buffer, w, h);
+
+// Also acceptable — arrow closure (no allocation)
+const getCell = (y, x) => buffer[y][x];
+```
+
+This works because the overlay and main buffer are composited at render time
+by the Renderer — the overlay never writes into the main buffer, so there is
+no aliasing conflict.
+
 ## Critical Font Metrics
 - core font (eascii-core): all glyphs have advance=32 units = 8px at 16px font-size
 - ext font (eascii-ext): glyphs like ⏎, ✓, ✖ have advance=64 units = 16px at 16px font-size
