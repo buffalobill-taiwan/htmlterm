@@ -256,6 +256,48 @@ function _buildPauseInner(cw, ch) {
     return vb._buffer.map(row => row.slice());
 }
 
+/** Pre-build game over frame border cells (red double-line box). */
+function _buildGameOverFrame(fw, fh) {
+    const bc = (ch) => ({ ch, fg: 1, bg: 0, bold: true, dim: false, italic: false, underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: 1 });
+    const cells = [];
+    for (let r = 0; r < fh; r++) {
+        const row = new Array(fw).fill(null);
+        if (r === 0) {
+            row[0] = bc('\u2554');
+            for (let c = 1; c < fw - 1; c++) row[c] = bc('\u2550');
+            row[fw - 1] = bc('\u2557');
+        } else if (r === fh - 1) {
+            row[0] = bc('\u255A');
+            for (let c = 1; c < fw - 1; c++) row[c] = bc('\u2550');
+            row[fw - 1] = bc('\u255D');
+        } else {
+            row[0] = bc('\u2551');
+            row[fw - 1] = bc('\u2551');
+        }
+        cells.push(row);
+    }
+    return cells;
+}
+
+/** Pre-build game over inner content cells (background + text). */
+function _buildGameOverInner(cw, ch) {
+    const vb = new VirtualBuffer(cw, ch);
+    const empty = { ch: ' ', fg: 0, bg: 0, bold: false, dim: false, italic: false, underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: 1 };
+    for (let r = 0; r < ch; r++)
+        for (let c = 0; c < cw; c++)
+            vb._buffer[r][c] = { ...empty };
+    const textW = 11; // " GAME OVER " = 11
+    const textX = Math.floor((cw - textW) / 2);
+    vb.writeStr(1, textX, '\x1B[1;31m GAME OVER \x1B[0m');
+    const sepLen = cw - 2;
+    const sepX = Math.floor((cw - sepLen) / 2);
+    vb.writeStr(2, sepX, '\x1B[31m' + '\u2500'.repeat(sepLen) + '\x1B[0m');
+    const hintW = 13; // [n]ew [q]uit
+    const hintX = Math.floor((cw - hintW) / 2);
+    vb.writeStr(3, hintX, '\x1B[90m[n]ew [q]uit\x1B[0m');
+    return vb._buffer.map(row => row.slice());
+}
+
 /**
  * Pre-build a mutable 16-cell row for a dynamic stat line (score/level/lines).
  * prefix = 8 static chars (e.g. ' Score  '), then 8 digit cells (bold yellow).
@@ -365,6 +407,8 @@ export class TetrisCmd extends CmdBase {
             this._sidebarVB = new VirtualBuffer(SIDEBAR_W, BOARD_H);
             this._pauseFrameVB = new VirtualBuffer(14, 5);
             this._pauseInnerVB = new VirtualBuffer(12, 3);
+            this._gameOverFrameVB = new VirtualBuffer(16, 6);
+            this._gameOverInnerVB = new VirtualBuffer(14, 4);
 
             // Pre-allocate fixed child slots — zero alloc per frame
             // rootVB slots: [0]=sidebarVB, [1]=boardVB
@@ -383,12 +427,23 @@ export class TetrisCmd extends CmdBase {
             this._boardSlotPause = this._boardVB.addChildSlot();
             this._boardSlotPause.active = false; // activated only when paused
 
+            // boardVB slot for game over overlay
+            this._boardSlotGameOver = this._boardVB.addChildSlot();
+            this._boardSlotGameOver.active = false; // activated only when game over
+
             // pauseFrameVB slot for inner content
             this._pauseSlotInner = this._pauseFrameVB.addChildSlot();
             this._pauseSlotInner.vb = this._pauseInnerVB;
             this._pauseSlotInner.x  = 1;
             this._pauseSlotInner.y  = 1;
             this._pauseSlotInner.active = true;
+
+            // gameOverFrameVB slot for inner content
+            this._gameOverSlotInner = this._gameOverFrameVB.addChildSlot();
+            this._gameOverSlotInner.vb = this._gameOverInnerVB;
+            this._gameOverSlotInner.x  = 1;
+            this._gameOverSlotInner.y  = 1;
+            this._gameOverSlotInner.active = true;
         }
 
         const cell = (ch, fg, bg, bld, dim) => ({ ch, fg, bg, bold: bld, dim, italic: false, underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: 1 });
@@ -419,6 +474,8 @@ export class TetrisCmd extends CmdBase {
             this._sidebarStatic = _buildStaticSidebar();
             this._pauseFrameCells = _buildPauseFrame(14, 5);
             this._pauseInnerCells = _buildPauseInner(12, 3);
+            this._gameOverFrameCells = _buildGameOverFrame(16, 6);
+            this._gameOverInnerCells = _buildGameOverInner(14, 4);
             // Pre-build mutable cell rows for score/level/lines (avoid makeCell each update)
             this._dynScore = _buildDynRow(' Score  ');
             this._dynLevel = _buildDynRow(' Level  ');
@@ -722,7 +779,7 @@ export class TetrisCmd extends CmdBase {
         this._completed = true;
         this._current = null;
         this._stopTimers();
-        this._renderSidebar();
+        this._render();
     }
 
     _onKey(data) {
@@ -850,11 +907,6 @@ export class TetrisCmd extends CmdBase {
             _writeDynRow(buf[16], this._dynLines, this._lines);
             this._prevLines = this._lines;
         }
-
-        if (this._completed) {
-            vb.writeStr(10, 1, bold(red(' GAME OVER ')));
-            vb.writeStr(11, 1, gray('[n]ew [q]uit'));
-        }
     }
 
     _renderBoard() {
@@ -927,6 +979,9 @@ export class TetrisCmd extends CmdBase {
         if (this._paused) this._renderPauseOverlay(vb);
         else this._boardSlotPause.active = false;
 
+        if (this._completed) this._renderGameOverOverlay(vb);
+        else this._boardSlotGameOver.active = false;
+
         // Slots were pre-allocated at init — no embed() / push needed
         term.writeVB(this._rootVB);
     }
@@ -957,6 +1012,37 @@ export class TetrisCmd extends CmdBase {
 
         // Activate the board's pause slot (deactivated when not paused)
         const ps = this._boardSlotPause;
+        ps.vb = frame;
+        ps.x  = ox;
+        ps.y  = oy;
+        ps.active = true;
+    }
+
+    _renderGameOverOverlay(vb) {
+        const fw = 16, fh = 6;
+        const ox = Math.floor((BOARD_W - fw) / 2);
+        const oy = Math.floor((BOARD_H - fh) / 2);
+
+        // Restore frame cells from pre-built cache (no spreads, no new objects)
+        const frame = this._gameOverFrameVB;
+        const frameBuf = frame._buffer;
+        const fc = this._gameOverFrameCells;
+        for (let r = 0; r < fh; r++) {
+            const srcRow = fc[r], dstRow = frameBuf[r];
+            for (let c = 0; c < fw; c++) dstRow[c] = srcRow[c];
+        }
+
+        // Restore inner cells from pre-built cache
+        const inner = this._gameOverInnerVB;
+        const innerBuf = inner._buffer;
+        const ic = this._gameOverInnerCells;
+        for (let r = 0; r < 4; r++) {
+            const srcRow = ic[r], dstRow = innerBuf[r];
+            for (let c = 0; c < 14; c++) dstRow[c] = srcRow[c];
+        }
+
+        // Activate the board's game over slot (deactivated when not game over)
+        const ps = this._boardSlotGameOver;
         ps.vb = frame;
         ps.x  = ox;
         ps.y  = oy;
