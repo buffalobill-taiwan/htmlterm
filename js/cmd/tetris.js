@@ -951,11 +951,14 @@ export class TetrisCmd extends CmdBase {
             const gy = _ghostY(this._board, type, rot, x, y);
             if (gy !== y) {
                 const gl = this._cellGhostL, gr = this._cellGhostR;
+                const dy = gy - y;
                 for (let r = 0; r < shape.length; r++)
                     for (let c = 0; c < shape[r].length; c++)
                         if (shape[r][c]) {
                             const ny = gy + r, nx = x + c;
                             if (ny >= 0 && ny < ROWS && this._board[ny][nx] === 0) {
+                                const cr = r + dy;
+                                if (cr >= 0 && cr < shape.length && shape[cr][c]) continue;
                                 buf[1 + ny][1 + nx * 2] = gl;
                                 buf[1 + ny][2 + nx * 2] = gr;
                             }
