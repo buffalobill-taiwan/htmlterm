@@ -437,8 +437,23 @@ export class Game2048Cmd extends CmdBase {
             const row = rootBuf[r];
             for (let c = 0; c < row.length; c++) row[c] = elc[c];
         }
+        this._renderHint();
         this._renderSidebar();
         this._renderBoard();
+    }
+
+    _renderHint() {
+        const buf = this._rootVB._buffer;
+        const makeCell = (ch, fg, bg, bold) => ({
+            ch, fg, bg, bold, dim: false, italic: false,
+            underline: false, blink: false, inverse: false,
+            conceal: false, crossedOut: false, width: 1,
+        });
+        const hint = '\u2190\u2191\u2193\u2192 Move  [u]ndo  [r]estart  [q]uit';
+        const row = buf[0];
+        for (let i = 0; i < hint.length && i < row.length; i++) {
+            row[i] = makeCell(hint[i], 8, 0, false);
+        }
     }
 
     _renderSidebar() {
