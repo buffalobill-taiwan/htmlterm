@@ -79,15 +79,10 @@ the entire render pipeline — affects tetris, anime, and all overlay commands:
   `_writeStr` both use it instead of `Object.assign(attr, defaultAttr())`.
 - `write.js` `_writeStr`: module-level `_attr` + `_sgrParams` reuse; SGR param
   parsing replaced `pStr.split(';').map().filter()` with direct integer accumulation.
-- `Renderer._renderRow`: two-layer cell skip — reference check (`cell === prevRow[c]`)
-  skips unchanged objects; DOM value check (`span.textContent === text && span.className
+- `Renderer._renderRow`: DOM value check (`span.textContent === text && span.className
   === cls && span.style.cssText === cssText`) skips DOM writes for cells with same
-  visual content but different object refs (e.g. anime frame objects). Eliminates
-  ~1280 Text node create/destroy per frame — the primary source of memory growth.
-- `Renderer._prevBlend`: per-row array storing previous frame's cell references;
-  initialized in constructor, synced in `resizeDOM`. Enables reference-level skip
-  for same-object cases (widgets, dialogs) while DOM value check handles cross-frame
-  anime cells.
+  visual content. This is the sole skip mechanism — no reference-level shortcut.
+  Eliminates ~1280 Text node create/destroy per frame.
 - Anime `copyFrame`/`buffer` elimination: removed `createEmptyBuffer`, `copyFrame`,
   `makeOverlayGetCell`; overlay `getCell` reads directly from `cellFrames[frameIdx]`
   via a swapped pointer (`curFrameCells`). Eliminated ~960 reference copies/frame
@@ -687,7 +682,6 @@ the render loop near zero GC pressure.
 | `_classParts` | Per-call, length reset to 0 | Reused array for building CSS class strings with SGR flags. Avoids per-cell `[]` + `.join()` allocation |
 | `_classCache` | Permanent Map | Keyed on `fg * 256 + bg` for cells without SGR flags. ~65K entries max. Cache hit skips string concatenation + `.join()` entirely |
 | `_cursorA` / `_cursorB` | Permanent ping-pong pair | `_renderCursor` writes into the slot that is NOT `_cursorCurrent`; swaps pointer instead of allocating. Eliminates one `new { x,y,ch,fg,bg,w,h }` per frame at 60fps |
-| `_prevBlend` | Permanent array-of-arrays | Per-row previous cell reference tracking. First level: `cell === prevRow[c]` skips unchanged cells. Second level: `span.textContent/className/style.cssText` comparison skips DOM writes for cells with same visual content but different object references (e.g. anime frame objects). Eliminates ~1280 Text node create/destroy per frame. |
 
 **Iteration rules:**
 - `_blendOverlays`: use indexed `for` loop over `ovs` — `for...of Array` allocates a hidden iterator object per call
@@ -936,7 +930,7 @@ draw() {
 
 - `Screen.js`: Cell buffer, cursor, scroll/SGR state, dirty tracking, overlays[]
 - `Parser.js`: VT100 escape state machine
-- `Renderer.js`: Per-cell DOM grid (`cellEls[][]`), cursor element, render loop, overlay blend, `colToHex()` color palette, content-level DOM caching (`_prevBlend` + span value comparison)
+- `Renderer.js`: Per-cell DOM grid (`cellEls[][]`), cursor element, render loop, overlay blend, `colToHex()` color palette, content-level DOM caching (span value comparison)
 - `terminal.js`: Thin coordinator (~100 lines) composing Screen/Parser/Renderer, `writeVB()`
 
 ### `js/system/` — Shell system layer

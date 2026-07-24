@@ -22,12 +22,10 @@ export class Renderer {
         this._classParts = [];
         this._classCache = new Map();
         this._blendRow = null;
-        this._prevBlend = [];       // per-row previous cell refs for skip-unchanged
         // Two reused cursor state objects — ping-pong to avoid allocation
         this._cursorA = { x: 0, y: 0, ch: '', fg: 0, bg: 0, w: 0, h: 0 };
         this._cursorB = { x: 0, y: 0, ch: '', fg: 0, bg: 0, w: 0, h: 0 };
         this._cursorCurrent = null;  // points to _cursorA or _cursorB (null = hidden)
-        this._cursorPrev = null;     // points to the other slot (null = hidden)
 
         this._initDOM();
         this._initScrollIndicator();
@@ -121,30 +119,19 @@ export class Renderer {
         const cols = this.screen.cols;
 
         if (!dataRow) {
-            const prevRow = this._prevBlend[rowIdx];
             for (let c = 0; c < cols; c++) {
-                if (prevRow && prevRow[c] === null) continue;
                 const span = cellRow[c];
                 span.textContent = ' ';
                 span.className = '';
                 span.style.cssText = '';
             }
-            this._prevBlend[rowIdx] = null;
             return;
         }
 
         const blended = this._blendOverlays(rowIdx, dataRow);
 
-        let prevRow = this._prevBlend[rowIdx];
-        if (!prevRow || prevRow.length !== cols) {
-            prevRow = new Array(cols).fill(null);
-            this._prevBlend[rowIdx] = prevRow;
-        }
-
         for (let c = 0; c < cols; c++) {
             const cell = blended[c];
-            if (cell === prevRow[c]) continue;
-            prevRow[c] = cell;
 
             const span = cellRow[c];
 
@@ -409,7 +396,6 @@ export class Renderer {
         while (this.rowEls.length > newRows) {
             this.container.removeChild(this.rowEls.pop());
             this.cellEls.pop();
-            this._prevBlend.pop();
         }
         for (let r = 0; r < this.rowEls.length; r++) {
             const cellRow = this.cellEls[r];
