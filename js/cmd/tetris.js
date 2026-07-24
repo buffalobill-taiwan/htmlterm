@@ -391,9 +391,6 @@ export class TetrisCmd extends CmdBase {
         this._clearingSet = null;
         this._clearFlashCount = 0;
         this._flashTimeout = null;
-        this._prevScore = -1;
-        this._prevLevel = -1;
-        this._prevLines = -1;
         this._prevNextType = null;
         this._prevHoldType = null;
 
@@ -857,9 +854,6 @@ export class TetrisCmd extends CmdBase {
             const row = rootBuf[r];
             for (let c = 0; c < row.length; c++) row[c] = elc[c];
         }
-        this._prevScore = -1;
-        this._prevLevel = -1;
-        this._prevLines = -1;
         this._prevNextType = null;
         this._prevHoldType = null;
         this._renderSidebar();
@@ -894,19 +888,10 @@ export class TetrisCmd extends CmdBase {
         if (this._holdType)
             _drawPreviewVB(vb, 8, 1, this._holdType, 14, 4, this._previewCells[this._holdType]);
 
-        // Dynamic: Score / Level / Lines — only re-copy when value changed
-        if (this._score !== this._prevScore) {
-            _writeDynRow(buf[14], this._dynScore, this._score);
-            this._prevScore = this._score;
-        }
-        if (this._level !== this._prevLevel) {
-            _writeDynRow(buf[15], this._dynLevel, this._level);
-            this._prevLevel = this._level;
-        }
-        if (this._lines !== this._prevLines) {
-            _writeDynRow(buf[16], this._dynLines, this._lines);
-            this._prevLines = this._lines;
-        }
+        // Dynamic: Score / Level / Lines — always re-write (static restore nulls these rows)
+        _writeDynRow(buf[14], this._dynScore, this._score);
+        _writeDynRow(buf[15], this._dynLevel, this._level);
+        _writeDynRow(buf[16], this._dynLines, this._lines);
     }
 
     _renderBoard() {
