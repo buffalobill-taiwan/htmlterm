@@ -768,7 +768,10 @@ export class TetrisCmd extends CmdBase {
         if (this._completed) return;
         this._paused = !this._paused;
         if (this._paused) this._stopTimers();
-        else this._startTimers();
+        else {
+            this._startTimers();
+            if (this._clearingRows && !this._flashTimeout) this._flashRows();
+        }
         this._render();
     }
 
