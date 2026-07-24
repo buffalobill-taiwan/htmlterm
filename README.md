@@ -93,7 +93,7 @@ Open `index.html` in a modern browser, or visit the live demo:
 | `help` | List available commands |
 | `menu` | Open command menu dialog |
 | `mbti` | MBTI personality test (interactive) |
-| `minesweeper` | Play Minesweeper (three difficulty levels) |
+| `minesw` | Play Minesweeper (three difficulty levels) |
 | `quiz` | Math quiz challenge |
 | `sleep` | Wait for N seconds (default 1) |
 | `sudoku` | Play Sudoku puzzle (interactive cursor navigation) |
