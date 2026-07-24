@@ -10,15 +10,15 @@ const DIFFICULTY = {
 };
 
 const NUM_COLORS = [
-    '',               // 0 — unused
-    '\x1B[94m',       // 1 — bright blue
-    '\x1B[32m',       // 2 — green
-    '\x1B[35m',       // 3 — magenta
-    '\x1B[34m',       // 4 — blue
-    '\x1B[35m',       // 5 — magenta
-    '\x1B[36m',       // 6 — cyan
-    '\x1B[37m',       // 7 — white
-    '\x1B[90m',       // 8 — gray
+    '',                         // 0 — unused
+    '\x1B[94m',                // 1 — bright blue
+    '\x1B[32m',                // 2 — green
+    '\x1B[33m',                // 3 — yellow
+    '\x1B[38;5;80m',           // 4 — turquoise
+    '\x1B[95m',                // 5 — bright magenta
+    '\x1B[36m',                // 6 — cyan
+    '\x1B[38;5;214m',          // 7 — orange
+    '\x1B[90m',                // 8 — gray
 ];
 
 const CELL_HIDDEN = '\u30FB';  // ・ katakana middle dot (hidden cell)
