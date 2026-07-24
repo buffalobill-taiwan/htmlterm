@@ -63,7 +63,9 @@ export class Screen {
 
     getCellAt(col, row) {
         if (col < 0 || col >= this.cols || row < 0 || row >= this.rows) return null;
-        for (const ov of this.overlays) {
+        const ovs = this.overlays;
+        for (let i = 0; i < ovs.length; i++) {
+            const ov = ovs[i];
             if (row >= ov.y && row < ov.y + ov.h && col >= ov.x && col < ov.x + ov.w) {
                 const c = ov.getCell(row - ov.y, col - ov.x);
                 if (c) return c;

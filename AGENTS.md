@@ -62,6 +62,23 @@ cached cell arrays; `_renderSidebar` copies cached cells instead of calling
 `writeStr()` (~200 cell objects saved per frame); score/level/lines only re-rendered
 when values change; `_children` array reused via `.length = 0` instead of `= []`;
 VB buffers and palettes persist across games (singleton instance reuse).
+GC pressure audit (Jul 2026): Systematic elimination of per-frame allocations across
+the entire render pipeline — affects tetris, anime, and all overlay commands:
+- `VirtualBuffer.addChildSlot()` added — pre-allocates a fixed child slot returned to
+  the caller; `blit()`/`render()` skip `slot.active === false` slots. Tetris uses 4
+  pre-allocated slots and never calls `embed()` per frame.
+- `_renderSidebar` score/level/lines replaced `writeStr(bold(yellow(...)))` with
+  `_buildDynRow` / `_writeDynRow` — mutable cell arrays updated in-place (zero alloc).
+- `_flashRows` flash check `clearingRows.includes(r)` replaced with `Set.has(r)`.
+- `Renderer._renderCursor`: replaced per-frame `new { x,y,ch,fg,bg,w,h }` with
+  ping-pong reuse (`_cursorA`/`_cursorB`, `_cursorCurrent` pointer).
+- `Renderer._renderRows`: `for...of Set` → `Set.forEach` (no hidden iterator object).
+- `Renderer._blendOverlays`: `for...of Array` → indexed `for` loop (no iterator).
+- `Screen.getCellAt`: same `for...of` → indexed loop fix.
+- `sgr.js` `resetAttr(attr)` added — resets attr in-place; `applySGR` p===0 and
+  `_writeStr` both use it instead of `Object.assign(attr, defaultAttr())`.
+- `write.js` `_writeStr`: module-level `_attr` + `_sgrParams` reuse; SGR param
+  parsing replaced `pStr.split(';').map().filter()` with direct integer accumulation.
 
 ## Architecture
 
@@ -648,6 +665,12 @@ the render loop near zero GC pressure.
 | `_swapFg` / `_swapBg` | Per-cell write target | `_swapInverse()` writes to these properties instead of returning `{fg, bg}` — eliminates ~3.3M small objects/sec |
 | `_classParts` | Per-call, length reset to 0 | Reused array for building CSS class strings with SGR flags. Avoids per-cell `[]` + `.join()` allocation |
 | `_classCache` | Permanent Map | Keyed on `fg * 256 + bg` for cells without SGR flags. ~65K entries max. Cache hit skips string concatenation + `.join()` entirely |
+| `_cursorA` / `_cursorB` | Permanent ping-pong pair | `_renderCursor` writes into the slot that is NOT `_cursorCurrent`; swaps pointer instead of allocating. Eliminates one `new { x,y,ch,fg,bg,w,h }` per frame at 60fps |
+
+**Iteration rules:**
+- `_blendOverlays`: use indexed `for` loop over `ovs` — `for...of Array` allocates a hidden iterator object per call
+- `_renderRows`: use `Set.forEach` over `dirtyRows` — `for...of Set` allocates a hidden iterator object per call
+- Both patterns recur every render frame; iterator objects accumulate GC pressure at 60fps
 
 **Rule:** The render hot path must not allocate objects, arrays, or strings on
 every cell. Reuse instance properties (`this._foo`) for per-frame scratch data.
@@ -683,6 +706,33 @@ actual overlay coverage, not every cell.
 **Rule:** Prefer in-place mutation of existing arrays over creating new ones.
 `createEmptyBuffer()` is expensive (2,000+ cell slots for a typical dialog);
 reuse the buffer and null individual cells instead.
+
+**`addChildSlot()` — zero-alloc child embedding:**
+
+`embed(childVB, x, y)` pushes a new `{ vb, x, y }` object to `_children` every call.
+For commands that embed the same child every frame (e.g. tetris board + sidebar), use
+`addChildSlot()` once at init and update the slot in-place:
+
+```js
+// ✗ Bad — new object allocated every _renderBoard call
+this._rootVB._children.length = 0;
+this._rootVB.embed(this._sidebarVB, SIDEBAR_X, BOARD_Y);
+this._rootVB.embed(this._boardVB, BOARD_X, BOARD_Y);
+
+// ✓ Good — slots pre-allocated once, no alloc per frame
+// At init:
+this._slotSidebar = this._rootVB.addChildSlot();
+this._slotSidebar.vb = this._sidebarVB;
+this._slotSidebar.x  = SIDEBAR_X;
+this._slotSidebar.y  = BOARD_Y;
+this._slotSidebar.active = true;
+// Per frame: nothing needed — slot is already configured
+```
+
+Set `slot.active = false` to temporarily hide a child (e.g. pause overlay when not paused)
+without removing it from the array. `blit()` and `render()` skip `active === false` slots.
+The old `embed()` API pushes objects without an `active` field (undefined ≠ false), so
+existing callers are unaffected.
 
 ### RAF animation — closure lifecycle
 
@@ -883,10 +933,10 @@ draw() {
 ### `js/util/` — Pure utilities (no DOM, no side-effects)
 
 - `constants.js`: Shared constants (`CHAR_WIDTH`, `CHAR_HEIGHT`, `TAB_WIDTH`, `CSI_INTRODUCER`, `DEFAULT_DIALOG_WIDTH`, `SCROLLBACK_MAX`)
-- `sgr.js`: SGR helpers (`defaultAttr`, `applySGR`, `makeCell`, `makeCursorCell`, color shortcuts), `createEmptyBuffer`, `isFinalByte`, `warn`, `CURSOR_HIDE`/`CURSOR_SHOW`, `OverlayZ`, `formatTime`
+- `sgr.js`: SGR helpers (`defaultAttr`, `resetAttr`, `applySGR`, `makeCell`, `makeCursorCell`, color shortcuts), `createEmptyBuffer`, `isFinalByte`, `warn`, `CURSOR_HIDE`/`CURSOR_SHOW`, `OverlayZ`, `formatTime`
 - `unicode-width.js`: Font-metric `isWide(ch)` for CJK/double-width detection
 - `display-width.js`: `bufWidth(str)` — measures visible string width skipping SGR sequences (used by VirtualBuffer)
-- `VirtualBuffer.js`: Compositing abstraction — nested cell buffer with `writeStr`, `centerRow`, `leftRow`, `rightRow`, `hline`, `embed`, `render`, `blit`, `setCell`
+- `VirtualBuffer.js`: Compositing abstraction — nested cell buffer with `writeStr`, `centerRow`, `leftRow`, `rightRow`, `hline`, `embed`, `addChildSlot`, `render`, `blit`, `setCell`
 - `drag.js`: Shared drag helpers used by Dialog and WidgetBase
 - `tokenize.js`: Shell command tokenizer (backslash escaping, quotes)
 - `calc-expr.js`: Safe recursive-descent expression evaluator (`safeEval`)
@@ -1034,22 +1084,30 @@ export class MyAnimCmd extends CmdBase {
         const oy = Math.floor((term.rows - h) / 2);
         const buffer = createEmptyBuffer(w, h);
 
+        // Pre-build a palette of reusable cell objects — one per color (zero alloc per frame)
+        const palette = [];
+        for (let c = 0; c < 16; c++) {
+            const a = defaultAttr();
+            a.fg = c;
+            palette.push(makeCell('⣿', a, 1));
+        }
+
         // Initialize frame 0
         for (let y = 0; y < h; y++)
             for (let x = 0; x < w; x++)
-                buffer[y][x] = makeCell('.', defaultAttr(), 1);
+                buffer[y][x] = palette[0];
 
         const getCell = makeOverlayGetCell(() => buffer, w, h);
         let frame = 0;
 
         startBufferAnimation(this, getCell, (ts, frameIdx) => {
-            // Update buffer per frame
-            const ch = '⣀⣤⣶⣿'[frameIdx % 4];
+            // Assign pre-built cell refs — no new objects allocated per frame
+            const cell = palette[frameIdx % 16];
             for (let y = 0; y < h; y++)
                 for (let x = 0; x < w; x++)
-                    buffer[y][x] = makeCell(ch, { ...defaultAttr(), fg: frameIdx % 16 }, 1);
+                    buffer[y][x] = cell;
             frame++;
-            term.markAllDirty();
+            for (let r = oy; r < oy + h; r++) term.markRowDirty(r);
             if (frame >= 60) return true;  // stop after 60 frames
         }, {
             y: oy, x: ox, w, h,

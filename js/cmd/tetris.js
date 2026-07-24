@@ -256,6 +256,32 @@ function _buildPauseInner(cw, ch) {
     return vb._buffer.map(row => row.slice());
 }
 
+/**
+ * Pre-build a mutable 16-cell row for a dynamic stat line (score/level/lines).
+ * prefix = 8 static chars (e.g. ' Score  '), then 8 digit cells (bold yellow).
+ * Callers update cells[8..15].ch in-place when the value changes — zero alloc.
+ */
+function _buildDynRow(prefix) {
+    const cells = [];
+    // Static prefix (gray, no attrs)
+    for (let i = 0; i < 8; i++)
+        cells.push({ ch: prefix[i], fg: 7, bg: 0, bold: false, dim: false, italic: false, underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: 1 });
+    // Dynamic digits (bold yellow = fg 11)
+    for (let i = 0; i < 8; i++)
+        cells.push({ ch: ' ', fg: 11, bg: 0, bold: true, dim: false, italic: false, underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: 1 });
+    return cells;
+}
+
+/**
+ * Write a numeric value into a pre-built dyn row (from _buildDynRow) and
+ * copy the 16 cells into the target buffer row. Zero allocation.
+ */
+function _writeDynRow(dstRow, cells, value) {
+    const s = String(value).padStart(8);
+    for (let i = 0; i < 8; i++) cells[8 + i].ch = s[i];
+    for (let i = 0; i < 16; i++) dstRow[i] = cells[i];
+}
+
 export class TetrisCmd extends CmdBase {
     execute(args) {
         const p = this.parseArgs(args, {
@@ -320,6 +346,7 @@ export class TetrisCmd extends CmdBase {
         this._lastWasRotation = false;
         this._timerInterval = null;
         this._clearingRows = null;
+        this._clearingSet = null;
         this._clearFlashCount = 0;
         this._flashTimeout = null;
         this._prevScore = -1;
@@ -338,6 +365,30 @@ export class TetrisCmd extends CmdBase {
             this._sidebarVB = new VirtualBuffer(SIDEBAR_W, BOARD_H);
             this._pauseFrameVB = new VirtualBuffer(14, 5);
             this._pauseInnerVB = new VirtualBuffer(12, 3);
+
+            // Pre-allocate fixed child slots — zero alloc per frame
+            // rootVB slots: [0]=sidebarVB, [1]=boardVB
+            this._rootSlotSidebar = this._rootVB.addChildSlot();
+            this._rootSlotBoard   = this._rootVB.addChildSlot();
+            this._rootSlotSidebar.vb = this._sidebarVB;
+            this._rootSlotSidebar.x  = SIDEBAR_X;
+            this._rootSlotSidebar.y  = BOARD_Y;
+            this._rootSlotSidebar.active = true;
+            this._rootSlotBoard.vb = this._boardVB;
+            this._rootSlotBoard.x  = BOARD_X;
+            this._rootSlotBoard.y  = BOARD_Y;
+            this._rootSlotBoard.active = true;
+
+            // boardVB slot for pause overlay
+            this._boardSlotPause = this._boardVB.addChildSlot();
+            this._boardSlotPause.active = false; // activated only when paused
+
+            // pauseFrameVB slot for inner content
+            this._pauseSlotInner = this._pauseFrameVB.addChildSlot();
+            this._pauseSlotInner.vb = this._pauseInnerVB;
+            this._pauseSlotInner.x  = 1;
+            this._pauseSlotInner.y  = 1;
+            this._pauseSlotInner.active = true;
         }
 
         const cell = (ch, fg, bg, bld, dim) => ({ ch, fg, bg, bold: bld, dim, italic: false, underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: 1 });
@@ -368,6 +419,10 @@ export class TetrisCmd extends CmdBase {
             this._sidebarStatic = _buildStaticSidebar();
             this._pauseFrameCells = _buildPauseFrame(14, 5);
             this._pauseInnerCells = _buildPauseInner(12, 3);
+            // Pre-build mutable cell rows for score/level/lines (avoid makeCell each update)
+            this._dynScore = _buildDynRow(' Score  ');
+            this._dynLevel = _buildDynRow(' Level  ');
+            this._dynLines = _buildDynRow(' Lines  ');
         }
 
         // Pre-render static board border cells (only once)
@@ -548,6 +603,7 @@ export class TetrisCmd extends CmdBase {
 
         if (fullRows.length > 0) {
             this._clearingRows = fullRows;
+            this._clearingSet = new Set(fullRows);
             this._clearFlashCount = 0;
             this._flashRows();
         } else {
@@ -563,6 +619,7 @@ export class TetrisCmd extends CmdBase {
                 this._board.unshift(new Uint8Array(COLS));
             }
             this._clearingRows = null;
+            this._clearingSet = null;
             this._flashTimeout = null;
             this._spawn();
             this._render();
@@ -743,7 +800,6 @@ export class TetrisCmd extends CmdBase {
             const row = rootBuf[r];
             for (let c = 0; c < row.length; c++) row[c] = elc[c];
         }
-        this._rootVB._children.length = 0;
         this._prevScore = -1;
         this._prevLevel = -1;
         this._prevLines = -1;
@@ -766,7 +822,6 @@ export class TetrisCmd extends CmdBase {
             // Null out remaining columns
             for (let c = srcRow.length; c < vb.width; c++) dstRow[c] = null;
         }
-        vb._children.length = 0;
 
         // Difficulty label (only once per game, but it's 1 writeStr — acceptable)
         if (this._difficulty) {
@@ -782,17 +837,17 @@ export class TetrisCmd extends CmdBase {
         if (this._holdType)
             _drawPreviewVB(vb, 8, 1, this._holdType, 14, 4, this._previewCells[this._holdType]);
 
-        // Dynamic: Score / Level / Lines — only writeStr when value changed
+        // Dynamic: Score / Level / Lines — only re-copy when value changed
         if (this._score !== this._prevScore) {
-            vb.writeStr(14, 0, ' Score  ' + bold(yellow(String(this._score).padStart(8))));
+            _writeDynRow(buf[14], this._dynScore, this._score);
             this._prevScore = this._score;
         }
         if (this._level !== this._prevLevel) {
-            vb.writeStr(15, 0, ' Level  ' + bold(yellow(String(this._level).padStart(8))));
+            _writeDynRow(buf[15], this._dynLevel, this._level);
             this._prevLevel = this._level;
         }
         if (this._lines !== this._prevLines) {
-            vb.writeStr(16, 0, ' Lines  ' + bold(yellow(String(this._lines).padStart(8))));
+            _writeDynRow(buf[16], this._dynLines, this._lines);
             this._prevLines = this._lines;
         }
 
@@ -819,7 +874,7 @@ export class TetrisCmd extends CmdBase {
             for (let c = 0; c < COLS; c++) {
                 const v = this._board[r][c];
                 if (v !== 0) {
-                    const flash = this._clearingRows && this._clearingRows.includes(r) && this._clearFlashCount % 2 === 1;
+                    const flash = this._clearingSet && this._clearingSet.has(r) && this._clearFlashCount % 2 === 1;
                     const cell = flash ? pal[15] : pal[v];
                     buf[1 + r][1 + c * 2] = cell;
                     buf[1 + r][2 + c * 2] = cell;
@@ -870,11 +925,9 @@ export class TetrisCmd extends CmdBase {
         }
 
         if (this._paused) this._renderPauseOverlay(vb);
+        else this._boardSlotPause.active = false;
 
-        // Reuse children array instead of creating new one
-        this._rootVB._children.length = 0;
-        this._rootVB.embed(this._sidebarVB, SIDEBAR_X, BOARD_Y);
-        this._rootVB.embed(this._boardVB, BOARD_X, BOARD_Y);
+        // Slots were pre-allocated at init — no embed() / push needed
         term.writeVB(this._rootVB);
     }
 
@@ -891,7 +944,6 @@ export class TetrisCmd extends CmdBase {
             const srcRow = fc[r], dstRow = frameBuf[r];
             for (let c = 0; c < fw; c++) dstRow[c] = srcRow[c];
         }
-        frame._children.length = 0;
 
         // Restore inner cells from pre-built cache
         const inner = this._pauseInnerVB;
@@ -901,10 +953,14 @@ export class TetrisCmd extends CmdBase {
             const srcRow = ic[r], dstRow = innerBuf[r];
             for (let c = 0; c < 12; c++) dstRow[c] = srcRow[c];
         }
-        inner._children.length = 0;
+        // _pauseSlotInner is always active (set at init)
 
-        frame.embed(inner, 1, 1);
-        vb.embed(frame, ox, oy);
+        // Activate the board's pause slot (deactivated when not paused)
+        const ps = this._boardSlotPause;
+        ps.vb = frame;
+        ps.x  = ox;
+        ps.y  = oy;
+        ps.active = true;
     }
 
     _quit() {

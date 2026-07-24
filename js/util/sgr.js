@@ -4,11 +4,26 @@ export function defaultAttr() {
     return { fg: DEFAULT_FG, bg: DEFAULT_BG, bold: false, dim: false, italic: false, underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, big: false };
 }
 
+/** Reset an existing attr object to defaults in-place — zero allocation. */
+export function resetAttr(attr) {
+    attr.fg = DEFAULT_FG;
+    attr.bg = DEFAULT_BG;
+    attr.bold = false;
+    attr.dim = false;
+    attr.italic = false;
+    attr.underline = false;
+    attr.blink = false;
+    attr.inverse = false;
+    attr.conceal = false;
+    attr.crossedOut = false;
+    attr.big = false;
+}
+
 export function applySGR(attr, params) {
     if (params.length === 0) params = [0];
     for (let i = 0; i < params.length; i++) {
         const p = params[i];
-        if (p === 0) Object.assign(attr, defaultAttr());
+        if (p === 0) resetAttr(attr);
         else if (p === 1) attr.bold = true;
         else if (p === 2) attr.dim = true;
         else if (p === 3) attr.italic = true;

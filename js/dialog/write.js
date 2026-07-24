@@ -1,8 +1,12 @@
-import { defaultAttr, applySGR, makeCell } from '../util/sgr.js';
+import { defaultAttr, resetAttr, applySGR, makeCell } from '../util/sgr.js';
 import { isWide } from '../util/display-width.js';
 
+// Reusable objects for _writeStr — avoids allocation on every call
+const _sgrParams = [];
+const _attr = defaultAttr(); // created once; reset via resetAttr() per _writeStr call
+
 export function _writeStr(buf, y, x, str, maxX) {
-    let attr = defaultAttr();
+    resetAttr(_attr);
     let cx = x;
     let i = 0;
     while (i < str.length) {
@@ -12,15 +16,25 @@ export function _writeStr(buf, y, x, str, maxX) {
             if (i >= str.length) break;
             if (str[i] === '[') {
                 i++;
-                let pStr = '';
+                // Parse semicolon-separated integers without split/map/filter
+                _sgrParams.length = 0;
+                let num = -1; // -1 = no digit seen yet
                 while (i < str.length) {
                     const c = str.charCodeAt(i);
-                    if (c >= 0x30 && c <= 0x3F) { pStr += str[i]; i++; }
-                    else break;
+                    if (c >= 0x30 && c <= 0x39) {
+                        num = (num < 0 ? 0 : num * 10) + (c - 0x30);
+                        i++;
+                    } else if (c === 0x3B) { // ';'
+                        if (num >= 0) _sgrParams.push(num);
+                        num = -1;
+                        i++;
+                    } else {
+                        break;
+                    }
                 }
+                if (num >= 0) _sgrParams.push(num);
                 if (i < str.length && str.charCodeAt(i) === 0x6D) {
-                    const params = pStr ? pStr.split(';').map(s => parseInt(s, 10)).filter(n => !isNaN(n)) : [];
-                    applySGR(attr, params);
+                    applySGR(_attr, _sgrParams);
                 }
                 i++;
             }
@@ -29,7 +43,7 @@ export function _writeStr(buf, y, x, str, maxX) {
         if (!buf[y] || cx >= (maxX || buf[y].length)) break;
         const w = isWide(str[i]) ? 2 : 1;
         if (cx + w > (maxX || buf[y].length)) break;
-        buf[y][cx] = makeCell(str[i], attr, w);
+        buf[y][cx] = makeCell(str[i], _attr, w);
         if (w === 2 && cx + 1 < (maxX || buf[y].length)) {
             buf[y][cx + 1] = { width: 0 };
         }

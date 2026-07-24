@@ -57,10 +57,28 @@ export class VirtualBuffer {
         this._children.push({ vb: childVB, x, y });
     }
 
+    /**
+     * Pre-allocate a child slot and return it. The caller holds the slot and
+     * can update .vb / .x / .y in-place without any array push or object
+     * allocation. Use embedSlot() to activate/deactivate the slot each frame
+     * by setting slot.active = true/false (blit skips inactive slots).
+     *
+     * Typical usage (tetris pattern):
+     *   const slot = vb.addChildSlot();   // once at init
+     *   slot.vb = childVB; slot.x = 2; slot.y = 1; slot.active = true;  // each frame
+     */
+    addChildSlot() {
+        const slot = { vb: null, x: 0, y: 0, active: false };
+        this._children.push(slot);
+        return slot;
+    }
+
     render() {
         const result = this._buffer.map(row => row.slice());
 
-        for (const { vb, x: ox, y: oy } of this._children) {
+        for (const child of this._children) {
+            if (child.active === false) continue;
+            const { vb, x: ox, y: oy } = child;
             const childCells = vb.render();
             for (let cy = 0; cy < childCells.length; cy++) {
                 const dy = oy + cy;
@@ -90,8 +108,9 @@ export class VirtualBuffer {
                 if (srcRow[c]) dstRow[dx] = srcRow[c];
             }
         }
-        for (const { vb, x: ox, y: oy } of this._children) {
-            vb.blit(destBuffer, destX + ox, destY + oy);
+        for (const child of this._children) {
+            if (child.active === false) continue;
+            child.vb.blit(destBuffer, destX + child.x, destY + child.y);
         }
     }
 }

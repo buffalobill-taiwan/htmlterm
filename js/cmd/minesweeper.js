@@ -521,8 +521,8 @@ export class MinesweeperCmd extends CmdBase {
         this._quit();
     }
 
-    static get commandName() { return 'minesweeper'; }
+    static get commandName() { return 'minesw'; }
     static get help() { return 'Play Minesweeper'; }
     static get menu() { return 'Minesweeper'; }
-    static get usage() { return 'minesweeper [--easy|--medium|--hard]'; }
+    static get usage() { return 'minesw [--easy|--medium|--hard]'; }
 }

@@ -22,6 +22,11 @@ export class Renderer {
         this._classParts = [];
         this._classCache = new Map();
         this._blendRow = null;
+        // Two reused cursor state objects — ping-pong to avoid allocation
+        this._cursorA = { x: 0, y: 0, ch: '', fg: 0, bg: 0, w: 0, h: 0 };
+        this._cursorB = { x: 0, y: 0, ch: '', fg: 0, bg: 0, w: 0, h: 0 };
+        this._cursorCurrent = null;  // points to _cursorA or _cursorB (null = hidden)
+        this._cursorPrev = null;     // points to the other slot (null = hidden)
 
         this._initDOM();
         this._initScrollIndicator();
@@ -91,10 +96,10 @@ export class Renderer {
 
     _renderRows() {
         const screen = this.screen;
-        for (const rowIdx of screen.dirtyRows) {
-            if (rowIdx < 0 || rowIdx >= screen.rows) continue;
-            this._renderRow(rowIdx);
-        }
+        // Set.forEach avoids the hidden iterator object that for...of allocates.
+        screen.dirtyRows.forEach((rowIdx) => {
+            if (rowIdx >= 0 && rowIdx < screen.rows) this._renderRow(rowIdx);
+        });
         screen.dirtyRows.clear();
     }
 
@@ -166,7 +171,8 @@ export class Renderer {
         if (!ovs || !ovs.length) return baseRow;
 
         let modified = false;
-        for (const ov of ovs) {
+        for (let oi = 0; oi < ovs.length; oi++) {
+            const ov = ovs[oi];
             if (displayRow >= ov.y && displayRow < ov.y + ov.h) {
                 const relRow = displayRow - ov.y;
                 const x0 = ov.x;
@@ -276,13 +282,22 @@ export class Renderer {
             rawBg = this._swapBg;
         }
 
-        const next = hidden ? null : {
-            x: screen.curX, y: screen.curY,
-            ch: cell.ch, fg: rawFg, bg: rawBg,
-            w: this.charWidth, h: this.charHeight,
-        };
+        // Pick the slot that is NOT currently used as _cursorCurrent for writing
+        const nc = (this._cursorCurrent === this._cursorA) ? this._cursorB : this._cursorA;
 
-        const prev = this._lastCursor;
+        let next = null;
+        if (!hidden) {
+            nc.x = screen.curX;
+            nc.y = screen.curY;
+            nc.ch = cell.ch;
+            nc.fg = rawFg;
+            nc.bg = rawBg;
+            nc.w = this.charWidth;
+            nc.h = this.charHeight;
+            next = nc;
+        }
+
+        const prev = this._cursorCurrent;
 
         if (!next && !prev) return; // still hidden
         if (next && prev &&
@@ -290,7 +305,7 @@ export class Renderer {
             next.ch === prev.ch && next.fg === prev.fg && next.bg === prev.bg &&
             next.w === prev.w && next.h === prev.h) return; // unchanged
 
-        this._lastCursor = next;
+        this._cursorCurrent = next;
 
         if (!next) {
             this.cursorEl.className = 'hidden';
@@ -331,7 +346,7 @@ export class Renderer {
         }
 
         screen.markAllDirty();
-        this._lastCursor = null;
+        this._cursorCurrent = null;
     }
 
     fitToViewport() {
