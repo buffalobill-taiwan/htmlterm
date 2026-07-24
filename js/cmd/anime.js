@@ -1,7 +1,7 @@
 import { term } from '../system/sys.js';
 import { CmdBase } from './CmdBase.js';
 import { decodeRLE, applyDiff } from '../util/pixel-codec.js';
-import { createEmptyBuffer, makeOverlayGetCell, makeCell, defaultAttr } from '../util/sgr.js';
+import { makeCell, defaultAttr } from '../util/sgr.js';
 import { startBufferAnimation } from '../system/RAFAnimationHelper.js';
 
 function toCells(pixels, cols, termRows, pixelRows) {
@@ -53,34 +53,44 @@ export class AnimeCmd extends CmdBase {
             hintRow[hintPad + x] = cell;
         }
 
-        // Create buffer
-        const buffer = createEmptyBuffer(cols, overlayH);
-
-        // Copy a frame to buffer
-        const copyFrame = (frameIdx) => {
-            const frame = cellFrames[frameIdx];
-            for (let ty = 0; ty < termRows; ty++) {
-                const srcRow = frame[ty];
-                const dstRow = buffer[ty];
-                for (let x = 0; x < cols; x++) dstRow[x] = srcRow[x];
-            }
-            buffer[termRows] = hintRow;
+        // getCell reads directly from the current frame pointer — no intermediate buffer
+        let curFrameCells = cellFrames[0];
+        const getCell = (relRow, relCol) => {
+            if (relRow < termRows) return curFrameCells[relRow][relCol];
+            if (relRow === termRows) return hintRow[relCol];
+            return null;
         };
 
-        // Initialize
-        copyFrame(0);
+        // Cache screen.markRowDirty to bypass Proxy wrapper allocation
+        const screen = term.screen;
+        const markDirty = screen.markRowDirty.bind(screen);
 
-        // Start animation
+        // Mark hint row dirty once (it never changes)
+        markDirty(oy + termRows);
+
+        // Start animation with frame-level row diffing
         let frameIdx = 0;
-        const getCell = makeOverlayGetCell(() => buffer, cols, overlayH);
+        let prevFrameCells = cellFrames[0];
 
         const animation = startBufferAnimation(
             this,
             getCell,
             (ts, loopFrameIdx) => {
                 frameIdx = (frameIdx + 1) % cellFrames.length;
-                copyFrame(frameIdx);
-                for (let r = oy; r < oy + overlayH; r++) term.markRowDirty(r);
+                curFrameCells = cellFrames[frameIdx];
+
+                // Only mark rows that actually changed
+                for (let ty = 0; ty < termRows; ty++) {
+                    const src = curFrameCells[ty];
+                    const dst = prevFrameCells[ty];
+                    let changed = false;
+                    for (let x = 0; x < cols; x++) {
+                        if (src[x] !== dst[x]) { changed = true; break; }
+                    }
+                    if (changed) markDirty(oy + ty);
+                }
+
+                prevFrameCells = curFrameCells;
             },
             {
                 y: oy,

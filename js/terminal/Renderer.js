@@ -22,6 +22,7 @@ export class Renderer {
         this._classParts = [];
         this._classCache = new Map();
         this._blendRow = null;
+        this._prevBlend = [];       // per-row previous cell refs for skip-unchanged
         // Two reused cursor state objects — ping-pong to avoid allocation
         this._cursorA = { x: 0, y: 0, ch: '', fg: 0, bg: 0, w: 0, h: 0 };
         this._cursorB = { x: 0, y: 0, ch: '', fg: 0, bg: 0, w: 0, h: 0 };
@@ -120,49 +121,68 @@ export class Renderer {
         const cols = this.screen.cols;
 
         if (!dataRow) {
+            const prevRow = this._prevBlend[rowIdx];
             for (let c = 0; c < cols; c++) {
+                if (prevRow && prevRow[c] === null) continue;
                 const span = cellRow[c];
                 span.textContent = ' ';
                 span.className = '';
                 span.style.cssText = '';
             }
+            this._prevBlend[rowIdx] = null;
             return;
         }
 
         const blended = this._blendOverlays(rowIdx, dataRow);
 
+        let prevRow = this._prevBlend[rowIdx];
+        if (!prevRow || prevRow.length !== cols) {
+            prevRow = new Array(cols).fill(null);
+            this._prevBlend[rowIdx] = prevRow;
+        }
+
         for (let c = 0; c < cols; c++) {
             const cell = blended[c];
+            if (cell === prevRow[c]) continue;
+            prevRow[c] = cell;
+
             const span = cellRow[c];
 
             if (cell.width === 0) {
+                if (span.textContent === '' && span.className === '' && span.style.cssText === '') continue;
                 span.textContent = '';
                 span.className = '';
                 span.style.cssText = '';
                 continue;
             }
 
-            span.textContent = cell.ch || ' ';
+            const text = cell.ch || ' ';
 
             this._swapInverse(cell.fg, cell.bg, cell);
             let fg = this._swapFg;
             let bg = this._swapBg;
             if (cell.bold && typeof fg === 'number' && fg < 8) fg += 8;
 
-            span.className = this._spanClass(fg, bg, cell.italic, cell.underline, cell.crossedOut, cell.blink, cell.dim);
+            const cls = this._spanClass(fg, bg, cell.italic, cell.underline, cell.crossedOut, cell.blink, cell.dim);
 
+            let cssText;
             if (cell.clip) {
                 const ox = (cell.clipOffX || 0) * this.charWidth;
                 const oy = (cell.clipOffY || 0) * this.charHeight;
-                span.innerHTML = '<span style="position:absolute;left:' + ox + 'px;top:' + oy + 'px">' + (cell.ch || ' ') + '</span>';
-                span.style.cssText = 'position:relative;display:inline-block;width:' + this.charWidth + 'px;height:' + this.charHeight + 'px;font-size:' + (this.charHeight * 2) + 'px;line-height:' + (this.charHeight * 2) + 'px;overflow:hidden;vertical-align:top;';
+                span.innerHTML = '<span style="position:absolute;left:' + ox + 'px;top:' + oy + 'px">' + text + '</span>';
+                cssText = 'position:relative;display:inline-block;width:' + this.charWidth + 'px;height:' + this.charHeight + 'px;font-size:' + (this.charHeight * 2) + 'px;line-height:' + (this.charHeight * 2) + 'px;overflow:hidden;vertical-align:top;';
             } else if (cell._clipRight) {
-                span.style.cssText = 'display:inline-block;width:' + this.charWidth + 'px;height:' + this.charHeight + 'px;overflow:hidden;vertical-align:top;';
+                cssText = 'display:inline-block;width:' + this.charWidth + 'px;height:' + this.charHeight + 'px;overflow:hidden;vertical-align:top;';
             } else if (cell._clipLeft) {
-                span.style.cssText = 'display:inline-block;width:' + this.charWidth + 'px;height:' + this.charHeight + 'px;overflow:hidden;text-indent:-' + this.charWidth + 'px;vertical-align:top;';
+                cssText = 'display:inline-block;width:' + this.charWidth + 'px;height:' + this.charHeight + 'px;overflow:hidden;text-indent:-' + this.charWidth + 'px;vertical-align:top;';
             } else {
-                span.style.cssText = '';
+                cssText = '';
             }
+
+            if (span.textContent === text && span.className === cls && span.style.cssText === cssText) continue;
+            span.textContent = text;
+            span.className = cls;
+            span.style.cssText = cssText;
         }
     }
 
@@ -242,17 +262,23 @@ export class Renderer {
     }
 
     _spanClass(fg, bg, italic, underline, crossedOut, blink, dim) {
-        if (!italic && !underline && !crossedOut && !blink && !dim &&
-            typeof fg === 'number' && fg <= 255 &&
-            typeof bg === 'number' && bg <= 255) {
-            const key = fg * 256 + bg;
-            let s = this._classCache.get(key);
-            if (s === undefined) {
-                s = 'q' + fg + ' b' + bg;
-                this._classCache.set(key, s);
-            }
-            return s;
+        const flags = (italic ? 1 : 0) | (underline ? 2 : 0) | (crossedOut ? 4 : 0) |
+                      (blink ? 8 : 0) | (dim ? 16 : 0);
+        let key;
+        if (typeof fg === 'number' && fg <= 255 && typeof bg === 'number' && bg <= 255) {
+            key = ((fg << 8) | bg) << 5 | flags;
+        } else {
+            key = fg + '\0' + bg + '\0' + flags;
         }
+        let s = this._classCache.get(key);
+        if (s === undefined) {
+            s = this._buildClassStr(fg, bg, italic, underline, crossedOut, blink, dim);
+            this._classCache.set(key, s);
+        }
+        return s;
+    }
+
+    _buildClassStr(fg, bg, italic, underline, crossedOut, blink, dim) {
         const parts = this._classParts;
         parts.length = 0;
         if (typeof fg === 'number' && fg <= 255) parts.push('q' + fg);
@@ -383,6 +409,7 @@ export class Renderer {
         while (this.rowEls.length > newRows) {
             this.container.removeChild(this.rowEls.pop());
             this.cellEls.pop();
+            this._prevBlend.pop();
         }
         for (let r = 0; r < this.rowEls.length; r++) {
             const cellRow = this.cellEls[r];
