@@ -316,12 +316,22 @@ function _buildDynRow(prefix) {
 
 /**
  * Write a numeric value into a pre-built dyn row (from _buildDynRow) and
- * copy the 16 cells into the target buffer row. Zero allocation.
+ * copy the 16 cells into the target buffer row. Digit cells are newly
+ * allocated each call so the Renderer's reference-level skip sees them
+ * as changed objects (the old in-place .ch mutation was invisible to it).
  */
 function _writeDynRow(dstRow, cells, value) {
     const s = String(value).padStart(8);
-    for (let i = 0; i < 8; i++) cells[8 + i].ch = s[i];
-    for (let i = 0; i < 16; i++) dstRow[i] = cells[i];
+    // Prefix cells (unchanged text) can keep shared references — prevBlend skips are fine.
+    for (let i = 0; i < 8; i++) dstRow[i] = cells[i];
+    // Digit cells must be new objects each call — the Renderer's reference-level
+    // skip (cell === prevRow[c]) would skip in-place .ch mutations on shared objects.
+    for (let i = 0; i < 8; i++) {
+        const p = cells[8 + i];
+        dstRow[8 + i] = { ch: s[i], fg: p.fg, bg: p.bg, bold: p.bold, dim: p.dim,
+            italic: p.italic, underline: p.underline, blink: p.blink,
+            inverse: p.inverse, conceal: p.conceal, crossedOut: p.crossedOut, width: p.width };
+    }
 }
 
 export class TetrisCmd extends CmdBase {
