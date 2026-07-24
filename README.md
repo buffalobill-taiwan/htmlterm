@@ -28,7 +28,7 @@ dialogs, and TSR-style widgets.
 ### Demo shell
 
 - Frame-stack command runner with rAF-based Typewriter output
-- 22 built-in commands (games, widgets, interactive tests — see below)
+- 23 built-in commands (games, widgets, interactive tests — see below)
 - Dialog framework (`MenuDialog`, `InputDialog`, `ShowDialog`) with overlay compositing
 - VirtualBuffer compositing abstraction for nested UI layout
 - TSR widgets (clock, DVD logo) — draggable, position remembered
@@ -76,6 +76,7 @@ Open `index.html` in a modern browser, or visit the live demo:
 
 | Command | Description |
 |---------|-------------|
+| `2048` | Play 2048 puzzle (slide/merge animation, undo) |
 | `anime` | Play 124-frame animation (30fps, Ctrl+C to stop) |
 | `art` | Render pixel art from a random artwork |
 | `ascii` | Show ANSI color chart (16-color + 256-color cube) |
@@ -92,6 +93,7 @@ Open `index.html` in a modern browser, or visit the live demo:
 | `help` | List available commands |
 | `menu` | Open command menu dialog |
 | `mbti` | MBTI personality test (interactive) |
+| `minesweeper` | Play Minesweeper (three difficulty levels) |
 | `quiz` | Math quiz challenge |
 | `sleep` | Wait for N seconds (default 1) |
 | `sudoku` | Play Sudoku puzzle (interactive cursor navigation) |
