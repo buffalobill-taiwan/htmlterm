@@ -152,13 +152,19 @@ export class Renderer {
 
             const cls = this._spanClass(fg, bg, cell.italic, cell.underline, cell.crossedOut, cell.blink, cell.dim);
 
-            let cssText;
             if (cell.clip) {
                 const ox = (cell.clipOffX || 0) * this.charWidth;
                 const oy = (cell.clipOffY || 0) * this.charHeight;
+                const cssText = 'position:relative;display:inline-block;width:' + this.charWidth + 'px;height:' + this.charHeight + 'px;font-size:' + (this.charHeight * 2) + 'px;line-height:' + (this.charHeight * 2) + 'px;overflow:hidden;vertical-align:top;';
+                if (span.className === cls && span.style.cssText === cssText) continue;
                 span.innerHTML = '<span style="position:absolute;left:' + ox + 'px;top:' + oy + 'px">' + text + '</span>';
-                cssText = 'position:relative;display:inline-block;width:' + this.charWidth + 'px;height:' + this.charHeight + 'px;font-size:' + (this.charHeight * 2) + 'px;line-height:' + (this.charHeight * 2) + 'px;overflow:hidden;vertical-align:top;';
-            } else if (cell._clipRight) {
+                span.className = cls;
+                span.style.cssText = cssText;
+                continue;
+            }
+
+            let cssText;
+            if (cell._clipRight) {
                 cssText = 'display:inline-block;width:' + this.charWidth + 'px;height:' + this.charHeight + 'px;overflow:hidden;vertical-align:top;';
             } else if (cell._clipLeft) {
                 cssText = 'display:inline-block;width:' + this.charWidth + 'px;height:' + this.charHeight + 'px;overflow:hidden;text-indent:-' + this.charWidth + 'px;vertical-align:top;';
