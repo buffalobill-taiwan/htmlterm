@@ -21,11 +21,11 @@ const NUM_COLORS = [
     '\x1B[90m',                // 8 — gray
 ];
 
-const CELL_HIDDEN = '\u30FB';  // ・ katakana middle dot (hidden cell)
-const CELL_EMPTY  = '\u3000';  // fullwidth space (revealed empty, 0 neighbors)
-const CELL_FLAG   = '\uFF26';  // Ｆ
-const CELL_MINE   = '\uFF0A';  // ＊
-const CELL_WRONG  = '\uFF38';  // Ｘ
+const CELL_HIDDEN = '・';  // ・ katakana middle dot (hidden cell)
+const CELL_EMPTY  = '　';  // fullwidth space (revealed empty, 0 neighbors)
+const CELL_FLAG   = 'Ｆ';  // Ｆ
+const CELL_MINE   = '＊';  // ＊
+const CELL_WRONG  = 'Ｘ';  // Ｘ
 
 function _formatTime(sec) {
     const m = Math.floor(sec / 60);
@@ -227,7 +227,7 @@ export class MinesweeperCmd extends CmdBase {
             title: 'Minesweeper',
             message: yellow('Select difficulty'),
             options: opts,
-            footer: '\u2190 \u2192 Move  \u21A9 Confirm  ESC Quit',
+            footer: '← → Move  ↩ Confirm  ESC Quit',
             onSelect: (idx) => {
                 this._difficultyDialog = null;
                 this._startGame(opts[idx].toLowerCase());
@@ -317,7 +317,7 @@ export class MinesweeperCmd extends CmdBase {
     }
 
     _drawFooter() {
-        term.write('\x1B[2;1H\x1B[2K' + gray('  \u2190\u2191\u2193\u2192 Move   Enter Reveal   Space Flag   [n]ew [q]uit'));
+        term.write('\x1B[2;1H\x1B[2K' + gray('  ←↑↓→ Move   Enter Reveal   Space Flag   [n]ew [q]uit'));
     }
 
     _drawBoard() {
@@ -325,26 +325,26 @@ export class MinesweeperCmd extends CmdBase {
         const boardY = 3;
         const lineW = 1 + cols * 2 + 1;
         let s = '\x1B[' + boardY + ';1H';
-        s += '\u2554' + '\u2550'.repeat(lineW - 2) + '\u2557';
+        s += '╔' + '═'.repeat(lineW - 2) + '╗';
         for (let r = 0; r < rows; r++) {
             s += '\x1B[' + (boardY + 1 + r) + ';1H';
-            s += '\u2551';
+            s += '║';
             for (let c = 0; c < cols; c++)
                 s += this._cellStr(r, c);
-            s += '\u2551';
+            s += '║';
         }
         s += '\x1B[' + (boardY + 1 + rows) + ';1H';
-        s += '\u255A' + '\u2550'.repeat(lineW - 2) + '\u255D';
+        s += '╚' + '═'.repeat(lineW - 2) + '╝';
         term.write(s);
     }
 
     _drawRow(r) {
         const boardY = 3;
         const { _cols: cols } = this;
-        let s = '\x1B[' + (boardY + 1 + r) + ';1H\u2551';
+        let s = '\x1B[' + (boardY + 1 + r) + ';1H║';
         for (let c = 0; c < cols; c++)
             s += this._cellStr(r, c);
-        s += '\u2551';
+        s += '║';
         term.write(s);
     }
 

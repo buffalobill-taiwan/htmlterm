@@ -189,7 +189,7 @@ function _buildPreviewCells(type) {
     for (let r = 0; r < shape.length; r++)
         for (let c = 0; c < shape[r].length; c++) {
             const filled = shape[r][c];
-            cells.push({ ch: filled ? '\u2588' : ' ', fg: filled ? fg : 0, bg: filled ? bg : 0, bold: false, dim: false, italic: false, underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: 1 });
+            cells.push({ ch: filled ? '█' : ' ', fg: filled ? fg : 0, bg: filled ? bg : 0, bold: false, dim: false, italic: false, underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: 1 });
         }
     return cells;
 }
@@ -204,10 +204,10 @@ function _buildStaticSidebar() {
     vb.writeStr(7, 0, '┌──── Hold ────┐');
     for (let r = 0; r < 4; r++) vb.writeStr(8 + r, 0, '│              │');
     vb.writeStr(12, 0, '└──────────────┘');
-    vb.writeStr(13, 0, gray('\u2500'.repeat(16)));
+    vb.writeStr(13, 0, gray('─'.repeat(16)));
     // Rows 14–16 are dynamic (score/level/lines) — leave null
-    vb.writeStr(17, 0, gray('\u2500'.repeat(16)));
-    vb.writeStr(18, 0, gray(' \u2190\u2191\u2193\u2192 Move'));
+    vb.writeStr(17, 0, gray('─'.repeat(16)));
+    vb.writeStr(18, 0, gray(' ←↑↓→ Move'));
     vb.writeStr(19, 0, gray(' Space  Drop'));
     vb.writeStr(20, 0, gray(' H Hold  P Pause'));
     vb.writeStr(21, 0, gray(' Q Quit'));
@@ -229,16 +229,16 @@ function _buildPauseFrame(fw, fh) {
     for (let r = 0; r < fh; r++) {
         const row = new Array(fw).fill(null);
         if (r === 0) {
-            row[0] = bc('\u2554');
-            for (let c = 1; c < fw - 1; c++) row[c] = bc('\u2550');
-            row[fw - 1] = bc('\u2557');
+            row[0] = bc('╔');
+            for (let c = 1; c < fw - 1; c++) row[c] = bc('═');
+            row[fw - 1] = bc('╗');
         } else if (r === fh - 1) {
-            row[0] = bc('\u255A');
-            for (let c = 1; c < fw - 1; c++) row[c] = bc('\u2550');
-            row[fw - 1] = bc('\u255D');
+            row[0] = bc('╚');
+            for (let c = 1; c < fw - 1; c++) row[c] = bc('═');
+            row[fw - 1] = bc('╝');
         } else {
-            row[0] = bc('\u2551');
-            row[fw - 1] = bc('\u2551');
+            row[0] = bc('║');
+            row[fw - 1] = bc('║');
         }
         cells.push(row);
     }
@@ -263,16 +263,16 @@ function _buildGameOverFrame(fw, fh) {
     for (let r = 0; r < fh; r++) {
         const row = new Array(fw).fill(null);
         if (r === 0) {
-            row[0] = bc('\u2554');
-            for (let c = 1; c < fw - 1; c++) row[c] = bc('\u2550');
-            row[fw - 1] = bc('\u2557');
+            row[0] = bc('╔');
+            for (let c = 1; c < fw - 1; c++) row[c] = bc('═');
+            row[fw - 1] = bc('╗');
         } else if (r === fh - 1) {
-            row[0] = bc('\u255A');
-            for (let c = 1; c < fw - 1; c++) row[c] = bc('\u2550');
-            row[fw - 1] = bc('\u255D');
+            row[0] = bc('╚');
+            for (let c = 1; c < fw - 1; c++) row[c] = bc('═');
+            row[fw - 1] = bc('╝');
         } else {
-            row[0] = bc('\u2551');
-            row[fw - 1] = bc('\u2551');
+            row[0] = bc('║');
+            row[fw - 1] = bc('║');
         }
         cells.push(row);
     }
@@ -291,7 +291,7 @@ function _buildGameOverInner(cw, ch) {
     vb.writeStr(1, textX, '\x1B[1;31m GAME OVER \x1B[0m');
     const sepLen = cw - 2;
     const sepX = Math.floor((cw - sepLen) / 2);
-    vb.writeStr(2, sepX, '\x1B[31m' + '\u2500'.repeat(sepLen) + '\x1B[0m');
+    vb.writeStr(2, sepX, '\x1B[31m' + '─'.repeat(sepLen) + '\x1B[0m');
     const hintW = 13; // [n]ew [q]uit
     const hintX = Math.floor((cw - hintW) / 2);
     vb.writeStr(3, hintX, '\x1B[90m[n]ew [q]uit\x1B[0m');
@@ -352,7 +352,7 @@ export class TetrisCmd extends CmdBase {
             title: 'Tetris',
             message: yellow('Select difficulty'),
             options: opts,
-            footer: '\u2190 \u2192 Move  \u21A9 Confirm  ESC Quit',
+            footer: '← → Move  ↩ Confirm  ESC Quit',
             onSelect: (idx) => {
                 this._difficultyDialog = null;
                 this._startGame(opts[idx].toLowerCase());
@@ -447,18 +447,18 @@ export class TetrisCmd extends CmdBase {
 
         if (!this._cellEmpty) {
             this._cellEmpty = cell(' ', 0, 0, false, false);
-            this._cellBorder = cell('\u2551', 8, 0, false, false);
-            this._cellGhostL = cell('\u2591', 8, 0, false, true);
-            this._cellGhostR = cell('\u2591', 8, 0, false, true);
+            this._cellBorder = cell('║', 8, 0, false, false);
+            this._cellGhostL = cell('░', 8, 0, false, true);
+            this._cellGhostR = cell('░', 8, 0, false, true);
 
             this._boardPalette = new Array(256);
             for (let i = 0; i < 256; i++)
-                this._boardPalette[i] = cell('\u2588', i, i, true, false);
+                this._boardPalette[i] = cell('█', i, i, true, false);
 
             this._curCells = {};
             for (const type of Object.keys(PIECE_COLORS)) {
                 const fg = PIECE_COLORS[type], bg = PIECE_BG[type];
-                this._curCells[type] = [cell('\u2588', fg, bg, true, false), cell('\u2588', fg, bg, true, false)];
+                this._curCells[type] = [cell('█', fg, bg, true, false), cell('█', fg, bg, true, false)];
             }
 
             this._previewCells = {};
@@ -482,9 +482,9 @@ export class TetrisCmd extends CmdBase {
         // Pre-render static board border cells (only once)
         if (!this._borderTop) {
             const bvb = new VirtualBuffer(BOARD_W, 1);
-            bvb.writeStr(0, 0, '\x1B[90m\u2554' + '\u2550'.repeat(BOARD_W - 2) + '\u2557');
+            bvb.writeStr(0, 0, '\x1B[90m╔' + '═'.repeat(BOARD_W - 2) + '╗');
             this._borderTop = bvb._buffer[0].slice();
-            bvb.writeStr(0, 0, '\x1B[90m\u255A' + '\u2550'.repeat(BOARD_W - 2) + '\u255D');
+            bvb.writeStr(0, 0, '\x1B[90m╚' + '═'.repeat(BOARD_W - 2) + '╝');
             this._borderBottom = bvb._buffer[0].slice();
         }
 
