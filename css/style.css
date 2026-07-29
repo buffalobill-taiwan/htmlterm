@@ -137,6 +137,16 @@ html, body {
     vertical-align: top;
 }
 
+.clip-cell > span {
+    position: absolute;
+}
+.clip-cell[data-ox="0"] > span { left: 0px; }
+.clip-cell[data-ox="-1"] > span { left: -8px; }
+.clip-cell[data-ox="-2"] > span { left: -16px; }
+.clip-cell[data-ox="-3"] > span { left: -24px; }
+.clip-cell[data-oy="0"] > span { top: 0px; }
+.clip-cell[data-oy="-1"] > span { top: -16px; }
+
 @keyframes cursor-blink {
     0%, 50% { opacity: 1; }
     51%, 100% { opacity: 0; }

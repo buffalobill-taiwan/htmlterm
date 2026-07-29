@@ -139,6 +139,8 @@ export class Renderer {
                 span.textContent = '';
                 span.className = '';
                 span._clipText = null;
+                delete span.dataset.ox;
+                delete span.dataset.oy;
                 continue;
             }
 
@@ -153,10 +155,14 @@ export class Renderer {
 
             if (cell.clip) {
                 cls += ' clip-cell';
-                const ox = (cell.clipOffX || 0) * this.charWidth;
-                const oy = (cell.clipOffY || 0) * this.charHeight;
+                const offX = cell.clipOffX || 0;
+                const offY = cell.clipOffY || 0;
+                const ox = offX * this.charWidth;
+                const oy = offY * this.charHeight;
                 if (span.className === cls && span._clipText === text && span._ox === ox && span._oy === oy) continue;
-                span.innerHTML = '<span style="position:absolute;left:' + ox + 'px;top:' + oy + 'px">' + text + '</span>';
+                span.dataset.ox = offX;
+                span.dataset.oy = offY;
+                span.innerHTML = '<span>' + text + '</span>';
                 span.className = cls;
                 span._clipText = text;
                 span._ox = ox;
