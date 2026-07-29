@@ -1,13 +1,17 @@
 import { term } from '../../system/sys.js';
 import { WidgetBase } from '../WidgetBase.js';
 import { makeCell } from '../../util/sgr.js';
+import { isWide } from '../../util/unicode-width.js';
 
 const COLORS = [1, 2, 3, 4, 5, 6, 9, 10, 11, 12, 13, 14];
 
 export class DVDWidget extends WidgetBase {
-    constructor() {
+    constructor(text = 'DVD') {
         super();
-        this._w = 6;
+        this._text = text;
+        let w = 0;
+        for (let i = 0; i < text.length; i++) w += isWide(text[i]) ? 4 : 2;
+        this._w = w;
         this._h = 2;
         const cols = term.cols;
         const rows = term.rows;
@@ -32,6 +36,7 @@ export class DVDWidget extends WidgetBase {
     getSaveState() {
         return {
             ...super.getSaveState(),
+            text: this._text,
             dx: this._dx,
             dy: this._dy,
             color: this._color,
@@ -40,6 +45,7 @@ export class DVDWidget extends WidgetBase {
 
     restoreSaveState(state) {
         super.restoreSaveState(state);
+        this._text = state.text;
         this._dx = state.dx;
         this._dy = state.dy;
         this._color = state.color;
@@ -92,19 +98,20 @@ export class DVDWidget extends WidgetBase {
     }
 
     draw() {
-        const text = 'DVD';
-        for (let i = 0; i < text.length; i++) {
-            const ch = text[i];
+        let x = 0;
+        for (let i = 0; i < this._text.length; i++) {
+            const ch = this._text[i];
+            const nCols = isWide(ch) ? 4 : 2;
             for (let r = 0; r < 2; r++) {
-                for (let c = 0; c < 2; c++) {
-                    const x = i * 2 + c;
-                    const cell = makeCell(ch, { fg: 0, bg: this._color }, 1);
+                for (let c = 0; c < nCols; c++) {
+                    const cell = makeCell(ch, { fg: 7, bg: this._color }, 1);
                     cell.clip = true;
                     cell.clipOffX = -c;
                     cell.clipOffY = -r;
-                    this._buffer[r][x] = cell;
+                    this._buffer[r][x + c] = cell;
                 }
             }
+            x += nCols;
         }
         for (let r = 0; r < this._h; r++) {
             term.markRowDirty(this._y + r);
