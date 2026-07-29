@@ -92,10 +92,6 @@ html, body {
 
 #cursor {
     position: absolute;
-    width: 8px;
-    height: 16px;
-    font-size: 16px;
-    line-height: 16px;
     z-index: 1;
     pointer-events: none;
     animation: cursor-blink 1s step-end infinite;
@@ -107,34 +103,6 @@ html, body {
 #cursor.hidden {
     animation: none;
     opacity: 0;
-}
-
-.clip-right {
-    display: inline-block;
-    width: 8px;
-    height: 16px;
-    overflow: hidden;
-    vertical-align: top;
-}
-
-.clip-left {
-    display: inline-block;
-    width: 8px;
-    height: 16px;
-    overflow: hidden;
-    text-indent: -8px;
-    vertical-align: top;
-}
-
-.clip-cell {
-    position: relative;
-    display: inline-block;
-    width: 8px;
-    height: 16px;
-    font-size: 32px;
-    line-height: 32px;
-    overflow: hidden;
-    vertical-align: top;
 }
 
 @keyframes cursor-blink {

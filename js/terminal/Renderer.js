@@ -123,6 +123,7 @@ export class Renderer {
                 const span = cellRow[c];
                 span.textContent = ' ';
                 span.className = '';
+                span.style.cssText = '';
             }
             return;
         }
@@ -131,12 +132,14 @@ export class Renderer {
 
         for (let c = 0; c < cols; c++) {
             const cell = blended[c];
+
             const span = cellRow[c];
 
             if (cell.width === 0) {
-                if (span.textContent === '' && span.className === '') continue;
+                if (span.textContent === '' && span.className === '' && span.style.cssText === '') continue;
                 span.textContent = '';
                 span.className = '';
+                span.style.cssText = '';
                 continue;
             }
 
@@ -147,27 +150,32 @@ export class Renderer {
             let bg = this._swapBg;
             if (cell.bold && typeof fg === 'number' && fg < 8) fg += 8;
 
-            let cls = this._spanClass(fg, bg, cell.italic, cell.underline, cell.crossedOut, cell.blink, cell.dim);
+            const cls = this._spanClass(fg, bg, cell.italic, cell.underline, cell.crossedOut, cell.blink, cell.dim);
 
             if (cell.clip) {
-                cls += ' clip-cell';
                 const ox = (cell.clipOffX || 0) * this.charWidth;
                 const oy = (cell.clipOffY || 0) * this.charHeight;
-                if (span.className === cls) continue;
+                const cssText = 'position:relative;display:inline-block;width:' + this.charWidth + 'px;height:' + this.charHeight + 'px;font-size:' + (this.charHeight * 2) + 'px;line-height:' + (this.charHeight * 2) + 'px;overflow:hidden;vertical-align:top;';
+                if (span.className === cls && span.style.cssText === cssText) continue;
                 span.innerHTML = '<span style="position:absolute;left:' + ox + 'px;top:' + oy + 'px">' + text + '</span>';
                 span.className = cls;
+                span.style.cssText = cssText;
                 continue;
             }
 
+            let cssText;
             if (cell._clipRight) {
-                cls += ' clip-right';
+                cssText = 'display:inline-block;width:' + this.charWidth + 'px;height:' + this.charHeight + 'px;overflow:hidden;vertical-align:top;';
             } else if (cell._clipLeft) {
-                cls += ' clip-left';
+                cssText = 'display:inline-block;width:' + this.charWidth + 'px;height:' + this.charHeight + 'px;overflow:hidden;text-indent:-' + this.charWidth + 'px;vertical-align:top;';
+            } else {
+                cssText = '';
             }
 
-            if (span.textContent === text && span.className === cls) continue;
+            if (span.textContent === text && span.className === cls && span.style.cssText === cssText) continue;
             span.textContent = text;
             span.className = cls;
+            span.style.cssText = cssText;
         }
     }
 
@@ -339,8 +347,10 @@ export class Renderer {
 
         this.cursorEl.className = 'b' + next.fg + ' q' + next.bg;
         this.cursorEl.textContent = next.ch;
-        this.cursorEl.style.left = (next.x * next.w) + 'px';
-        this.cursorEl.style.top = (next.y * next.h) + 'px';
+        this.cursorEl.style.cssText =
+            `left:${next.x * next.w}px;top:${next.y * next.h}px;` +
+            `width:${next.w}px;height:${next.h}px;` +
+            `font-size:${next.h}px;line-height:${next.h}px;`;
     }
 
     _updateContainerDimensions() {
