@@ -1203,4 +1203,7 @@ export class MyCursorCmd extends CmdBase {
 ### Tools
 
 - `tools/png2art.js`: Offline PNG → art module converter (not used at runtime)
+- `tools/subset-font.js`: Offline Unifont → woff2 subsetter — extracts a Unicode range
+  from the system Unifont OTF (`fonts-unifont` package) via `pyftsubset` (fonttools).
+  Usage: `node tools/subset-font.js U+2B00-2BFF fonts/unifont-misc-arrows.woff2`
 - `tools/compress-anime.js`: Offline script to compress anime pixel data (RLE + frame-diff)
