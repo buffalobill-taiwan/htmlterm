@@ -1,18 +1,14 @@
 import { term } from '../../system/sys.js';
 import { WidgetBase } from '../WidgetBase.js';
+import { makeCell } from '../../util/sgr.js';
 
 const COLORS = [1, 2, 3, 4, 5, 6, 9, 10, 11, 12, 13, 14];
-const LOGO = [
-    '       ',
-    ' D V D ',
-    '       ',
-];
 
 export class DVDWidget extends WidgetBase {
     constructor() {
         super();
-        this._w = 7;
-        this._h = 3;
+        this._w = 6;
+        this._h = 2;
         const cols = term.cols;
         const rows = term.rows;
         this.setPosition(Math.floor((cols - this._w) / 2), Math.floor((rows - this._h) / 2));
@@ -96,12 +92,22 @@ export class DVDWidget extends WidgetBase {
     }
 
     draw() {
-        for (let r = 0; r < this._h; r++) {
-            for (let c = 0; c < this._w; c++) {
-                const ch = LOGO[r][c];
-                const fg = (ch === 'D' || ch === 'V') ? 0 : this._color;
-                this.putc(c, r, ch, fg, this._color);
+        const text = 'DVD';
+        for (let i = 0; i < text.length; i++) {
+            const ch = text[i];
+            for (let r = 0; r < 2; r++) {
+                for (let c = 0; c < 2; c++) {
+                    const x = i * 2 + c;
+                    const cell = makeCell(ch, { fg: 0, bg: this._color }, 1);
+                    cell.clip = true;
+                    cell.clipOffX = -c;
+                    cell.clipOffY = -r;
+                    this._buffer[r][x] = cell;
+                }
             }
+        }
+        for (let r = 0; r < this._h; r++) {
+            term.markRowDirty(this._y + r);
         }
     }
 }

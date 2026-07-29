@@ -219,7 +219,9 @@ export class Renderer {
                             bold: ovCell.bold, dim: ovCell.dim, italic: ovCell.italic,
                             underline: ovCell.underline, blink: ovCell.blink,
                             inverse: ovCell.inverse, conceal: ovCell.conceal,
-                            crossedOut: ovCell.crossedOut, width: 1, _clipRight: true,
+                            crossedOut: ovCell.crossedOut,
+                            clip: ovCell.clip, clipOffX: ovCell.clipOffX, clipOffY: ovCell.clipOffY,
+                            width: 1, _clipRight: true,
                         };
                         if (c + 1 < baseRow.length) {
                             baseRow[c + 1] = {
@@ -230,6 +232,18 @@ export class Renderer {
                                 crossedOut: prev.crossedOut, width: 1, _clipLeft: true,
                             };
                         }
+                    } else if (prev && prev.width === 0 && c > 0) {
+                        const leftCell = baseRow[c - 1];
+                        if (leftCell && leftCell.width >= 2) {
+                            baseRow[c - 1] = {
+                                ch: leftCell.ch, fg: leftCell.fg, bg: leftCell.bg,
+                                bold: leftCell.bold, dim: leftCell.dim, italic: leftCell.italic,
+                                underline: leftCell.underline, blink: leftCell.blink,
+                                inverse: leftCell.inverse, conceal: leftCell.conceal,
+                                crossedOut: leftCell.crossedOut, width: 1, _clipRight: true,
+                            };
+                        }
+                        baseRow[c] = ovCell;
                     } else {
                         baseRow[c] = ovCell;
                     }
