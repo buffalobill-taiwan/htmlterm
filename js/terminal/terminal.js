@@ -383,8 +383,8 @@ export class Terminal {
         if (e.ctrlKey) btn += 16;
         return {
             btn,
-            col: Math.floor(x / this.renderer.charWidth),
-            row: Math.floor(y / this.renderer.charHeight),
+            col: Math.floor((x / rect.width) * this.cols),
+            row: Math.floor((y / rect.height) * this.rows),
         };
     }
 

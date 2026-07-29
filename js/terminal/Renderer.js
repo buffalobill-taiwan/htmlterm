@@ -64,7 +64,7 @@ export class Renderer {
             this.cellEls.push(cellRow);
         }
 
-        this._setScale(1);
+        this._updateContainerDimensions();
     }
 
     startRenderLoop() {
@@ -353,33 +353,19 @@ export class Renderer {
             `font-size:${next.h}px;line-height:${next.h}px;`;
     }
 
-    _setScale(scale) {
+    _updateContainerDimensions() {
         const screen = this.screen;
-        this._scale = scale;
-        this.charWidth = this._baseCharWidth * scale;
-        this.charHeight = this._baseCharHeight * scale;
-
         const w = screen.cols * this.charWidth;
         const h = screen.rows * this.charHeight;
 
         this.container.style.width = w + 'px';
         this.container.style.height = h + 'px';
-        this.container.style.fontSize = this.charHeight + 'px';
-        this.container.style.lineHeight = this.charHeight + 'px';
-
-        for (const el of this.rowEls) {
-            el.style.height = this.charHeight + 'px';
-            el.style.lineHeight = this.charHeight + 'px';
-        }
 
         const wrapper = this.container.parentElement;
         if (wrapper) {
             wrapper.style.width = w + 'px';
             wrapper.style.height = h + 'px';
         }
-
-        screen.markAllDirty();
-        this._cursorCurrent = null;
     }
 
     fitToViewport() {
@@ -389,13 +375,17 @@ export class Renderer {
 
         if (maxW <= 0 || maxH <= 0) return;
 
-        const baseW = this.screen.cols * this._baseCharWidth;
-        const baseH = this.screen.rows * this._baseCharHeight;
+        const baseW = this.screen.cols * this.charWidth;
+        const baseH = this.screen.rows * this.charHeight;
 
         let scale = Math.min(maxW / baseW, maxH / baseH);
         if (scale < 1) scale = 1;
 
-        this._setScale(scale);
+        this._scale = scale;
+        const wrapper = this.container.parentElement;
+        if (wrapper) {
+            wrapper.style.transform = `scale(${scale})`;
+        }
     }
 
     resizeDOM(newCols, newRows) {
@@ -430,6 +420,7 @@ export class Renderer {
                 rowEl.removeChild(cellRow.pop());
             }
         }
-        this._setScale(this._scale);
+        this._updateContainerDimensions();
+        this.fitToViewport();
     }
 }
