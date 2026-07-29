@@ -92,6 +92,13 @@ the entire render pipeline — affects tetris, anime, and all overlay commands:
   changes. Unchanged rows skip `_renderRow` entirely.
 - Anime Proxy bypass: `screen.markRowDirty` cached via `term.screen.markRowDirty.bind(screen)`
   to avoid per-call wrapper function allocation from the `term` Proxy get trap.
+Renderer clip refactor (Jul 2026): `_renderRow` replaced `span.style.cssText` per-cell
+inline styles with CSS classes — `clip-right`, `clip-left`, `clip-cell` defined in
+`style.css`. Clip cell comparison uses `span._clipText`/`_ox`/`_oy` properties instead
+of `span.style.cssText` for the skip-fast-path check. Cursor sizing moved from per-frame
+inline `cssText` to static CSS (`width:8px;height:16px;font-size:16px;line-height:16px`);
+cursor positioning simplified to `style.left`/`style.top` only. `tools/subset-font.js`
+added — offline Unifont → woff2 subsetter via `pyftsubset`.
 
 ## Architecture
 
@@ -107,7 +114,7 @@ Renderer._blendOverlays(Y):
          for c in [ov.x, ov.x+ov.w):
            cell = ov.getCell(relY, relC)
            if cell != null → blended[c] = cell
-  3. per-cell: span.textContent / span.className / span.style.cssText
+  3. per-cell: span.textContent / span.className / span.style.cssText (or innerHTML for clip-cell)
 ```
 
 | Layer | Z | Buffer owner | Writes via |
@@ -144,7 +151,8 @@ markRowDirty(r) { this.screen.markRowDirty(r); }
 
 `Renderer` pre-creates 80×25 `<span>` elements at init (`cellEls[row][col]`).
 Each render cycle updates only `.textContent`, `.className`, and `.style.cssText`
-on individual spans — no innerHTML string building, no node create/destroy.
+(or `.innerHTML` for `clip-cell` spans) on individual spans — no innerHTML string
+building, no node create/destroy.
 
 ```
 _renderRow(rowIdx):
@@ -169,6 +177,41 @@ _renderRow(rowIdx):
 | `_clipLeft` | `display:inline-block;width:8px;overflow:hidden;text-indent:-8px;vertical-align:top` |
 
 `_setScale()` sets `charWidth`/`charHeight`; render uses dynamic values for clip sizes.
+
+Now updated to use CSS classes instead of per-cell inline styles:
+
+```
+_renderRow(rowIdx):
+  1. dataRow = _getDataRow(rowIdx)
+  2. blended = _blendOverlays(rowIdx, dataRow)
+  3. for c in [0, cols):
+       cell = blended[c]
+       if cell.width === 0 → empty span, skip
+       compute text, cls
+       if cell.clip:
+         cls += ' clip-cell'
+         ox = cell.clipOffX * charWidth, oy = cell.clipOffY * charHeight
+         if span.className === cls && span._clipText === text && span._ox === ox && span._oy === oy → skip
+         span.innerHTML = '<span style="position:absolute;left:'+ox+'px;top:'+oy+'px">' + text + '</span>'
+         span.className = cls; span._clipText = text; span._ox = ox; span._oy = oy
+       else:
+         if cell._clipRight: cls += ' clip-right'
+         else if cell._clipLeft: cls += ' clip-left'
+         if span.textContent === text && span.className === cls && span._clipText === null → skip
+         span.textContent = text; span.className = cls; span._clipText = null
+```
+
+**Clip CSS classes** (defined in `style.css`, not per-cell inline):
+
+| Class | Style |
+|---|---|
+| `clip-right` | `display:inline-block;width:8px;overflow:hidden;vertical-align:top` |
+| `clip-left` | `display:inline-block;width:8px;overflow:hidden;text-indent:-8px;vertical-align:top` |
+| `clip-cell` | `position:relative;display:inline-block;width:8px;height:16px;font-size:32px;line-height:32px;overflow:hidden;vertical-align:top` |
+
+`_setScale()` sets `charWidth`/`charHeight`; render uses dynamic values for clip sizes.
+Clip cell comparison uses `span._clipText`/`_ox`/`_oy` span properties (instead of
+`span.style.cssText`) for the skip-fast-path — no per-frame inline string allocation.
 
 ## Mouse event routing
 
@@ -688,6 +731,9 @@ the render loop near zero GC pressure.
 - `_renderRows`: use `Set.forEach` over `dirtyRows` — `for...of Set` allocates a hidden iterator object per call
 - Both patterns recur every render frame; iterator objects accumulate GC pressure at 60fps
 
+| `_clipText` / `_ox` / `_oy` | Span DOM properties | `_renderRow` stores on each `<span>` for clip-cell skip-fast-path; comparison avoids per-frame inline style string allocation |
+| `_clipText = null` | Span DOM property | Marks non-clip spans; skip check compares `textContent`+`className`+`_clipText===null` instead of `style.cssText` |
+
 **Rule:** The render hot path must not allocate objects, arrays, or strings on
 every cell. Reuse instance properties (`this._foo`) for per-frame scratch data.
 
@@ -930,7 +976,7 @@ draw() {
 
 - `Screen.js`: Cell buffer, cursor, scroll/SGR state, dirty tracking, overlays[]
 - `Parser.js`: VT100 escape state machine
-- `Renderer.js`: Per-cell DOM grid (`cellEls[][]`), cursor element, render loop, overlay blend, `colToHex()` color palette, content-level DOM caching (span value comparison)
+- `Renderer.js`: Per-cell DOM grid (`cellEls[][]`), cursor element, render loop, overlay blend, `colToHex()` color palette, content-level DOM caching (span value comparison, `_clipText`/`_ox`/`_oy` custom properties for clip-cell skip-fast-path)
 - `terminal.js`: Thin coordinator (~100 lines) composing Screen/Parser/Renderer, `writeVB()`
 
 ### `js/system/` — Shell system layer

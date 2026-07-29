@@ -43,7 +43,7 @@ dialogs, and TSR-style widgets.
 | Component | Approach |
 |-----------|----------|
 | **Core split** | `Screen.js` (buffer) · `Parser.js` (VT100 state machine) · `Renderer.js` (DOM grid) · `terminal.js` (coordinator) |
-| **Rendering** | Pre-created 80×25 `<span>` grid; dirty-row updates via `.textContent` / `.className` / `.style.cssText` |
+| **Rendering** | Pre-created 80×25 `<span>` grid; dirty-row updates via `.textContent` / `.className` / `.style.cssText`; clip cells use CSS classes (`clip-right`/`clip-left`/`clip-cell`) + `.innerHTML` |
 | **Buffer** | 2D cell array (`{ch, fg, bg, bold, italic, …, width}`) + scrollback; CJK uses `width: 2` + continuation cell |
 | **Overlays** | Widgets (z=10), dialogs (z=100), and flash (z=200) own separate buffers; `Renderer._blendOverlays` composites at render time |
 | **Shell** | `SystemManager` (singleton) + `sys.js` (Proxy exports for cmd code) + `ShellCmd` (persistent CmdBase subclass, REPL) |
@@ -130,7 +130,10 @@ js/
 └── cmd/         CmdBase.js ShellCmd.js ... + widgets/        # Demo commands + widgets
 css/style.css
 index.html
-tools/png2art.js                                          # Offline art converter
+tools/
+├── png2art.js                                            # Offline art converter
+├── subset-font.js                                         # Offline Unifont → woff2 subsetter
+└── compress-anime.js                                      # Offline anime pixel data compressor
 ```
 
 ## License
