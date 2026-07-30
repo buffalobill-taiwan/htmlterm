@@ -273,8 +273,10 @@ export class WordleCmd extends CmdBase {
 
             if (this._revealState.pos >= 5) {
                 const guess = this._revealState.guess;
+                const result = this._revealState.result;
                 this._revealState = null;
                 this._guesses.push(guess);
+                this._updateKeyState(guess, result);
 
                 if (guess === this._answer) {
                     this._won = true;
@@ -284,6 +286,8 @@ export class WordleCmd extends CmdBase {
                 } else if (this._guesses.length >= 6) {
                     this._gameOver = true;
                     this._message = `\x1B[91m遊戲結束！答案是 ${toFullwidth(this._answer)}${RESET}  ${BORDER}[n] 新遊戲  [q] 離開${RESET}`;
+                    this._render();
+                } else {
                     this._render();
                 }
 
@@ -357,7 +361,6 @@ export class WordleCmd extends CmdBase {
 
             const guess = this._currentGuess;
             const result = evaluateGuess(guess, this._answer);
-            this._updateKeyState(guess, result);
             this._currentGuess = '';
             this._message = '';
 
