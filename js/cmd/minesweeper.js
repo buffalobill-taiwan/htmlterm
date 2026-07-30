@@ -303,7 +303,7 @@ export class MinesweeperCmd extends CmdBase {
 
     _drawHeader() {
         const cfg = DIFFICULTY[this._difficulty];
-        const mines = this._mineCount - this._flagsPlaced;
+        const mines = this._completed ? 0 : this._mineCount - this._flagsPlaced;
         const t = _formatTime(this._timer);
         const pad = Math.max(0, 48 - cfg.label.length);
         term.write('\x1B[1;1H' + bold(cyan('  Minesweeper [' + cfg.label + ']')) +
@@ -417,6 +417,7 @@ export class MinesweeperCmd extends CmdBase {
         for (let r = 0; r < this._rows; r++)
             for (let c = 0; c < this._cols; c++)
                 if (this._board[r][c] === -1) this._revealed[r][c] = true;
+        this._drawHeader();
         this._drawBoard();
         const timeStr = _formatTime(this._timer);
         const fRow = this._footerRow();
