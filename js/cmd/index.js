@@ -26,4 +26,5 @@ export { MinesweeperCmd } from './minesweeper.js';
 export { TetrisCmd } from './tetris.js';
 export { Game2048Cmd } from './game2048.js';
 export { SnakeCmd } from './snake.js';
+export { WordleCmd } from './wordle.js';
 
