@@ -12,7 +12,7 @@ Live demo: <https://buffalobill-taiwan.github.io/htmlterm/>
 | Terminal core (Screen/Parser/Renderer) | Complete |
 | Overlay compositing (widgets + dialogs) | Complete |
 | Frame-stack shell + Typewriter | Complete |
-| Demo commands | 22 registered (see Command Architecture) |
+| Demo commands | 23 registered (see Command Architecture) |
 | Automated tests | Excluded — manual testing only |
 | CI | Excluded — not planned |
 
@@ -99,6 +99,10 @@ of `span.style.cssText` for the skip-fast-path check. Cursor sizing moved from p
 inline `cssText` to static CSS (`width:8px;height:16px;font-size:16px;line-height:16px`);
 cursor positioning simplified to `style.left`/`style.top` only. `tools/subset-font.js`
 added — offline Unifont → woff2 subsetter via `pyftsubset`.
+Wordle (Jul 2026): `js/cmd/wordle.js` added — full Wordle clone with fullwidth uppercase display,
+box-drawing grid borders, 100ms left-to-right color reveal animation, 3-row on-screen keyboard
+with per-key state tracking (green/yellow/gray), 799-word answer pool, 15926-word guess validation,
+Ctrl+C/ESC/q to close, n to start a new game. `js/cmd/valid-words.js` auto-generated.
 
 ## Architecture
 
@@ -555,16 +559,17 @@ js/cmd/
 ├── time.js            TimeCmd     — measure execution time of a command
 ├── sudoku.js          Sudoku      — play Sudoku puzzle (custom _onKey, grid rendering, auto-check, timer)
 ├── tetris.js          Tetris      — play Tetris (SRS rotation, wall kicks, T-Spin, ghost, hold, combo, B2B, lock delay, line-flash)
-├── minesweeper.js     MinesweeperCmd — Minesweeper game (2×1 fullwidth cells, backtracking mine gen, BFS reveal, first-click safe)
+├── wordle.js          WordleCmd   — play Wordle (fullwidth display, 3-row keyboard, 16k valid words)
+├── valid-words.js     Auto-generated 15926-word guess dictionary
 ├── art/               Static pixel data modules (adam, blacklotus, glaneuses, anime, …)
 └── widgets/
     ├── ClockWidget.js
     └── DVDWidget.js
 ```
 
-**22 registered commands:** `5willow`, `anime`, `art`, `ascii`, `astrology`, `calc`, `clear`, `clock`,
+**23 registered commands:** `5willow`, `anime`, `art`, `ascii`, `astrology`, `calc`, `clear`, `clock`,
 `cowsay`, `date`, `dvd`, `echo`, `flash`, `help`, `menu`,
-`mbti`, `minesweeper`, `quiz`, `sleep`, `sudoku`, `tetris`, `time`
+`mbti`, `minesweeper`, `quiz`, `sleep`, `sudoku`, `tetris`, `time`, `wordle`
 
 **CmdBase contract:**
 
@@ -1028,6 +1033,8 @@ draw() {
 - `anime.js`: 124-frame animation player (rAF + buffer overlay, pixel-codec)
 - `sudoku.js`: Sudoku puzzle game (backtracking generator, grid rendering, custom `_onKey`, auto-check, timer)
 - `tetris.js`: Tetris game (SRS rotation, wall kicks, T-Spin detection, ghost piece, hold, combo, B2B, lock delay, line-clear flash, 2×1 cell rendering)
+- `wordle.js`: WordleCmd — play Wordle (fullwidth uppercase display, box-drawing grid, 100ms left-to-right color reveal, 3-row on-screen keyboard with per-key state, 799-word answer pool)
+- `valid-words.js`: Auto-generated 15926-word guess dictionary
 
 ## Command Development Templates
 
