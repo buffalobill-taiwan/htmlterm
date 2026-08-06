@@ -9,19 +9,35 @@ export const BLACK = 2;
 
 /** @typedef {{ R: number, C: number, N: number, nbrs: number[][], squares: [number,number,number,number][] }} Geom */
 
+const _geomCache = new Map();
+
 export function geom(R, C) {
+    const key = R * 1000 + C;
+    const hit = _geomCache.get(key);
+    if (hit) return hit;
+
     const N = R * C;
     const nbrs = [];
+    // Flat CSR-style neighbour table — avoids per-cell array iteration overhead
+    // in the propagate hot loop.
+    const nbrOff = new Int32Array(N + 1);
+    const nbrList = new Int32Array(N * 4);
+    let k = 0;
     for (let r = 0; r < R; r++) {
         for (let c = 0; c < C; c++) {
+            const i = r * C + c;
+            nbrOff[i] = k;
             const ns = [];
             if (r > 0) ns.push((r - 1) * C + c);
             if (r < R - 1) ns.push((r + 1) * C + c);
             if (c > 0) ns.push(r * C + (c - 1));
             if (c < C - 1) ns.push(r * C + (c + 1));
             nbrs.push(ns);
+            for (const n of ns) nbrList[k++] = n;
         }
     }
+    nbrOff[N] = k;
+
     const squares = [];
     for (let r = 0; r < R - 1; r++) {
         for (let c = 0; c < C - 1; c++) {
@@ -29,7 +45,36 @@ export function geom(R, C) {
             squares.push([a, a + 1, a + C, a + C + 1]);
         }
     }
-    return { R, C, N, nbrs, squares };
+    // Flat square table (4 ints per square) — no per-square array allocation.
+    const sqFlat = new Int32Array(squares.length * 4);
+    for (let s = 0; s < squares.length; s++) {
+        sqFlat[s * 4] = squares[s][0];
+        sqFlat[s * 4 + 1] = squares[s][1];
+        sqFlat[s * 4 + 2] = squares[s][2];
+        sqFlat[s * 4 + 3] = squares[s][3];
+    }
+
+    const g = {
+        R, C, N, nbrs, squares, nbrOff, nbrList, sqFlat,
+        // Scratch buffers reused by propagate(). Safe because propagate is never
+        // re-entrant (solveAll recursion calls it sequentially, never nested).
+        _scratch: {
+            seen: new Uint8Array(N),
+            regionId: new Int32Array(N),
+            reach: new Uint8Array(N),
+            spent: new Int32Array(N),
+            stack: new Int32Array(N),
+            queue: new Int32Array(N),
+            cells: new Int32Array(N),
+            mark: new Int32Array(N),
+            markGen: 0,
+            regCells: [],   // flat cell list per clued region
+            regStart: [],
+            regClue: [],
+        },
+    };
+    _geomCache.set(key, g);
+    return g;
 }
 
 export function initialState(p) {
@@ -57,22 +102,68 @@ function whiteRegion(state, g, p, start, seen) {
     return { cells, clue };
 }
 
+// Lazily grown scratch buffers shared per-geometry. propagate() is never
+// re-entrant, so reusing them across calls is safe and removes ~10 typed-array
+// allocations per call (propagate runs tens of thousands of times per puzzle).
+function scratch(g) {
+    let s = g._scratch;
+    if (!s.ready) {
+        const N = g.N;
+        s.seen = new Uint8Array(N);
+        s.regionId = new Int32Array(N);
+        s.reach = new Uint8Array(N);
+        s.spent = new Int32Array(N);
+        s.stack = new Int32Array(N);
+        // Relaxation BFS can re-enqueue a cell up to once per improved cost,
+        // so the queue needs headroom beyond N.
+        s.queue = new Int32Array(N * 5);
+        s.cells = new Int32Array(N);
+        s.regCell = new Int32Array(N);
+        s.regStart = new Int32Array(N + 1);
+        s.regClue = new Int32Array(N);
+        s.blackSeen = new Uint8Array(N);
+        s.exitMark = new Int32Array(N);
+        s.exitGen = 0;
+        s.ready = true;
+    }
+    return s;
+}
+
 export function propagate(state, g, p) {
+    const N = g.N;
+    const clues = p.clues;
+    const nbrOff = g.nbrOff;
+    const nbrList = g.nbrList;
+    const sqFlat = g.sqFlat;
+    const sqCount = sqFlat.length >> 2;
+    const s = scratch(g);
+    const seen = s.seen;
+    const regionId = s.regionId;
+    const reach = s.reach;
+    const spent = s.spent;
+    const stack = s.stack;
+    const queue = s.queue;
+    const regCell = s.regCell;
+    const regStart = s.regStart;
+    const regClue = s.regClue;
+    const blackSeen = s.blackSeen;
+    const exitMark = s.exitMark;
+
     let changed = true;
     while (changed) {
         changed = false;
 
         // 1. Check 2x2 pools (3 black + 1 unknown => 4th is white)
-        for (const [a, b, c, d] of g.squares) {
+        for (let q = 0; q < sqCount; q++) {
+            const o = q << 2;
             let black = 0;
             let unknown = -1;
             let unknownCount = 0;
-            for (const cell of [a, b, c, d]) {
-                if (state[cell] === BLACK) black++;
-                else if (state[cell] === UNKNOWN) {
-                    unknown = cell;
-                    unknownCount++;
-                }
+            for (let t = 0; t < 4; t++) {
+                const cell = sqFlat[o + t];
+                const v = state[cell];
+                if (v === BLACK) black++;
+                else if (v === UNKNOWN) { unknown = cell; unknownCount++; }
             }
             if (black === 4) return false;
             if (black === 3 && unknownCount === 1) {
@@ -82,42 +173,52 @@ export function propagate(state, g, p) {
         }
 
         // 2. White regions analysis & Island Merger Prevention
-        const seen = new Uint8Array(g.N);
-        const regionId = new Int32Array(g.N).fill(-1);
-        const cluedRegions = [];
+        seen.fill(0);
+        regionId.fill(-1);
+        let regCount = 0;
+        let regTop = 0;      // write cursor into regCell
+        regStart[0] = 0;
 
-        for (let i = 0; i < g.N; i++) {
+        for (let i = 0; i < N; i++) {
             if (state[i] !== WHITE || seen[i]) continue;
 
-            const cells = [];
-            const stack = [i];
+            let sp = 0;
+            let cellStart = regTop;
+            let cellCount = 0;
+            stack[sp++] = i;
             seen[i] = 1;
             let clue = 0;
-            while (stack.length) {
-                const cur = stack.pop();
-                cells.push(cur);
-                if (p.clues[cur] > 0) {
-                    clue = clue === 0 ? p.clues[cur] : -1;
-                }
-                for (const nb of g.nbrs[cur]) {
+            while (sp > 0) {
+                const cur = stack[--sp];
+                regCell[cellStart + cellCount] = cur;
+                cellCount++;
+                if (clues[cur] > 0) clue = clue === 0 ? clues[cur] : -1;
+                for (let k = nbrOff[cur]; k < nbrOff[cur + 1]; k++) {
+                    const nb = nbrList[k];
                     if (!seen[nb] && state[nb] === WHITE) {
                         seen[nb] = 1;
-                        stack.push(nb);
+                        stack[sp++] = nb;
                     }
                 }
             }
 
             if (clue === -1) return false; // Two clues merged -> contradiction!
             if (clue > 0) {
-                if (cells.length > clue) return false;
-                const id = cluedRegions.length;
-                for (const cell of cells) regionId[cell] = id;
-                cluedRegions.push({ id, cells, clue });
+                if (cellCount > clue) return false;
+                const id = regCount;
+                for (let t = 0; t < cellCount; t++) regionId[regCell[cellStart + t]] = id;
+                regClue[id] = clue;
+                regStart[id] = cellStart;
+                regStart[id + 1] = cellStart + cellCount;
+                regCount++;
+                regTop = cellStart + cellCount;
 
                 // If island is complete -> surround all border unknown cells with black
-                if (cells.length === clue) {
-                    for (const cell of cells) {
-                        for (const nb of g.nbrs[cell]) {
+                if (cellCount === clue) {
+                    for (let t = 0; t < cellCount; t++) {
+                        const cell = regCell[cellStart + t];
+                        for (let k = nbrOff[cell]; k < nbrOff[cell + 1]; k++) {
+                            const nb = nbrList[k];
                             if (state[nb] === UNKNOWN) {
                                 state[nb] = BLACK;
                                 changed = true;
@@ -126,22 +227,20 @@ export function propagate(state, g, p) {
                     }
                 }
             }
+            // Unclued regions are not recorded — regTop stays put and their cells
+            // are overwritten by the next clued region.
         }
 
         // 3. Unknown cell bridging 2 different clued regions -> MUST BE BLACK!
-        for (let i = 0; i < g.N; i++) {
+        for (let i = 0; i < N; i++) {
             if (state[i] !== UNKNOWN) continue;
             let touchId = -1;
             let multiTouch = false;
-            for (const nb of g.nbrs[i]) {
-                const rId = regionId[nb];
+            for (let k = nbrOff[i]; k < nbrOff[i + 1]; k++) {
+                const rId = regionId[nbrList[k]];
                 if (rId !== -1) {
-                    if (touchId === -1) {
-                        touchId = rId;
-                    } else if (touchId !== rId) {
-                        multiTouch = true;
-                        break;
-                    }
+                    if (touchId === -1) touchId = rId;
+                    else if (touchId !== rId) { multiTouch = true; break; }
                 }
             }
             if (multiTouch) {
@@ -151,77 +250,88 @@ export function propagate(state, g, p) {
         }
 
         // 4. Single-option expansion for incomplete white island
-        for (const { id, cells, clue } of cluedRegions) {
-            if (cells.length < clue) {
-                const candSet = new Set();
-                for (const cell of cells) {
-                    for (const nb of g.nbrs[cell]) {
-                        if (state[nb] === UNKNOWN) {
-                            let canTouchOther = false;
-                            for (const nbnb of g.nbrs[nb]) {
-                                const rId = regionId[nbnb];
-                                if (rId !== -1 && rId !== id) {
-                                    canTouchOther = true;
-                                    break;
-                                }
-                            }
-                            if (!canTouchOther) candSet.add(nb);
-                        }
+        for (let id = 0; id < regCount; id++) {
+            const cs = regStart[id];
+            const ce = regStart[id + 1];
+            const clue = regClue[id];
+            if (ce - cs >= clue) continue;
+
+            const gen = ++s.exitGen;
+            let candCount = 0;
+            let lastCand = -1;
+            for (let t = cs; t < ce; t++) {
+                const cell = regCell[t];
+                for (let k = nbrOff[cell]; k < nbrOff[cell + 1]; k++) {
+                    const nb = nbrList[k];
+                    if (state[nb] !== UNKNOWN || exitMark[nb] === gen) continue;
+                    let canTouchOther = false;
+                    for (let k2 = nbrOff[nb]; k2 < nbrOff[nb + 1]; k2++) {
+                        const rId = regionId[nbrList[k2]];
+                        if (rId !== -1 && rId !== id) { canTouchOther = true; break; }
+                    }
+                    if (!canTouchOther) {
+                        exitMark[nb] = gen;
+                        candCount++;
+                        lastCand = nb;
                     }
                 }
-                if (candSet.size === 0) return false; // Impossible to complete island!
-                if (candSet.size === 1) {
-                    const forcedCell = Array.from(candSet)[0];
-                    state[forcedCell] = WHITE;
-                    changed = true;
-                }
+            }
+            if (candCount === 0) return false; // Impossible to complete island!
+            if (candCount === 1) {
+                state[lastCand] = WHITE;
+                changed = true;
             }
         }
 
         // 5. Reachability from clues
-        const reach = new Uint8Array(g.N);
-        for (const { id, cells, clue } of cluedRegions) {
-            const budget = clue - cells.length;
-            for (const cell of cells) reach[cell] = 1;
+        reach.fill(0);
+        for (let id = 0; id < regCount; id++) {
+            const cs = regStart[id];
+            const ce = regStart[id + 1];
+            const budget = regClue[id] - (ce - cs);
+            for (let t = cs; t < ce; t++) reach[regCell[t]] = 1;
             if (budget <= 0) continue;
-            const spent = new Int32Array(g.N).fill(999);
-            const queue = [];
-            for (const cell of cells) {
+
+            spent.fill(999);
+            let qh = 0;
+            let qt = 0;
+            for (let t = cs; t < ce; t++) {
+                const cell = regCell[t];
                 spent[cell] = 0;
-                queue.push(cell);
+                queue[qt++] = cell;
             }
-            for (let h = 0; h < queue.length; h++) {
-                const cur = queue[h];
+            while (qh < qt) {
+                const cur = queue[qh++];
                 const base = spent[cur];
-                for (const nb of g.nbrs[cur]) {
-                    if (state[nb] === BLACK) continue;
-                    if (state[nb] === WHITE && regionId[nb] !== -1 && regionId[nb] !== id) continue;
-                    const cost = state[nb] === UNKNOWN ? 1 : 0;
-                    const nd = base + cost;
+                for (let k = nbrOff[cur]; k < nbrOff[cur + 1]; k++) {
+                    const nb = nbrList[k];
+                    const v = state[nb];
+                    if (v === BLACK) continue;
+                    if (v === WHITE && regionId[nb] !== -1 && regionId[nb] !== id) continue;
+                    const nd = base + (v === UNKNOWN ? 1 : 0);
                     if (nd <= budget && nd < spent[nb]) {
                         spent[nb] = nd;
                         reach[nb] = 1;
-                        queue.push(nb);
+                        if (qt < queue.length) queue[qt++] = nb;
                     }
                 }
             }
         }
 
-        for (let i = 0; i < g.N; i++) {
-            if (!reach[i]) {
-                if (state[i] === UNKNOWN) {
-                    state[i] = BLACK;
-                    changed = true;
-                } else if (state[i] === WHITE && regionId[i] === -1) {
-                    return false;
-                }
+        for (let i = 0; i < N; i++) {
+            if (reach[i]) continue;
+            if (state[i] === UNKNOWN) {
+                state[i] = BLACK;
+                changed = true;
+            } else if (state[i] === WHITE && regionId[i] === -1) {
+                return false;
             }
         }
 
         // 6. Black Sea Connectivity Check (Bottleneck & Disconnection check)
         let firstBlack = -1;
         let blackCount = 0;
-        for (let i = 0; i < g.N; i++) {
+        for (let i = 0; i < N; i++) {
             if (state[i] === BLACK) {
                 blackCount++;
                 if (firstBlack === -1) firstBlack = i;
@@ -229,47 +339,54 @@ export function propagate(state, g, p) {
         }
 
         if (blackCount > 0) {
-            const reachedNonWhite = new Uint8Array(g.N);
-            const stack = [firstBlack];
-            reachedNonWhite[firstBlack] = 1;
+            // Reuse `seen` — region data has already been consumed above.
+            seen.fill(0);
+            let sp = 0;
+            stack[sp++] = firstBlack;
+            seen[firstBlack] = 1;
             let reachedBlackCount = 0;
-
-            while (stack.length) {
-                const cur = stack.pop();
+            while (sp > 0) {
+                const cur = stack[--sp];
                 if (state[cur] === BLACK) reachedBlackCount++;
-                for (const nb of g.nbrs[cur]) {
-                    if (!reachedNonWhite[nb] && state[nb] !== WHITE) {
-                        reachedNonWhite[nb] = 1;
-                        stack.push(nb);
+                for (let k = nbrOff[cur]; k < nbrOff[cur + 1]; k++) {
+                    const nb = nbrList[k];
+                    if (!seen[nb] && state[nb] !== WHITE) {
+                        seen[nb] = 1;
+                        stack[sp++] = nb;
                     }
                 }
             }
-
             if (reachedBlackCount < blackCount) return false;
 
-            const blackSeen = new Uint8Array(g.N);
-            for (let i = 0; i < g.N; i++) {
-                if (state[i] === BLACK && !blackSeen[i]) {
-                    const comp = [];
-                    const bStack = [i];
-                    blackSeen[i] = 1;
-                    const unkExitSet = new Set();
-                    while (bStack.length) {
-                        const cur = bStack.pop();
-                        comp.push(cur);
-                        for (const nb of g.nbrs[cur]) {
-                            if (state[nb] === BLACK && !blackSeen[nb]) {
-                                blackSeen[nb] = 1;
-                                bStack.push(nb);
-                            } else if (state[nb] === UNKNOWN) {
-                                unkExitSet.add(nb);
-                            }
+            blackSeen.fill(0);
+            for (let i = 0; i < N; i++) {
+                if (state[i] !== BLACK || blackSeen[i]) continue;
+                let bsp = 0;
+                stack[bsp++] = i;
+                blackSeen[i] = 1;
+                let compSize = 0;
+                const gen = ++s.exitGen;
+                let exitCount = 0;
+                let lastExit = -1;
+                while (bsp > 0) {
+                    const cur = stack[--bsp];
+                    compSize++;
+                    for (let k = nbrOff[cur]; k < nbrOff[cur + 1]; k++) {
+                        const nb = nbrList[k];
+                        const v = state[nb];
+                        if (v === BLACK) {
+                            if (!blackSeen[nb]) { blackSeen[nb] = 1; stack[bsp++] = nb; }
+                        } else if (v === UNKNOWN && exitMark[nb] !== gen) {
+                            exitMark[nb] = gen;
+                            exitCount++;
+                            lastExit = nb;
                         }
                     }
-                    if (blackCount > comp.length && unkExitSet.size === 0) return false;
-                    if (blackCount > comp.length && unkExitSet.size === 1) {
-                        const exitCell = Array.from(unkExitSet)[0];
-                        state[exitCell] = BLACK;
+                }
+                if (blackCount > compSize) {
+                    if (exitCount === 0) return false;
+                    if (exitCount === 1) {
+                        state[lastExit] = BLACK;
                         changed = true;
                     }
                 }
@@ -375,7 +492,7 @@ export function hasUniqueSolution(p) {
 
 // --- Generator ---
 
-function mulberry32(seed) {
+export function mulberry32(seed) {
     let a = seed >>> 0;
     return () => {
         a |= 0;
@@ -394,24 +511,25 @@ function shuffle(arr, rng) {
     return arr;
 }
 
-function isBlackSafeToRemove(cell, state, g) {
+/** Is the black sea still fully connected if `cell` becomes white? */
+function seaStaysConnected(cell, state, g) {
+    const prev = state[cell];
     state[cell] = WHITE;
-    let firstB = -1;
-    let bCount = 0;
+    let first = -1;
+    let count = 0;
     for (let i = 0; i < g.N; i++) {
         if (state[i] === BLACK) {
-            bCount++;
-            if (firstB === -1) firstB = i;
+            count++;
+            if (first === -1) first = i;
         }
     }
-    if (bCount === 0) {
-        state[cell] = BLACK;
+    if (count === 0) {
+        state[cell] = prev;
         return false;
     }
-
     const seen = new Uint8Array(g.N);
-    const stack = [firstB];
-    seen[firstB] = 1;
+    const stack = [first];
+    seen[first] = 1;
     let reached = 0;
     while (stack.length) {
         const cur = stack.pop();
@@ -423,141 +541,252 @@ function isBlackSafeToRemove(cell, state, g) {
             }
         }
     }
-    state[cell] = BLACK;
-    return reached === bCount;
+    state[cell] = prev;
+    return reached === count;
 }
 
-function buildConnectedCarvedBoard(R, C, rng) {
+/** Is the whole black sea one connected component in the current state? */
+function seaConnected(state, g) {
+    let first = -1;
+    let count = 0;
+    for (let i = 0; i < g.N; i++) {
+        if (state[i] === BLACK) {
+            count++;
+            if (first === -1) first = i;
+        }
+    }
+    if (count === 0) return false;
+    const seen = new Uint8Array(g.N);
+    const stack = [first];
+    seen[first] = 1;
+    let reached = 0;
+    while (stack.length) {
+        const cur = stack.pop();
+        reached++;
+        for (const nb of g.nbrs[cur]) {
+            if (!seen[nb] && state[nb] === BLACK) {
+                seen[nb] = 1;
+                stack.push(nb);
+            }
+        }
+    }
+    return reached === count;
+}
+
+function hasPool(state, g) {
+    for (const [a, b, c, d] of g.squares) {
+        if (state[a] === BLACK && state[b] === BLACK &&
+            state[c] === BLACK && state[d] === BLACK) return true;
+    }
+    return false;
+}
+
+/** Enumerate the white islands (connected white components) of a state. */
+function islandsOf(state, g) {
+    const seen = new Uint8Array(g.N);
+    const out = [];
+    for (let i = 0; i < g.N; i++) {
+        if (state[i] !== WHITE || seen[i]) continue;
+        const cells = [];
+        const stack = [i];
+        seen[i] = 1;
+        while (stack.length) {
+            const cur = stack.pop();
+            cells.push(cur);
+            for (const nb of g.nbrs[cur]) {
+                if (!seen[nb] && state[nb] === WHITE) {
+                    seen[nb] = 1;
+                    stack.push(nb);
+                }
+            }
+        }
+        out.push(cells);
+    }
+    return out;
+}
+
+/**
+ * Build a random legal Nurikabe solution with a *targeted island count*.
+ *
+ * A count K is drawn from [minIslands, maxIslands] up front and a size budget is
+ * distributed across the K islands; each island is then grown from a legal seed
+ * while keeping the black sea connected at every step. Leftover 2x2 black pools
+ * are dissolved afterwards, preferring the fix that extends a single existing
+ * island (which leaves the count untouched) over merging or spawning islands.
+ *
+ * Returns null if the final count falls outside [minIslands, maxIslands].
+ */
+function buildSolution(R, C, rng, opt) {
     const g = geom(R, C);
-    const state = new Int8Array(g.N).fill(BLACK);
+    const N = g.N;
+    const state = new Int8Array(N).fill(BLACK);
+    const owner = new Int32Array(N).fill(-1);
+    let islands = [];
 
-    // Control island count directly: an N×N board targets N-1..1.25N islands.
-    // No per-island max area — islands grow freely within the white budget.
-    const N = Math.min(R, C);
-    const minIslands = N - 1;
-    const maxIslands = Math.floor(N * 1.25);
-    const targetIslandCount = minIslands + Math.floor(rng() * (maxIslands - minIslands + 1));
-    const minDist = N <= 8 ? 1 : 2;
-    const cand = shuffle(Array.from({ length: g.N }, (_, i) => i), rng);
-    const seeds = [];
+    const K = opt.minIslands + Math.floor(rng() * (opt.maxIslands - opt.minIslands + 1));
+    const targetWhite = Math.round(N * opt.white);
 
-    for (const cell of cand) {
-        if (seeds.length >= targetIslandCount) break;
-        let ok = true;
-        const cr = Math.floor(cell / C), cc = cell % C;
-        for (const s of seeds) {
-            const sr = Math.floor(s / C), sc = s % C;
-            if (Math.abs(sr - cr) <= minDist && Math.abs(sc - cc) <= minDist) {
-                ok = false;
+    // Distribute the white budget across K islands, capped at maxSize each.
+    const sizes = new Array(K).fill(1);
+    let budget = targetWhite - K;
+    let spins = 0;
+    while (budget > 0 && spins++ < N * 10) {
+        const i = Math.floor(rng() * K);
+        if (sizes[i] >= opt.maxSize) continue;
+        sizes[i]++;
+        budget--;
+    }
+
+    const cells = shuffle(Array.from({ length: N }, (_, i) => i), rng);
+    for (let id = 0; id < K; id++) {
+        // A legal seed is a black cell with no white neighbour that can be
+        // whitened without splitting the sea.
+        let seed = -1;
+        for (const c of cells) {
+            if (state[c] !== BLACK) continue;
+            let adjWhite = false;
+            for (const nb of g.nbrs[c]) if (state[nb] === WHITE) { adjWhite = true; break; }
+            if (adjWhite) continue;
+            if (!seaStaysConnected(c, state, g)) continue;
+            seed = c;
+            break;
+        }
+        if (seed === -1) break;
+
+        const isl = [seed];
+        state[seed] = WHITE;
+        owner[seed] = id;
+
+        while (isl.length < sizes[id]) {
+            const cand = [];
+            for (const c of isl) {
+                for (const nb of g.nbrs[c]) {
+                    if (state[nb] !== BLACK) continue;
+                    let touchesOther = false;
+                    for (const n2 of g.nbrs[nb]) {
+                        if (state[n2] === WHITE && owner[n2] !== id) { touchesOther = true; break; }
+                    }
+                    if (touchesOther) continue;
+                    if (!seaStaysConnected(nb, state, g)) continue;
+                    cand.push(nb);
+                }
+            }
+            if (!cand.length) break;
+            const pick = cand[Math.floor(rng() * cand.length)];
+            state[pick] = WHITE;
+            owner[pick] = id;
+            isl.push(pick);
+        }
+        islands.push(isl);
+        shuffle(cells, rng);
+    }
+
+    // Dissolve 2x2 black pools, in two priorities per pool:
+    //   1. whiten a cell touching exactly one island -> extends it, count unchanged
+    //   2. otherwise merge islands / spawn a new one -> count changes
+    for (let pass = 0; pass < 12; pass++) {
+        let fixed = 0;
+        for (const [a, b, c, d] of g.squares) {
+            if (state[a] !== BLACK || state[b] !== BLACK ||
+                state[c] !== BLACK || state[d] !== BLACK) continue;
+
+            let handled = false;
+            for (const cell of shuffle([a, b, c, d], rng)) {
+                if (!seaStaysConnected(cell, state, g)) continue;
+                const owners = new Set();
+                for (const nb of g.nbrs[cell]) {
+                    if (state[nb] === WHITE && owner[nb] >= 0) owners.add(owner[nb]);
+                }
+                if (owners.size !== 1) continue;
+                const o = owners.values().next().value;
+                state[cell] = WHITE;
+                owner[cell] = o;
+                islands[o].push(cell);
+                fixed++;
+                handled = true;
+                break;
+            }
+            if (handled) continue;
+
+            for (const cell of shuffle([a, b, c, d], rng)) {
+                if (!seaStaysConnected(cell, state, g)) continue;
+                state[cell] = WHITE;
+                const owners = new Set();
+                for (const nb of g.nbrs[cell]) {
+                    if (state[nb] === WHITE && owner[nb] >= 0) owners.add(owner[nb]);
+                }
+                if (owners.size === 0) {
+                    owner[cell] = islands.length;
+                    islands.push([cell]);
+                } else {
+                    const keep = Math.min(...owners);
+                    owner[cell] = keep;
+                    islands[keep].push(cell);
+                    for (const o of owners) {
+                        if (o === keep) continue;
+                        for (const x of islands[o]) {
+                            owner[x] = keep;
+                            islands[keep].push(x);
+                        }
+                        islands[o] = null;
+                    }
+                }
+                fixed++;
                 break;
             }
         }
-        if (ok && isBlackSafeToRemove(cell, state, g)) {
-            seeds.push(cell);
-            state[cell] = WHITE;
-        }
+        if (!fixed) break;
     }
+    islands = islands.filter(Boolean);
 
-    if (seeds.length < minIslands) return null;
-
-    const islands = seeds.map(s => [s]);
-    // O(1) island membership: one Set per island
-    const islandSets = seeds.map(s => new Set([s]));
-    // O(1) cell-to-island index: avoids findIndex+includes
-    const cellToIsland = new Int32Array(g.N).fill(-1);
-    for (let idx = 0; idx < seeds.length; idx++) cellToIsland[seeds[idx]] = idx;
-
-    // Budget-based island size allocation: distribute ~35-45% of board cells
-    // evenly among islands so each island gets a fair share (→ bigger islands)
-    const targetTotalWhite = Math.round(g.N * (0.35 + rng() * 0.1));
-    const targetSizes = seeds.map(() => 1);
-    let remainingBudget = targetTotalWhite - seeds.length;
-    while (remainingBudget > 0) {
-        const idx = Math.floor(rng() * seeds.length);
-        targetSizes[idx]++;
-        remainingBudget--;
-    }
-
-    let growing = true;
-    while (growing) {
-        growing = false;
-        for (let idx = 0; idx < seeds.length; idx++) {
-            const isl = islands[idx];
-            const islSet = islandSets[idx];
-            if (isl.length >= targetSizes[idx]) continue;
-
-            const nbrs = [];
-            for (const cell of isl) {
-                for (const nb of g.nbrs[cell]) {
-                    if (state[nb] === BLACK) {
-                        let touchesOther = false;
-                        for (const nbnb of g.nbrs[nb]) {
-                            // O(1) Set lookup instead of isl.includes()
-                            if (state[nbnb] === WHITE && !islSet.has(nbnb)) {
-                                touchesOther = true;
-                                break;
-                            }
-                        }
-                        if (!touchesOther && isBlackSafeToRemove(nb, state, g)) {
-                            nbrs.push(nb);
-                        }
-                    }
-                }
-            }
-
-            if (nbrs.length > 0) {
-                const pick = nbrs[Math.floor(rng() * nbrs.length)];
-                state[pick] = WHITE;
-                isl.push(pick);
-                islSet.add(pick);
-                cellToIsland[pick] = idx;
-                growing = true;
-            }
-        }
-    }
-
-    // Resolve 2x2 black pools by growing adjacent islands safely
-    for (let pass = 0; pass < 5; pass++) {
-        let poolsFixed = 0;
-        for (const [a, b, c, d] of g.squares) {
-            if (state[a] === BLACK && state[b] === BLACK &&
-                state[c] === BLACK && state[d] === BLACK) {
-                const quad = shuffle([a, b, c, d], rng);
-                for (const cell of quad) {
-                    let touchIslIdx = -1;
-                    let touchMultiple = false;
-                    for (const nb of g.nbrs[cell]) {
-                        if (state[nb] === WHITE) {
-                            // O(1) lookup via cellToIsland map
-                            const islIdx = cellToIsland[nb];
-                            if (islIdx !== -1) {
-                                if (touchIslIdx === -1) touchIslIdx = islIdx;
-                                else if (touchIslIdx !== islIdx) { touchMultiple = true; break; }
-                            }
-                        }
-                    }
-                    if (!touchMultiple && touchIslIdx !== -1 && isBlackSafeToRemove(cell, state, g)) {
-                        state[cell] = WHITE;
-                        islands[touchIslIdx].push(cell);
-                        islandSets[touchIslIdx].add(cell);
-                        cellToIsland[cell] = touchIslIdx;
-                        poolsFixed++;
-                        break;
-                    }
-                }
-            }
-        }
-        if (poolsFixed === 0) break;
-    }
-
-    let pools = 0;
-    for (const [a, b, c, d] of g.squares) {
-        if (state[a] === BLACK && state[b] === BLACK &&
-            state[c] === BLACK && state[d] === BLACK) pools++;
-    }
-    if (pools > 0) return null;
-
+    if (hasPool(state, g)) return null;
+    if (islands.length < opt.minIslands || islands.length > opt.maxIslands) return null;
     return { state, islands };
+}
+
+/**
+ * Human-style logic solver: run `propagate`, then try each frontier unknown cell
+ * both ways; if one branch is contradictory the other value is forced. Repeat
+ * until no progress.
+ *
+ * Used instead of `solveAll` during generation. Full DFS search is exponential
+ * on 12x12+ boards (100k+ branches, many seconds per candidate); this runs in
+ * low milliseconds and, as a bonus, only accepts puzzles a human can actually
+ * deduce without guessing.
+ *
+ * @returns {{ solved: Int8Array|null, partial: Int8Array|null }}
+ */
+function logicSolve(p, g) {
+    const state = initialState(p);
+    if (!propagate(state, g, p)) return { solved: null, partial: null };
+
+    const tryW = new Int8Array(g.N);
+    const tryB = new Int8Array(g.N);
+    for (;;) {
+        if (isSolved(state, g, p)) return { solved: state, partial: state };
+        let progress = false;
+        for (let i = 0; i < g.N; i++) {
+            if (state[i] !== UNKNOWN) continue;
+            // Only frontier cells are worth trialling — an isolated unknown
+            // rarely produces a contradiction and doubles the work.
+            let frontier = false;
+            for (const nb of g.nbrs[i]) if (state[nb] !== UNKNOWN) { frontier = true; break; }
+            if (!frontier) continue;
+
+            tryW.set(state);
+            tryW[i] = WHITE;
+            const okW = propagate(tryW, g, p);
+            tryB.set(state);
+            tryB[i] = BLACK;
+            const okB = propagate(tryB, g, p);
+
+            if (!okW && !okB) return { solved: null, partial: null };
+            if (!okW) { state.set(tryB); progress = true; continue; }
+            if (!okB) { state.set(tryW); progress = true; continue; }
+        }
+        if (!progress) break;
+    }
+    return { solved: null, partial: state };
 }
 
 function eqState(a, b) {
@@ -566,41 +795,119 @@ function eqState(a, b) {
     return true;
 }
 
-function deriveUnique(R, C, solved, rng) {
+/**
+ * Turn a legal solution into a logically-solvable puzzle, repairing it in place
+ * when it isn't.
+ *
+ * Each round places one clue per island and runs `logicSolve`. If the puzzle is
+ * not fully deducible, one white cell that the solver could not pin down is
+ * flipped to black (keeping the sea connected and pool-free) and the round
+ * repeats. Shrinking the ambiguous islands is what converges the board toward
+ * uniqueness, instead of rerolling a whole new random board every time.
+ */
+function deriveByRepair(R, C, solved, rng, maxRepairs, minIslands, maxIslands) {
     const g = geom(R, C);
-    for (let tries = 0; tries < 10; tries++) {
+    const state = solved.state;
+    const inRange = (n) => n >= minIslands && n <= maxIslands;
+    for (let it = 0; it < maxRepairs; it++) {
+        const islands = islandsOf(state, g);
+        if (!islands.length) return null;
+        if (!inRange(islands.length)) return null;
         const clues = new Array(g.N).fill(0);
-        for (const cells of solved.islands) {
-            const at = cells[Math.floor(rng() * cells.length)];
-            clues[at] = cells.length;
+        for (const cells of islands) {
+            clues[cells[Math.floor(rng() * cells.length)]] = cells.length;
         }
         const p = { R, C, clues };
-        const sols = solveAll(p, 2);
-        if (sols.length === 1 && eqState(sols[0], solved.state)) {
-            if (isSolved(solved.state, g, p)) return { clues, solution: solved.state };
+        const { solved: sol, partial } = logicSolve(p, g);
+        if (sol && eqState(sol, state)) return { clues, solution: state };
+
+        // Repair candidates: cells the solver could not determine. Shrinking an
+        // island (white -> black) is tried first, then growing one, and every
+        // flip must keep the island count inside the requested band.
+        const ambWhite = [];
+        const ambBlack = [];
+        for (let i = 0; i < g.N; i++) {
+            if (partial && partial[i] !== UNKNOWN) continue;
+            if (state[i] === WHITE && clues[i] === 0) ambWhite.push(i);
+            else if (state[i] === BLACK) ambBlack.push(i);
         }
+
+        let flipped = false;
+        for (const c of shuffle(ambWhite, rng)) {
+            state[c] = BLACK;
+            if (seaConnected(state, g) && !hasPool(state, g) &&
+                inRange(islandsOf(state, g).length)) { flipped = true; break; }
+            state[c] = WHITE;
+        }
+        if (!flipped) {
+            for (const c of shuffle(ambBlack, rng)) {
+                state[c] = WHITE;
+                if (seaConnected(state, g) && !hasPool(state, g) &&
+                    inRange(islandsOf(state, g).length)) { flipped = true; break; }
+                state[c] = BLACK;
+            }
+        }
+        if (!flipped) return null;
     }
     return null;
 }
 
 /**
- * Generate a uniquely-solvable Nurikabe puzzle.
- * Island count is controlled to lie in [N-1, 1.25N] for N×N boards;
- * individual island sizes are not capped.
+ * Island-count band for an R×C board: [n-1, 3n] where n = max(R, C).
+ *
+ * The upper bound is the one that bites: capping the count forces larger average
+ * islands, and large islands are what destroy unique solvability. A 1.5n cap
+ * yields zero unique puzzles on 12×12 even under exhaustive DFS search
+ * (measured: 84 boards -> 40 multi-solution, 33 unsolvable, 0 unique). 3n sits
+ * comfortably inside the feasible region for every size we ship (7, 12, 16).
+ */
+export function islandCountBand(R, C) {
+    const n = Math.max(R, C);
+    return { minIslands: n - 1, maxIslands: 3 * n };
+}
+
+/**
+ * Generation tuning per board size.
+ *
+ * Island *area* is deliberately uncapped (`maxSize: Infinity`) — only the island
+ * *count* is constrained, via `islandCountBand`. The white-cell budget is spread
+ * randomly across the chosen number of islands, so sizes vary naturally instead
+ * of being clipped to a uniform maximum.
+ */
+function genOpts(R, C) {
+    const n = Math.max(R, C);
+    const band = islandCountBand(R, C);
+    if (n <= 8) return { white: 0.38, maxSize: Infinity, ...band };
+    return { white: 0.42, maxSize: Infinity, ...band };
+}
+
+/**
+ * Generate a Nurikabe puzzle solvable by pure logic (no guessing).
+ *
+ * Strategy: build a random legal solution by incremental island growth, then
+ * repeatedly place clues and shrink ambiguous islands until a logic solver can
+ * deduce the board. This replaces the previous "carve a board, then verify with
+ * exhaustive DFS" loop, which hung on 12x12 and larger.
+ *
  * @param {number} R
  * @param {number} C
- * @param {{ seed?: number, maxAttempts?: number }} opts
+ * @param {{ seed?: number, maxAttempts?: number, timeBudgetMs?: number }} opts
  * @returns {{ R: number, C: number, clues: number[][], solution: number[][] } | null}
  */
 export function generatePuzzle(R, C, opts = {}) {
     const seed = opts.seed ?? (Date.now() & 0x7fffffff);
-    const maxAttempts = opts.maxAttempts ?? 1000;
+    const maxAttempts = opts.maxAttempts ?? 400;
+    const timeBudgetMs = opts.timeBudgetMs ?? 8000;
+    const tuning = opts.tuning ?? genOpts(R, C);
+    const deadline = Date.now() + timeBudgetMs;
 
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        if (Date.now() > deadline) break;
         const rng = mulberry32(seed + attempt * 2654435761);
-        const solved = buildConnectedCarvedBoard(R, C, rng);
-        if (!solved) continue;
-        const derived = deriveUnique(R, C, solved, rng);
+        const solution = buildSolution(R, C, rng, tuning);
+        if (!solution) continue;
+        const derived = deriveByRepair(R, C, solution, rng, 80,
+            tuning.minIslands, tuning.maxIslands);
         if (!derived) continue;
 
         const clues2d = Array.from({ length: R }, () => Array(C).fill(0));

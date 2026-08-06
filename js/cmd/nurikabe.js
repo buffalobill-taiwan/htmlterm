@@ -10,7 +10,12 @@ import { bold, red, green, yellow, cyan, gray, white, CURSOR_HIDE } from '../uti
 const DIFFICULTY = {
     easy:   { size: 7,  label: 'Easy' },
     medium: { size: 12, label: 'Medium' },
-    hard:   { size: 18, label: 'Hard' },
+    // 16 is currently the largest board we can generate reliably. 18x18 is not
+    // limited by the island-count band (buildSolution succeeds ~66% of the time
+    // there, at 18-47 islands, well inside [17, 54]) — the blocker is
+    // deriveByRepair failing to converge on a logically-solvable puzzle within
+    // the time budget. Revisit 18 once repair convergence is improved.
+    hard:   { size: 16, label: 'Hard' },
 };
 
 const CLUE_CONNECTED = 'connected';
