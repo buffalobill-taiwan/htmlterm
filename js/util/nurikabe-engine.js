@@ -338,12 +338,14 @@ function pickBranch(state, g) {
     return best;
 }
 
-export function solveAll(p, limit = 2) {
+export function solveAll(p, limit = 2, maxBranches = 5000) {
     const g = geom(p.R, p.C);
     const out = [];
+    let branchCount = 0;
 
     const recurse = (state) => {
-        if (out.length >= limit) return;
+        if (out.length >= limit || branchCount >= maxBranches) return;
+        branchCount++;
         if (!propagate(state, g, p)) return;
         const cell = pickBranch(state, g);
         if (cell === -1) {
@@ -351,7 +353,7 @@ export function solveAll(p, limit = 2) {
             return;
         }
         for (const guess of [BLACK, WHITE]) {
-            if (out.length >= limit) return;
+            if (out.length >= limit || branchCount >= maxBranches) return;
             const next = state.slice();
             next[cell] = guess;
             recurse(next);
@@ -459,6 +461,11 @@ function buildConnectedCarvedBoard(R, C, rng) {
     if (seeds.length < minIslands) return null;
 
     const islands = seeds.map(s => [s]);
+    // O(1) island membership: one Set per island
+    const islandSets = seeds.map(s => new Set([s]));
+    // O(1) cell-to-island index: avoids findIndex+includes
+    const cellToIsland = new Int32Array(g.N).fill(-1);
+    for (let idx = 0; idx < seeds.length; idx++) cellToIsland[seeds[idx]] = idx;
 
     // Budget-based island size allocation: distribute ~35-45% of board cells
     // evenly among islands so each island gets a fair share (→ bigger islands)
@@ -476,6 +483,7 @@ function buildConnectedCarvedBoard(R, C, rng) {
         growing = false;
         for (let idx = 0; idx < seeds.length; idx++) {
             const isl = islands[idx];
+            const islSet = islandSets[idx];
             if (isl.length >= targetSizes[idx]) continue;
 
             const nbrs = [];
@@ -484,7 +492,8 @@ function buildConnectedCarvedBoard(R, C, rng) {
                     if (state[nb] === BLACK) {
                         let touchesOther = false;
                         for (const nbnb of g.nbrs[nb]) {
-                            if (state[nbnb] === WHITE && !isl.includes(nbnb)) {
+                            // O(1) Set lookup instead of isl.includes()
+                            if (state[nbnb] === WHITE && !islSet.has(nbnb)) {
                                 touchesOther = true;
                                 break;
                             }
@@ -500,6 +509,8 @@ function buildConnectedCarvedBoard(R, C, rng) {
                 const pick = nbrs[Math.floor(rng() * nbrs.length)];
                 state[pick] = WHITE;
                 isl.push(pick);
+                islSet.add(pick);
+                cellToIsland[pick] = idx;
                 growing = true;
             }
         }
@@ -517,7 +528,8 @@ function buildConnectedCarvedBoard(R, C, rng) {
                     let touchMultiple = false;
                     for (const nb of g.nbrs[cell]) {
                         if (state[nb] === WHITE) {
-                            const islIdx = islands.findIndex(isl => isl.includes(nb));
+                            // O(1) lookup via cellToIsland map
+                            const islIdx = cellToIsland[nb];
                             if (islIdx !== -1) {
                                 if (touchIslIdx === -1) touchIslIdx = islIdx;
                                 else if (touchIslIdx !== islIdx) { touchMultiple = true; break; }
@@ -527,6 +539,8 @@ function buildConnectedCarvedBoard(R, C, rng) {
                     if (!touchMultiple && touchIslIdx !== -1 && isBlackSafeToRemove(cell, state, g)) {
                         state[cell] = WHITE;
                         islands[touchIslIdx].push(cell);
+                        islandSets[touchIslIdx].add(cell);
+                        cellToIsland[cell] = touchIslIdx;
                         poolsFixed++;
                         break;
                     }

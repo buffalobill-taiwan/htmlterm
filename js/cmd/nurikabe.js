@@ -211,13 +211,15 @@ export class NurikabeCmd extends CmdBase {
     async _generateAsync(size, epoch) {
         const maxAttempts = size <= 7 ? 300 : size <= 12 ? 600 : 1200;
         const seed = Date.now() & 0x7fffffff;
-        for (let batch = 0; batch < maxAttempts; batch += 5) {
+        for (let attempt = 0; attempt < maxAttempts; attempt++) {
             if (epoch !== this.abortEpoch) return null;
             const puzzle = generatePuzzle(size, size, {
-                seed: seed + batch,
-                maxAttempts: 5,
+                seed: seed + attempt,
+                maxAttempts: 1,
             });
             if (puzzle) return puzzle;
+            // Yield to the UI thread every attempt so the browser never freezes.
+            // For large boards each attempt can take 10-100ms; batching would cause jank.
             await new Promise((r) => setTimeout(r, 0));
         }
         return null;
