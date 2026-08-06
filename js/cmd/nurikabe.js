@@ -15,6 +15,7 @@ const DIFFICULTY = {
 
 const CLUE_CONNECTED = 'connected';
 const CLUE_OK = 'ok';
+const CLUE_OVER = 'over';
 const CLUE_BAD = 'bad';
 
 const CELL_ISLAND = '　';
@@ -74,6 +75,7 @@ function _analyzeClueColors(size, player, clues) {
                 const n = clues[cr][cc];
                 if (connected) status[cr][cc] = CLUE_CONNECTED;
                 else if (regionSize === n) status[cr][cc] = CLUE_OK;
+                else if (regionSize > n) status[cr][cc] = CLUE_OVER;
                 else status[cr][cc] = CLUE_BAD;
             }
         }
@@ -98,7 +100,7 @@ function _analyzePools(size, player) {
 }
 
 function _styleClue(status, ch) {
-    if (status === CLUE_CONNECTED) return gray(ch);
+    if (status === CLUE_CONNECTED || status === CLUE_OVER) return gray(ch);
     if (status === CLUE_OK) return bold(white(ch));
     return red(ch);
 }
