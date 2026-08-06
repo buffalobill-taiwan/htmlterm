@@ -30,6 +30,10 @@ if (!isWide(CELL_ISLAND)) {
     throw new Error('Nurikabe island glyph must be wide (2-column).');
 }
 
+if (CELL_SEA.length !== 2) {
+    throw new Error('Nurikabe sea cells must occupy exactly 2 columns.');
+}
+
 function _formatTime(sec) {
     const m = Math.floor(sec / 60);
     const s = sec % 60;
@@ -108,6 +112,21 @@ function _styleClue(status, ch) {
     if (status === CLUE_CONNECTED || status === CLUE_OVER) return gray(ch);
     if (status === CLUE_OK) return bold(white(ch));
     return red(ch);
+}
+
+/**
+ * Clue styling under the cursor.
+ *
+ * Cannot reuse `_styleClue` + `\x1B[7m`: inverse swaps the clue's own foreground
+ * colour into the background, so the digit ends up drawn in near-identical tones
+ * to the cell behind it and becomes unreadable. Instead paint an explicit bright
+ * background with a dark foreground per status, matching how the sea cells
+ * handle the cursor (`\x1B[107;30m`).
+ */
+function _styleClueCursor(status, ch) {
+    if (status === CLUE_CONNECTED || status === CLUE_OVER) return '\x1B[107;90m' + ch + '\x1B[0m';
+    if (status === CLUE_OK) return '\x1B[107;30m\x1B[1m' + ch + '\x1B[0m';
+    return '\x1B[107;31m\x1B[1m' + ch + '\x1B[0m';
 }
 
 export class NurikabeCmd extends CmdBase {
@@ -289,16 +308,22 @@ export class NurikabeCmd extends CmdBase {
         if (clue > 0) {
             const ch = formatClue(clue);
             const st = this._clueStatus[r][c];
-            const cell = bold(_styleClue(st, ch) + '\x1B[0m');
-            return isCur ? '\x1B[7m' + cell + '\x1B[0m' : cell;
+            if (isCur) return _styleClueCursor(st, ch);
+            return bold(_styleClue(st, ch) + '\x1B[0m');
         }
 
         const isSea = this._player[r][c] === BLACK;
         if (isSea) {
             const inPool = this._poolMask[r][c];
+            // Sea cells are blank, so the cursor can only be shown by changing
+            // the *background*. Keeping the pool cell red under the cursor is a
+            // no-op (bg 1 -> 1) and the cursor vanishes, so it switches to
+            // yellow: the only colour that stays distinguishable from the red
+            // pool itself (3.4:1), from the white normal-sea cursor (1.7:1) and
+            // from unhighlighted sea (2.4:1), while still reading as a warning.
             if (isCur) {
                 return inPool
-                    ? '\x1B[41;97m' + CELL_SEA + '\x1B[0m'
+                    ? '\x1B[43m' + CELL_SEA + '\x1B[0m'
                     : '\x1B[107;30m' + CELL_SEA + '\x1B[0m';
             }
             return inPool
