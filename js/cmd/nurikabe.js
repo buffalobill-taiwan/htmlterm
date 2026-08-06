@@ -8,9 +8,9 @@ import { isWide } from '../util/unicode-width.js';
 import { bold, red, green, yellow, cyan, gray, white, CURSOR_HIDE } from '../util/sgr.js';
 
 const DIFFICULTY = {
-    easy:   { size: 7,  maxIsland: 8,  label: 'Easy' },
-    medium: { size: 12, maxIsland: 13, label: 'Medium' },
-    hard:   { size: 18, maxIsland: 16, label: 'Hard' },
+    easy:   { size: 7,  label: 'Easy' },
+    medium: { size: 12, label: 'Medium' },
+    hard:   { size: 18, label: 'Hard' },
 };
 
 const CLUE_CONNECTED = 'connected';
@@ -173,7 +173,7 @@ export class NurikabeCmd extends CmdBase {
 
         this.holdBusy();
         const epoch = this.abortEpoch;
-        const puzzle = await this._generateAsync(cfg.size, cfg.maxIsland, epoch);
+        const puzzle = await this._generateAsync(cfg.size, epoch);
         this.releaseBusy();
 
         if (this.closed || epoch !== this.abortEpoch) return;
@@ -208,13 +208,12 @@ export class NurikabeCmd extends CmdBase {
         }, 1000);
     }
 
-    async _generateAsync(size, maxIsland, epoch) {
+    async _generateAsync(size, epoch) {
         const maxAttempts = size <= 7 ? 300 : size <= 12 ? 600 : 1200;
         const seed = Date.now() & 0x7fffffff;
         for (let batch = 0; batch < maxAttempts; batch += 5) {
             if (epoch !== this.abortEpoch) return null;
             const puzzle = generatePuzzle(size, size, {
-                maxIsland,
                 seed: seed + batch,
                 maxAttempts: 5,
             });

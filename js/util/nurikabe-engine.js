@@ -425,15 +425,17 @@ function isBlackSafeToRemove(cell, state, g) {
     return reached === bCount;
 }
 
-function buildConnectedCarvedBoard(R, C, maxIsland, rng) {
+function buildConnectedCarvedBoard(R, C, rng) {
     const g = geom(R, C);
     const state = new Int8Array(g.N).fill(BLACK);
 
-    // Control island count: fewer islands → bigger each
-    const targetIslandCount = R <= 8  ? 3 + Math.floor(rng() * 3)    // 3-5
-                            : R <= 12 ? 5 + Math.floor(rng() * 4)    // 5-8
-                            :           8 + Math.floor(rng() * 5);   // 8-12
-    const minDist = R <= 8 ? 1 : 2;
+    // Control island count directly: an N×N board targets N-1..1.25N islands.
+    // No per-island max area — islands grow freely within the white budget.
+    const N = Math.min(R, C);
+    const minIslands = N - 1;
+    const maxIslands = Math.floor(N * 1.25);
+    const targetIslandCount = minIslands + Math.floor(rng() * (maxIslands - minIslands + 1));
+    const minDist = N <= 8 ? 1 : 2;
     const cand = shuffle(Array.from({ length: g.N }, (_, i) => i), rng);
     const seeds = [];
 
@@ -454,7 +456,7 @@ function buildConnectedCarvedBoard(R, C, maxIsland, rng) {
         }
     }
 
-    if (seeds.length < 2) return null;
+    if (seeds.length < minIslands) return null;
 
     const islands = seeds.map(s => [s]);
 
@@ -465,12 +467,8 @@ function buildConnectedCarvedBoard(R, C, maxIsland, rng) {
     let remainingBudget = targetTotalWhite - seeds.length;
     while (remainingBudget > 0) {
         const idx = Math.floor(rng() * seeds.length);
-        if (targetSizes[idx] < maxIsland) {
-            targetSizes[idx]++;
-            remainingBudget--;
-        } else if (targetSizes.every(s => s >= maxIsland)) {
-            break;
-        }
+        targetSizes[idx]++;
+        remainingBudget--;
     }
 
     let growing = true;
@@ -573,19 +571,20 @@ function deriveUnique(R, C, solved, rng) {
 
 /**
  * Generate a uniquely-solvable Nurikabe puzzle.
+ * Island count is controlled to lie in [N-1, 1.25N] for N×N boards;
+ * individual island sizes are not capped.
  * @param {number} R
  * @param {number} C
- * @param {{ maxIsland?: number, seed?: number, maxAttempts?: number }} opts
+ * @param {{ seed?: number, maxAttempts?: number }} opts
  * @returns {{ R: number, C: number, clues: number[][], solution: number[][] } | null}
  */
 export function generatePuzzle(R, C, opts = {}) {
-    const maxIsland = opts.maxIsland ?? 9;
     const seed = opts.seed ?? (Date.now() & 0x7fffffff);
     const maxAttempts = opts.maxAttempts ?? 1000;
 
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
         const rng = mulberry32(seed + attempt * 2654435761);
-        const solved = buildConnectedCarvedBoard(R, C, maxIsland, rng);
+        const solved = buildConnectedCarvedBoard(R, C, rng);
         if (!solved) continue;
         const derived = deriveUnique(R, C, solved, rng);
         if (!derived) continue;
