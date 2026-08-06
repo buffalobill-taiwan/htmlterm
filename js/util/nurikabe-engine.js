@@ -62,6 +62,7 @@ export function propagate(state, g, p) {
     while (changed) {
         changed = false;
 
+        // 1. Check 2x2 pools (3 black + 1 unknown => 4th is white)
         for (const [a, b, c, d] of g.squares) {
             let black = 0;
             let unknown = -1;
@@ -80,13 +81,40 @@ export function propagate(state, g, p) {
             }
         }
 
+        // 2. White regions analysis & Island Merger Prevention
         const seen = new Uint8Array(g.N);
+        const regionId = new Int32Array(g.N).fill(-1);
+        const cluedRegions = [];
+
         for (let i = 0; i < g.N; i++) {
             if (state[i] !== WHITE || seen[i]) continue;
-            const { cells, clue } = whiteRegion(state, g, p, i, seen);
-            if (clue === -1) return false;
+
+            const cells = [];
+            const stack = [i];
+            seen[i] = 1;
+            let clue = 0;
+            while (stack.length) {
+                const cur = stack.pop();
+                cells.push(cur);
+                if (p.clues[cur] > 0) {
+                    clue = clue === 0 ? p.clues[cur] : -1;
+                }
+                for (const nb of g.nbrs[cur]) {
+                    if (!seen[nb] && state[nb] === WHITE) {
+                        seen[nb] = 1;
+                        stack.push(nb);
+                    }
+                }
+            }
+
+            if (clue === -1) return false; // Two clues merged -> contradiction!
             if (clue > 0) {
                 if (cells.length > clue) return false;
+                const id = cluedRegions.length;
+                for (const cell of cells) regionId[cell] = id;
+                cluedRegions.push({ id, cells, clue });
+
+                // If island is complete -> surround all border unknown cells with black
                 if (cells.length === clue) {
                     for (const cell of cells) {
                         for (const nb of g.nbrs[cell]) {
@@ -100,26 +128,63 @@ export function propagate(state, g, p) {
             }
         }
 
-        const reach = new Uint8Array(g.N);
-        const region = new Int32Array(g.N).fill(-1);
-        const seen2 = new Uint8Array(g.N);
-        const clued = [];
+        // 3. Unknown cell bridging 2 different clued regions -> MUST BE BLACK!
         for (let i = 0; i < g.N; i++) {
-            if (state[i] !== WHITE || seen2[i]) continue;
-            const { cells, clue } = whiteRegion(state, g, p, i, seen2);
-            if (clue > 0) {
-                const id = clued.length;
-                for (const cell of cells) region[cell] = id;
-                clued.push({ id, cells, clue });
+            if (state[i] !== UNKNOWN) continue;
+            let touchId = -1;
+            let multiTouch = false;
+            for (const nb of g.nbrs[i]) {
+                const rId = regionId[nb];
+                if (rId !== -1) {
+                    if (touchId === -1) {
+                        touchId = rId;
+                    } else if (touchId !== rId) {
+                        multiTouch = true;
+                        break;
+                    }
+                }
+            }
+            if (multiTouch) {
+                state[i] = BLACK;
+                changed = true;
             }
         }
 
-        for (const { id, cells, clue } of clued) {
+        // 4. Single-option expansion for incomplete white island
+        for (const { id, cells, clue } of cluedRegions) {
+            if (cells.length < clue) {
+                const candSet = new Set();
+                for (const cell of cells) {
+                    for (const nb of g.nbrs[cell]) {
+                        if (state[nb] === UNKNOWN) {
+                            let canTouchOther = false;
+                            for (const nbnb of g.nbrs[nb]) {
+                                const rId = regionId[nbnb];
+                                if (rId !== -1 && rId !== id) {
+                                    canTouchOther = true;
+                                    break;
+                                }
+                            }
+                            if (!canTouchOther) candSet.add(nb);
+                        }
+                    }
+                }
+                if (candSet.size === 0) return false; // Impossible to complete island!
+                if (candSet.size === 1) {
+                    const forcedCell = Array.from(candSet)[0];
+                    state[forcedCell] = WHITE;
+                    changed = true;
+                }
+            }
+        }
+
+        // 5. Reachability from clues
+        const reach = new Uint8Array(g.N);
+        for (const { id, cells, clue } of cluedRegions) {
             const budget = clue - cells.length;
-            if (budget < 0) return false;
             for (const cell of cells) reach[cell] = 1;
-            if (budget === 0) continue;
-            const spent = new Float64Array(g.N).fill(Infinity);
+            if (budget <= 0) continue;
+            const spent = new Int32Array(g.N).fill(999);
             const queue = [];
             for (const cell of cells) {
                 spent[cell] = 0;
@@ -130,7 +195,7 @@ export function propagate(state, g, p) {
                 const base = spent[cur];
                 for (const nb of g.nbrs[cur]) {
                     if (state[nb] === BLACK) continue;
-                    if (state[nb] === WHITE && region[nb] !== -1 && region[nb] !== id) continue;
+                    if (state[nb] === WHITE && regionId[nb] !== -1 && regionId[nb] !== id) continue;
                     const cost = state[nb] === UNKNOWN ? 1 : 0;
                     const nd = base + cost;
                     if (nd <= budget && nd < spent[nb]) {
@@ -143,12 +208,71 @@ export function propagate(state, g, p) {
         }
 
         for (let i = 0; i < g.N; i++) {
-            if (reach[i]) continue;
-            if (state[i] === UNKNOWN) {
-                state[i] = BLACK;
-                changed = true;
-            } else if (state[i] === WHITE && region[i] === -1) {
-                return false;
+            if (!reach[i]) {
+                if (state[i] === UNKNOWN) {
+                    state[i] = BLACK;
+                    changed = true;
+                } else if (state[i] === WHITE && regionId[i] === -1) {
+                    return false;
+                }
+            }
+        }
+
+        // 6. Black Sea Connectivity Check (Bottleneck & Disconnection check)
+        let firstBlack = -1;
+        let blackCount = 0;
+        for (let i = 0; i < g.N; i++) {
+            if (state[i] === BLACK) {
+                blackCount++;
+                if (firstBlack === -1) firstBlack = i;
+            }
+        }
+
+        if (blackCount > 0) {
+            const reachedNonWhite = new Uint8Array(g.N);
+            const stack = [firstBlack];
+            reachedNonWhite[firstBlack] = 1;
+            let reachedBlackCount = 0;
+
+            while (stack.length) {
+                const cur = stack.pop();
+                if (state[cur] === BLACK) reachedBlackCount++;
+                for (const nb of g.nbrs[cur]) {
+                    if (!reachedNonWhite[nb] && state[nb] !== WHITE) {
+                        reachedNonWhite[nb] = 1;
+                        stack.push(nb);
+                    }
+                }
+            }
+
+            if (reachedBlackCount < blackCount) return false;
+
+            const blackSeen = new Uint8Array(g.N);
+            for (let i = 0; i < g.N; i++) {
+                if (state[i] === BLACK && !blackSeen[i]) {
+                    const comp = [];
+                    const bStack = [i];
+                    blackSeen[i] = 1;
+                    const unkExitSet = new Set();
+                    while (bStack.length) {
+                        const cur = bStack.pop();
+                        comp.push(cur);
+                        for (const nb of g.nbrs[cur]) {
+                            if (state[nb] === BLACK && !blackSeen[nb]) {
+                                blackSeen[nb] = 1;
+                                bStack.push(nb);
+                            } else if (state[nb] === UNKNOWN) {
+                                unkExitSet.add(nb);
+                            }
+                        }
+                    }
+                    if (blackCount > comp.length && unkExitSet.size === 0) return false;
+                    if (blackCount > comp.length && unkExitSet.size === 1) {
+                        const exitCell = Array.from(unkExitSet)[0];
+                        state[exitCell] = BLACK;
+                        changed = true;
+                    }
+                }
             }
         }
     }
@@ -268,91 +392,159 @@ function shuffle(arr, rng) {
     return arr;
 }
 
-function buildSolved(R, C, maxIsland, rng) {
-    const g = geom(R, C);
-    const state = new Int8Array(g.N).fill(WHITE);
-
-    const wouldPool = (cell) => {
-        const r = Math.floor(cell / C);
-        const c = cell % C;
-        for (const [dr, dc] of [[-1, -1], [-1, 0], [0, -1], [0, 0]]) {
-            const r0 = r + dr;
-            const c0 = c + dc;
-            if (r0 < 0 || c0 < 0 || r0 + 1 >= R || c0 + 1 >= C) continue;
-            let black = 0;
-            for (const cc of [r0 * C + c0, r0 * C + c0 + 1, (r0 + 1) * C + c0, (r0 + 1) * C + c0 + 1]) {
-                if (cc === cell || state[cc] === BLACK) black++;
-            }
-            if (black === 4) return true;
+function isBlackSafeToRemove(cell, state, g) {
+    state[cell] = WHITE;
+    let firstB = -1;
+    let bCount = 0;
+    for (let i = 0; i < g.N; i++) {
+        if (state[i] === BLACK) {
+            bCount++;
+            if (firstB === -1) firstB = i;
         }
+    }
+    if (bCount === 0) {
+        state[cell] = BLACK;
         return false;
-    };
+    }
 
-    const start = Math.floor(rng() * g.N);
-    state[start] = BLACK;
-    const black = [start];
-    const targetBlack = Math.round(g.N * (0.6 + rng() * 0.1));
-    let guard = g.N * 20;
+    const seen = new Uint8Array(g.N);
+    const stack = [firstB];
+    seen[firstB] = 1;
+    let reached = 0;
+    while (stack.length) {
+        const cur = stack.pop();
+        reached++;
+        for (const nb of g.nbrs[cur]) {
+            if (!seen[nb] && state[nb] === BLACK) {
+                seen[nb] = 1;
+                stack.push(nb);
+            }
+        }
+    }
+    state[cell] = BLACK;
+    return reached === bCount;
+}
 
-    while (black.length < targetBlack && guard-- > 0) {
-        const b = black[Math.floor(rng() * black.length)];
-        const cand = shuffle([...g.nbrs[b]], rng);
-        for (const w of cand) {
-            if (state[w] !== WHITE) continue;
-            if (wouldPool(w)) continue;
-            state[w] = BLACK;
-            black.push(w);
+function buildConnectedCarvedBoard(R, C, maxIsland, rng) {
+    const g = geom(R, C);
+    const state = new Int8Array(g.N).fill(BLACK);
+
+    // Control island count: fewer islands → bigger each
+    const targetIslandCount = R <= 8  ? 3 + Math.floor(rng() * 3)    // 3-5
+                            : R <= 12 ? 5 + Math.floor(rng() * 4)    // 5-8
+                            :           8 + Math.floor(rng() * 5);   // 8-12
+    const minDist = R <= 8 ? 1 : 2;
+    const cand = shuffle(Array.from({ length: g.N }, (_, i) => i), rng);
+    const seeds = [];
+
+    for (const cell of cand) {
+        if (seeds.length >= targetIslandCount) break;
+        let ok = true;
+        const cr = Math.floor(cell / C), cc = cell % C;
+        for (const s of seeds) {
+            const sr = Math.floor(s / C), sc = s % C;
+            if (Math.abs(sr - cr) <= minDist && Math.abs(sc - cc) <= minDist) {
+                ok = false;
+                break;
+            }
+        }
+        if (ok && isBlackSafeToRemove(cell, state, g)) {
+            seeds.push(cell);
+            state[cell] = WHITE;
+        }
+    }
+
+    if (seeds.length < 2) return null;
+
+    const islands = seeds.map(s => [s]);
+
+    // Budget-based island size allocation: distribute ~35-45% of board cells
+    // evenly among islands so each island gets a fair share (→ bigger islands)
+    const targetTotalWhite = Math.round(g.N * (0.35 + rng() * 0.1));
+    const targetSizes = seeds.map(() => 1);
+    let remainingBudget = targetTotalWhite - seeds.length;
+    while (remainingBudget > 0) {
+        const idx = Math.floor(rng() * seeds.length);
+        if (targetSizes[idx] < maxIsland) {
+            targetSizes[idx]++;
+            remainingBudget--;
+        } else if (targetSizes.every(s => s >= maxIsland)) {
             break;
         }
     }
 
-    const componentOf = (cell, seen) => {
-        const cells = [];
-        const stack = [cell];
-        seen[cell] = 1;
-        while (stack.length) {
-            const cur = stack.pop();
-            cells.push(cur);
-            for (const nb of g.nbrs[cur]) {
-                if (!seen[nb] && state[nb] === WHITE) {
-                    seen[nb] = 1;
-                    stack.push(nb);
+    let growing = true;
+    while (growing) {
+        growing = false;
+        for (let idx = 0; idx < seeds.length; idx++) {
+            const isl = islands[idx];
+            if (isl.length >= targetSizes[idx]) continue;
+
+            const nbrs = [];
+            for (const cell of isl) {
+                for (const nb of g.nbrs[cell]) {
+                    if (state[nb] === BLACK) {
+                        let touchesOther = false;
+                        for (const nbnb of g.nbrs[nb]) {
+                            if (state[nbnb] === WHITE && !isl.includes(nbnb)) {
+                                touchesOther = true;
+                                break;
+                            }
+                        }
+                        if (!touchesOther && isBlackSafeToRemove(nb, state, g)) {
+                            nbrs.push(nb);
+                        }
+                    }
+                }
+            }
+
+            if (nbrs.length > 0) {
+                const pick = nbrs[Math.floor(rng() * nbrs.length)];
+                state[pick] = WHITE;
+                isl.push(pick);
+                growing = true;
+            }
+        }
+    }
+
+    // Resolve 2x2 black pools by growing adjacent islands safely
+    for (let pass = 0; pass < 5; pass++) {
+        let poolsFixed = 0;
+        for (const [a, b, c, d] of g.squares) {
+            if (state[a] === BLACK && state[b] === BLACK &&
+                state[c] === BLACK && state[d] === BLACK) {
+                const quad = shuffle([a, b, c, d], rng);
+                for (const cell of quad) {
+                    let touchIslIdx = -1;
+                    let touchMultiple = false;
+                    for (const nb of g.nbrs[cell]) {
+                        if (state[nb] === WHITE) {
+                            const islIdx = islands.findIndex(isl => isl.includes(nb));
+                            if (islIdx !== -1) {
+                                if (touchIslIdx === -1) touchIslIdx = islIdx;
+                                else if (touchIslIdx !== islIdx) { touchMultiple = true; break; }
+                            }
+                        }
+                    }
+                    if (!touchMultiple && touchIslIdx !== -1 && isBlackSafeToRemove(cell, state, g)) {
+                        state[cell] = WHITE;
+                        islands[touchIslIdx].push(cell);
+                        poolsFixed++;
+                        break;
+                    }
                 }
             }
         }
-        return cells;
-    };
-
-    let trimGuard = g.N * 4;
-    for (;;) {
-        const seen = new Uint8Array(g.N);
-        let big = null;
-        for (let i = 0; i < g.N; i++) {
-            if (state[i] === WHITE && !seen[i]) {
-                const comp = componentOf(i, seen);
-                if (comp.length > maxIsland) {
-                    big = comp;
-                    break;
-                }
-            }
-        }
-        if (!big) break;
-        if (trimGuard-- <= 0) return null;
-        const border = shuffle(
-            big.filter((cell) => g.nbrs[cell].some((nb) => state[nb] === BLACK) && !wouldPool(cell)),
-            rng,
-        );
-        if (!border.length) return null;
-        state[border[0]] = BLACK;
-        black.push(border[0]);
+        if (poolsFixed === 0) break;
     }
 
-    const islands = [];
-    const seen = new Uint8Array(g.N);
-    for (let i = 0; i < g.N; i++) {
-        if (state[i] === WHITE && !seen[i]) islands.push(componentOf(i, seen));
+    let pools = 0;
+    for (const [a, b, c, d] of g.squares) {
+        if (state[a] === BLACK && state[b] === BLACK &&
+            state[c] === BLACK && state[d] === BLACK) pools++;
     }
-    if (islands.length < 2) return null;
+    if (pools > 0) return null;
+
     return { state, islands };
 }
 
@@ -364,7 +556,7 @@ function eqState(a, b) {
 
 function deriveUnique(R, C, solved, rng) {
     const g = geom(R, C);
-    for (let tries = 0; tries < 24; tries++) {
+    for (let tries = 0; tries < 10; tries++) {
         const clues = new Array(g.N).fill(0);
         for (const cells of solved.islands) {
             const at = cells[Math.floor(rng() * cells.length)];
@@ -389,11 +581,11 @@ function deriveUnique(R, C, solved, rng) {
 export function generatePuzzle(R, C, opts = {}) {
     const maxIsland = opts.maxIsland ?? 9;
     const seed = opts.seed ?? (Date.now() & 0x7fffffff);
-    const maxAttempts = opts.maxAttempts ?? 2000;
+    const maxAttempts = opts.maxAttempts ?? 1000;
 
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
         const rng = mulberry32(seed + attempt * 2654435761);
-        const solved = buildSolved(R, C, maxIsland, rng);
+        const solved = buildConnectedCarvedBoard(R, C, maxIsland, rng);
         if (!solved) continue;
         const derived = deriveUnique(R, C, solved, rng);
         if (!derived) continue;

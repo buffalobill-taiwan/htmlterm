@@ -10,7 +10,7 @@ import { bold, red, green, yellow, cyan, gray, white, CURSOR_HIDE } from '../uti
 const DIFFICULTY = {
     easy:   { size: 7,  maxIsland: 8,  label: 'Easy' },
     medium: { size: 12, maxIsland: 13, label: 'Medium' },
-    hard:   { size: 18, maxIsland: 21, label: 'Hard' },
+    hard:   { size: 18, maxIsland: 16, label: 'Hard' },
 };
 
 const CLUE_CONNECTED = 'connected';
@@ -209,14 +209,14 @@ export class NurikabeCmd extends CmdBase {
     }
 
     async _generateAsync(size, maxIsland, epoch) {
-        const maxAttempts = size <= 7 ? 500 : size <= 12 ? 1000 : 2000;
+        const maxAttempts = size <= 7 ? 300 : size <= 12 ? 600 : 1200;
         const seed = Date.now() & 0x7fffffff;
-        for (let batch = 0; batch < maxAttempts; batch += 10) {
+        for (let batch = 0; batch < maxAttempts; batch += 5) {
             if (epoch !== this.abortEpoch) return null;
             const puzzle = generatePuzzle(size, size, {
                 maxIsland,
                 seed: seed + batch,
-                maxAttempts: 10,
+                maxAttempts: 5,
             });
             if (puzzle) return puzzle;
             await new Promise((r) => setTimeout(r, 0));
