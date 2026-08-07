@@ -161,6 +161,8 @@ export class CmdBase {
 
     _onKey(data) {}
 
+    handleKeyUp(key) {}
+
     select(opts) {
         const renderedRef = { value: false };
         const render = opts.render || defaultGridRender(renderedRef);

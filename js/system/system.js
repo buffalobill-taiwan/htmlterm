@@ -322,6 +322,13 @@ export class SystemManager {
         return false;
     }
 
+    handleKeyUp(key) {
+        const top = this.cmdStack[this.cmdStack.length - 1];
+        if (top && top.cmd && typeof top.cmd.handleKeyUp === 'function') {
+            top.cmd.handleKeyUp(key);
+        }
+    }
+
     createDialog(DialogClass, key, opts, ...ctorArgs) {
         const pos = this._dialogPositions[key] || {};
         const dlg = new DialogClass(this.term, ...ctorArgs, {

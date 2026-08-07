@@ -17,6 +17,7 @@ const term = new Terminal(document.getElementById('screen'), {
 new SystemManager(term, cmdModule);
 term.onData = (data) => SystemManager.instance.handleInput(data);
 term.onMouse = (type, info) => SystemManager.instance.handleMouse(type, info);
+term.onKeyUp = (key) => SystemManager.instance.handleKeyUp(key);
 term.focus();
 
 window.term = term;

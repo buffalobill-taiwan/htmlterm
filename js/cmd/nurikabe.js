@@ -151,6 +151,8 @@ export class NurikabeCmd extends CmdBase {
         this._timer = 0;
         this._difficulty = null;
         this._generating = false;
+        this._spaceHeld = false;
+        this._paintTarget = null;
 
         this.open();
         term.write('\x1B[2J\x1B[1;1H');
@@ -189,6 +191,8 @@ export class NurikabeCmd extends CmdBase {
         this._clues = null;
         this._solution = null;
         this._player = null;
+        this._spaceHeld = false;
+        this._paintTarget = null;
 
         this.open();
         term.write('\x1B[2J\x1B[1;1H');
@@ -270,7 +274,7 @@ export class NurikabeCmd extends CmdBase {
 
     _drawFooter() {
         term.write('\x1B[2;1H\x1B[2K' +
-            gray('  ←↑↓→ Move   Space Toggle   [n]ew [r]estart [q]uit'));
+            gray('  ←↑↓→ Move   Space Paint (hold)   [n]ew [r]estart [q]uit'));
     }
 
     _drawBoard() {
@@ -361,6 +365,8 @@ export class NurikabeCmd extends CmdBase {
     _gameOver(won) {
         this._completed = true;
         this._won = won;
+        this._spaceHeld = false;
+        this._paintTarget = null;
         if (this._timerInterval) {
             clearInterval(this._timerInterval);
             this._timerInterval = null;
@@ -385,8 +391,26 @@ export class NurikabeCmd extends CmdBase {
         const oldC = this._cursorCol;
         this._cursorRow = nr;
         this._cursorCol = nc;
-        this._drawRow(oldR);
-        this._drawRow(nr);
+        if (this._spaceHeld) {
+            this._paintCell();
+        } else {
+            this._drawRow(oldR);
+            this._drawRow(nr);
+        }
+    }
+
+    _paintCell() {
+        const r = this._cursorRow;
+        const c = this._cursorCol;
+        if (this._clues[r][c] > 0 || this._paintTarget == null) return;
+        this._player[r][c] = this._paintTarget;
+        this._updateClueColors();
+        this._drawBoard();
+        this._checkWin();
+    }
+
+    handleKeyUp(key) {
+        if (key === ' ') this._spaceHeld = false;
     }
 
     _onKey(data) {
@@ -440,7 +464,11 @@ export class NurikabeCmd extends CmdBase {
         if (code === 0x03) { this._quit(); return; }
 
         if (code === 0x20) {
-            this._toggleCell();
+            if (!this._spaceHeld) {
+                this._spaceHeld = true;
+                this._toggleCell();
+                this._paintTarget = this._player[this._cursorRow][this._cursorCol];
+            }
             return;
         }
 
@@ -460,6 +488,8 @@ export class NurikabeCmd extends CmdBase {
         this._completed = false;
         this._won = false;
         this._timer = 0;
+        this._spaceHeld = false;
+        this._paintTarget = null;
         this._updateClueColors();
         this._render();
         if (this._timerInterval) clearInterval(this._timerInterval);
@@ -482,6 +512,8 @@ export class NurikabeCmd extends CmdBase {
             this._difficultyDialog.close();
             this._difficultyDialog = null;
         }
+        this._spaceHeld = false;
+        this._paintTarget = null;
         if (this._timerInterval) {
             clearInterval(this._timerInterval);
             this._timerInterval = null;

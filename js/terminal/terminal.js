@@ -19,6 +19,7 @@ export class Terminal {
         this.textarea = document.getElementById('hidden-input');
         this._isComposing = false;
         this.onMouse = null;
+        this.onKeyUp = null;
         this.mouseBtn = 0;
         this.mouseX = 0;
         this.mouseY = 0;
@@ -273,6 +274,7 @@ export class Terminal {
         if (this._isComposing) return;
         const code = e.keyCode;
         if (code === 16 || code === 17 || code === 18 || code === 91) return;
+        if (this.onKeyUp) this.onKeyUp(e.key);
         if (code > 15) this._focusInput();
     }
 
