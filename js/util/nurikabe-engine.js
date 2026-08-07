@@ -890,6 +890,7 @@ function genOpts(R, C) {
         white: 0.42,
         maxSize: Infinity,
         initialMinIslands: Math.ceil(n * 1.5),
+        acceptLegalCandidate: true,
         ...band,
     };
     // Large boards need to start near the top of the permitted band. Starting
