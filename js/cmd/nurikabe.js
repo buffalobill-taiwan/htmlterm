@@ -108,6 +108,35 @@ function _analyzePools(size, player) {
     return pool;
 }
 
+function _analyzeSeaConnectivity(size, player, r, c) {
+    const mask = Array.from({ length: size }, () => Array(size).fill(false));
+    if (player[r][c] !== BLACK) return mask;
+    const seen = Array.from({ length: size }, () => Array(size).fill(false));
+    const stack = [[r, c]];
+    seen[r][c] = true;
+    while (stack.length) {
+        const [cr, cc] = stack.pop();
+        mask[cr][cc] = true;
+        if (cr > 0 && !seen[cr - 1][cc] && player[cr - 1][cc] === BLACK) {
+            seen[cr - 1][cc] = true;
+            stack.push([cr - 1, cc]);
+        }
+        if (cr + 1 < size && !seen[cr + 1][cc] && player[cr + 1][cc] === BLACK) {
+            seen[cr + 1][cc] = true;
+            stack.push([cr + 1, cc]);
+        }
+        if (cc > 0 && !seen[cr][cc - 1] && player[cr][cc - 1] === BLACK) {
+            seen[cr][cc - 1] = true;
+            stack.push([cr, cc - 1]);
+        }
+        if (cc + 1 < size && !seen[cr][cc + 1] && player[cr][cc + 1] === BLACK) {
+            seen[cr][cc + 1] = true;
+            stack.push([cr, cc + 1]);
+        }
+    }
+    return mask;
+}
+
 function _styleClue(status, ch) {
     if (status === CLUE_CONNECTED || status === CLUE_OVER) return gray(ch);
     if (status === CLUE_OK) return bold(white(ch));
@@ -153,6 +182,8 @@ export class NurikabeCmd extends CmdBase {
         this._generating = false;
         this._spaceHeld = false;
         this._paintTarget = null;
+        this._connectivityHeld = false;
+        this._connectivityMask = null;
 
         this.open();
         term.write('\x1B[2J\x1B[1;1H');
@@ -193,6 +224,8 @@ export class NurikabeCmd extends CmdBase {
         this._player = null;
         this._spaceHeld = false;
         this._paintTarget = null;
+        this._connectivityHeld = false;
+        this._connectivityMask = null;
 
         this.open();
         term.write('\x1B[2J\x1B[1;1H');
@@ -274,7 +307,7 @@ export class NurikabeCmd extends CmdBase {
 
     _drawFooter() {
         term.write('\x1B[2;1H\x1B[2K' +
-            gray('  ←↑↓→ Move   Space Paint (hold)   [n]ew [r]estart [q]uit'));
+            gray('  ←↑↓→ Move   Space Paint (hold)   [c]onnectivity (hold)   [n][r][q]'));
     }
 
     _drawBoard() {
@@ -330,6 +363,9 @@ export class NurikabeCmd extends CmdBase {
                     ? '\x1B[43m' + CELL_SEA + '\x1B[0m'
                     : '\x1B[107;30m' + CELL_SEA + '\x1B[0m';
             }
+            if (this._connectivityHeld && this._connectivityMask && this._connectivityMask[r][c]) {
+                return '\x1B[104m' + CELL_SEA + '\x1B[0m';
+            }
             return inPool
                 ? '\x1B[41m' + CELL_SEA + '\x1B[0m'
                 : '\x1B[100m' + CELL_SEA + '\x1B[0m';
@@ -349,6 +385,7 @@ export class NurikabeCmd extends CmdBase {
         this._player[r][c] = this._player[r][c] === WHITE ? BLACK : WHITE;
         this._updateClueColors();
         this._drawBoard();
+        if (this._connectivityHeld) this._updateConnectivity();
         this._checkWin();
     }
 
@@ -367,6 +404,8 @@ export class NurikabeCmd extends CmdBase {
         this._won = won;
         this._spaceHeld = false;
         this._paintTarget = null;
+        this._connectivityHeld = false;
+        this._connectivityMask = null;
         if (this._timerInterval) {
             clearInterval(this._timerInterval);
             this._timerInterval = null;
@@ -391,7 +430,9 @@ export class NurikabeCmd extends CmdBase {
         const oldC = this._cursorCol;
         this._cursorRow = nr;
         this._cursorCol = nc;
-        if (this._spaceHeld && this._paintCell()) {
+        if (this._connectivityHeld) {
+            this._updateConnectivity();
+        } else if (this._spaceHeld && this._paintCell()) {
             // full board already redrawn with cursor
         } else {
             this._drawRow(oldR);
@@ -406,12 +447,23 @@ export class NurikabeCmd extends CmdBase {
         this._player[r][c] = this._paintTarget;
         this._updateClueColors();
         this._drawBoard();
+        if (this._connectivityHeld) this._updateConnectivity();
         this._checkWin();
         return true;
     }
 
+    _updateConnectivity() {
+        this._connectivityMask = _analyzeSeaConnectivity(this._size, this._player, this._cursorRow, this._cursorCol);
+        this._drawBoard();
+    }
+
     handleKeyUp(key) {
         if (key === ' ') this._spaceHeld = false;
+        if (key.toLowerCase() === 'c' && this._connectivityHeld) {
+            this._connectivityHeld = false;
+            this._connectivityMask = null;
+            this._drawBoard();
+        }
     }
 
     _onKey(data) {
@@ -478,6 +530,11 @@ export class NurikabeCmd extends CmdBase {
             if (ch === 'q') { this._quit(); return; }
             if (ch === 'n') { this._pickDifficulty(); return; }
             if (ch === 'r') { this._restart(); return; }
+            if (ch === 'c' && !this._connectivityHeld) {
+                this._connectivityHeld = true;
+                this._updateConnectivity();
+                return;
+            }
         }
     }
 
@@ -491,6 +548,8 @@ export class NurikabeCmd extends CmdBase {
         this._timer = 0;
         this._spaceHeld = false;
         this._paintTarget = null;
+        this._connectivityHeld = false;
+        this._connectivityMask = null;
         this._updateClueColors();
         this._render();
         if (this._timerInterval) clearInterval(this._timerInterval);
@@ -515,6 +574,8 @@ export class NurikabeCmd extends CmdBase {
         }
         this._spaceHeld = false;
         this._paintTarget = null;
+        this._connectivityHeld = false;
+        this._connectivityMask = null;
         if (this._timerInterval) {
             clearInterval(this._timerInterval);
             this._timerInterval = null;
