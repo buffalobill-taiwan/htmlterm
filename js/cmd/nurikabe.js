@@ -270,7 +270,7 @@ export class NurikabeCmd extends CmdBase {
 
     _drawFooter() {
         term.write('\x1B[2;1H\x1B[2K' +
-            gray('  ←↑↓→ Move   Space Toggle   [n]ew [q]uit'));
+            gray('  ←↑↓→ Move   Space Toggle   [n]ew [r]estart [q]uit'));
     }
 
     _drawBoard() {
@@ -448,7 +448,26 @@ export class NurikabeCmd extends CmdBase {
             const ch = data.toLowerCase();
             if (ch === 'q') { this._quit(); return; }
             if (ch === 'n') { this._pickDifficulty(); return; }
+            if (ch === 'r') { this._restart(); return; }
         }
+    }
+
+    _restart() {
+        const size = this._size;
+        for (let r = 0; r < size; r++)
+            for (let c = 0; c < size; c++)
+                this._player[r][c] = WHITE;
+        this._completed = false;
+        this._won = false;
+        this._timer = 0;
+        this._updateClueColors();
+        this._render();
+        if (this._timerInterval) clearInterval(this._timerInterval);
+        this._timerInterval = setInterval(() => {
+            if (this._completed || this._generating) return;
+            this._timer++;
+            this._drawHeader();
+        }, 1000);
     }
 
     _render() {
