@@ -391,8 +391,8 @@ export class NurikabeCmd extends CmdBase {
         const oldC = this._cursorCol;
         this._cursorRow = nr;
         this._cursorCol = nc;
-        if (this._spaceHeld) {
-            this._paintCell();
+        if (this._spaceHeld && this._paintCell()) {
+            // full board already redrawn with cursor
         } else {
             this._drawRow(oldR);
             this._drawRow(nr);
@@ -402,11 +402,12 @@ export class NurikabeCmd extends CmdBase {
     _paintCell() {
         const r = this._cursorRow;
         const c = this._cursorCol;
-        if (this._clues[r][c] > 0 || this._paintTarget == null) return;
+        if (this._clues[r][c] > 0 || this._paintTarget == null) return false;
         this._player[r][c] = this._paintTarget;
         this._updateClueColors();
         this._drawBoard();
         this._checkWin();
+        return true;
     }
 
     handleKeyUp(key) {

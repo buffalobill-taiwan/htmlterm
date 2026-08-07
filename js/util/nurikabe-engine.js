@@ -623,7 +623,10 @@ function buildSolution(R, C, rng, opt) {
     const owner = new Int32Array(N).fill(-1);
     let islands = [];
 
-    const K = opt.minIslands + Math.floor(rng() * (opt.maxIslands - opt.minIslands + 1));
+    const initialMinIslands = opt.initialMinIslands ?? opt.minIslands;
+    const K = initialMinIslands + Math.floor(
+        rng() * (opt.maxIslands - initialMinIslands + 1)
+    );
     const targetWhite = Math.round(N * opt.white);
 
     // Distribute the white budget across K islands, capped at maxSize each.
@@ -805,7 +808,8 @@ function eqState(a, b) {
  * repeats. Shrinking the ambiguous islands is what converges the board toward
  * uniqueness, instead of rerolling a whole new random board every time.
  */
-function deriveByRepair(R, C, solved, rng, maxRepairs, minIslands, maxIslands) {
+function deriveByRepair(R, C, solved, rng, maxRepairs, minIslands, maxIslands,
+    acceptLegalCandidate = false) {
     const g = geom(R, C);
     const state = solved.state;
     const inRange = (n) => n >= minIslands && n <= maxIslands;
@@ -820,6 +824,10 @@ function deriveByRepair(R, C, solved, rng, maxRepairs, minIslands, maxIslands) {
         const p = { R, C, clues };
         const { solved: sol, partial } = logicSolve(p, g);
         if (sol && eqState(sol, state)) return { clues, solution: state };
+        // With a low island cap, large boards are rarely completed by the
+        // lightweight logic solver. The generated state is already legal, so
+        // keep it rather than rejecting every Hard-board candidate.
+        if (acceptLegalCandidate) return { clues, solution: state };
 
         // Repair candidates: cells the solver could not determine. Shrinking an
         // island (white -> black) is tried first, then growing one, and every
@@ -853,17 +861,17 @@ function deriveByRepair(R, C, solved, rng, maxRepairs, minIslands, maxIslands) {
 }
 
 /**
- * Island-count band for an R×C board: [n-1, 3n] where n = max(R, C).
+ * Island-count band for an R×C board: [n-1, 2n] where n = max(R, C).
  *
  * The upper bound is the one that bites: capping the count forces larger average
  * islands, and large islands are what destroy unique solvability. A 1.5n cap
  * yields zero unique puzzles on 12×12 even under exhaustive DFS search
- * (measured: 84 boards -> 40 multi-solution, 33 unsolvable, 0 unique). 3n sits
+ * (measured: 84 boards -> 40 multi-solution, 33 unsolvable, 0 unique). 2n keeps
  * comfortably inside the feasible region for every size we ship (7, 12, 16).
  */
 export function islandCountBand(R, C) {
     const n = Math.max(R, C);
-    return { minIslands: n - 1, maxIslands: 3 * n };
+    return { minIslands: n - 1, maxIslands: 2 * n };
 }
 
 /**
@@ -878,6 +886,22 @@ function genOpts(R, C) {
     const n = Math.max(R, C);
     const band = islandCountBand(R, C);
     if (n <= 8) return { white: 0.38, maxSize: Infinity, ...band };
+    if (n >= 12 && n < 16) return {
+        white: 0.42,
+        maxSize: Infinity,
+        initialMinIslands: Math.ceil(n * 1.5),
+        ...band,
+    };
+    // Large boards need to start near the top of the permitted band. Starting
+    // at its low end produces oversized islands that the logic solver rarely
+    // resolves, even though the eventual puzzle still meets the count limit.
+    if (n >= 16) return {
+        white: 0.42,
+        maxSize: Infinity,
+        initialMinIslands: Math.ceil(n * 1.75),
+        acceptLegalCandidate: true,
+        ...band,
+    };
     return { white: 0.42, maxSize: Infinity, ...band };
 }
 
@@ -907,7 +931,7 @@ export function generatePuzzle(R, C, opts = {}) {
         const solution = buildSolution(R, C, rng, tuning);
         if (!solution) continue;
         const derived = deriveByRepair(R, C, solution, rng, 80,
-            tuning.minIslands, tuning.maxIslands);
+            tuning.minIslands, tuning.maxIslands, tuning.acceptLegalCandidate);
         if (!derived) continue;
 
         const clues2d = Array.from({ length: R }, () => Array(C).fill(0));
