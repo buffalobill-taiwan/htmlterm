@@ -115,6 +115,10 @@ puyo is blocked, but `_lock` checks `_hasFloatingPuyo()` and an unsupported puyo
 independently (puyos never float). Classic chain-power scoring (1,8,16,32,64,96…),
 white pop-flash animation, `Chain N!` +score overlay, landing ghost, next-pair preview, pause/game-over
 overlays, SelectDialog difficulty picker, `--easy|--medium|--hard` flags.
+Landing ghost (`_ghostLanding`) simulates the post-lock settle: the pair drops as a
+rigid unit to its lowest fitting row, then each puyo's independent gravity fall is
+applied on a scratch board — so an overhang ghost shows the two puyos at their final
+settled spots, which may be non-adjacent.
 
 ## Architecture
 

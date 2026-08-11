@@ -402,11 +402,42 @@ export class PuyoCmd extends CmdBase {
         return this._fitsAt(x, y + 1, rot);
     }
 
-    _ghostY() {
-        const { x, y, rot } = this._current;
+    // Final landing positions accounting for post-lock gravity. The pair
+    // drops as a rigid unit to its lowest fitting row, but an unsupported
+    // puyo keeps falling independently (see _lock / _hasFloatingPuyo), so the
+    // two may settle non-adjacent. Simulates on a scratch board and returns
+    // the settled [row, col] of each puyo.
+    _ghostLanding() {
+        const { colors, x, y, rot } = this._current;
+        const tailX = x + TAIL[rot][0];
         let gy = y;
         while (this._fitsAt(x, gy + 1, rot)) gy++;
-        return gy;
+        const tailY = gy + TAIL[rot][1];
+
+        const sim = _createBoard();
+        for (let r = 0; r < ROWS; r++)
+            for (let c = 0; c < COLS; c++) sim[r][c] = this._board[r][c];
+        const a = [gy, x];
+        const b = [tailY, tailX];
+        sim[a[0]][a[1]] = colors[0];
+        sim[b[0]][b[1]] = colors[1];
+
+        let moved = true;
+        while (moved) {
+            moved = false;
+            const spots = [a, b];
+            for (let i = 0; i < 2; i++) {
+                const p = spots[i];
+                if (p[0] + 1 >= ROWS) continue;
+                if (sim[p[0] + 1][p[1]] === 0) {
+                    sim[p[0]][p[1]] = 0;
+                    p[0]++;
+                    sim[p[0]][p[1]] = colors[i];
+                    moved = true;
+                }
+            }
+        }
+        return [a, b];
     }
 
     _move(dx) {
@@ -770,19 +801,18 @@ export class PuyoCmd extends CmdBase {
             }
         }
 
-        // Current pair + landing ghost
+        // Current pair + landing ghost (ghost shows the final settled spot of
+        // each puyo after its own gravity fall — the two may be non-adjacent)
         if (this._current && !this._completed && !this._paused && !this._resolving) {
             const { colors, x, y, rot } = this._current;
             const tailX = x + TAIL[rot][0], tailY = y + TAIL[rot][1];
             this._setPuyo(buf, x, y, colors[0]);
             this._setPuyo(buf, tailX, tailY, colors[1]);
 
-            const gy = this._ghostY();
-            if (gy !== y) {
-                const occ = new Set([y * COLS + x, tailY * COLS + tailX]);
-                this._setGhost(buf, x, gy, colors[0], occ);
-                this._setGhost(buf, x + TAIL[rot][0], gy + TAIL[rot][1], colors[1], occ);
-            }
+            const [ga, gb] = this._ghostLanding();
+            const occ = new Set([y * COLS + x, tailY * COLS + tailX]);
+            this._setGhost(buf, ga[1], ga[0], colors[0], occ);
+            this._setGhost(buf, gb[1], gb[0], colors[1], occ);
         }
 
         // Borders from pre-rendered caches
