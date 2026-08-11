@@ -12,7 +12,7 @@ Live demo: <https://buffalobill-taiwan.github.io/htmlterm/>
 | Terminal core (Screen/Parser/Renderer) | Complete |
 | Overlay compositing (widgets + dialogs) | Complete |
 | Frame-stack shell + Typewriter | Complete |
-| Demo commands | 27 registered (see Command Architecture) |
+| Demo commands | 28 registered (see Command Architecture) |
 | Automated tests | Excluded — manual testing only |
 | CI | Excluded — not planned |
 
@@ -119,6 +119,17 @@ Landing ghost (`_ghostLanding`) simulates the post-lock settle: the pair drops a
 rigid unit to its lowest fitting row, then each puyo's independent gravity fall is
 applied on a scratch board — so an overhang ghost shows the two puyos at their final
 settled spots, which may be non-adjacent.
+Gweled (Aug 2026): `js/cmd/gweled.js` added — Bejeweled-style match-3 on a classic 8×8 field
+rendered as wide `⬤` cells (same glyph as Puyo). Space selects the gem under the cursor (white bg),
+arrow keys then swap it with the neighbor in that direction (blue bg = cursor, no selection when
+cursors elsewhere). No-match swaps animate back after 250ms. Puyo-style chain pipeline: run-based
+`_findMatches` (horizontal+vertical runs ≥3, `_swapCreatesMatch`/`_hasAnyMove` for move detection),
+white pop-flash, one-row-at-a-time gravity fall (40ms/row via `_fallStep` → `_fallOneStep`), random
+top refill (`_spawnGems`), then re-check — `Chain N!` +score overlay when `_chain≥2`. Classic
+chain-power scoring table + color/group bonuses scaled to the color pool. `_genBoard` guarantees no
+initial match AND ≥1 valid move; `_checkNoMoves` reshuffles (with a brief "No moves! Reshuffling"
+overlay) when the board stalls. Difficulty limits color pool: easy=5, medium=6, hard=7. Pause overlay,
+SelectDialog difficulty picker, `--easy|--medium|--hard` flags, N=new game.
 
 ## Architecture
 
@@ -578,14 +589,15 @@ js/cmd/
 ├── wordle.js          WordleCmd   — play Wordle (fullwidth display, 3-row keyboard, 16k valid words)
 ├── valid-words.js     Auto-generated 15926-word guess dictionary
 ├── puyo.js            PuyoCmd     — play Puyo Puyo (wide ⬤ cells, no-overhang column gravity, chain elimination, 3-5 colors)
+├── gweled.js          GweledCmd   — play Gweled (Bejeweled match-3, space-select then arrow-swap, chain cascade, 5-7 colors)
 ├── art/               Static pixel data modules (adam, blacklotus, glaneuses, anime, …)
 └── widgets/
     ├── ClockWidget.js
     └── DVDWidget.js
 ```
 
-**27 registered commands:** `5willow`, `anime`, `art`, `ascii`, `astrology`, `calc`, `clear`, `clock`,
-`cowsay`, `date`, `dvd`, `echo`, `flash`, `game2048`, `help`, `menu`,
+**28 registered commands:** `5willow`, `anime`, `art`, `ascii`, `astrology`, `calc`, `clear`, `clock`,
+`cowsay`, `date`, `dvd`, `echo`, `flash`, `game2048`, `gweled`, `help`, `menu`,
 `mbti`, `minesw`, `nurikabe`, `puyo`, `quiz`, `sleep`, `snake`, `sudoku`, `tetris`, `time`, `wordle`
 
 **CmdBase contract:**
@@ -1052,6 +1064,7 @@ draw() {
 - `tetris.js`: Tetris game (SRS rotation, wall kicks, T-Spin detection, ghost piece, hold, combo, B2B, lock delay, line-clear flash, 2×1 cell rendering)
 - `wordle.js`: WordleCmd — play Wordle (fullwidth uppercase display, box-drawing grid, 100ms left-to-right color reveal, 3-row on-screen keyboard with per-key state, 799-word answer pool)
 - `puyo.js`: PuyoCmd — play Puyo Puyo (wide ⬤ cells, no-overhang column gravity, chain elimination, classic chain-power scoring, 3-5 colors by difficulty)
+- `gweled.js`: GweledCmd — play Gweled (Bejeweled match-3, space-select then arrow-swap, run-based chain cascade, classic chain-power scoring, 5-7 colors by difficulty)
 - `valid-words.js`: Auto-generated 15926-word guess dictionary
 
 ## Command Development Templates
