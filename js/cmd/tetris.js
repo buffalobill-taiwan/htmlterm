@@ -207,7 +207,7 @@ function _buildStaticSidebar() {
     vb.writeStr(13, 0, gray('─'.repeat(16)));
     // Rows 14–16 are dynamic (score/level/lines) — leave null
     vb.writeStr(17, 0, gray('─'.repeat(16)));
-    vb.writeStr(18, 0, gray(' ←↑↓→ Move'));
+    vb.writeStr(18, 0, gray(' ←↑↓→ Move  Z/X'));
     vb.writeStr(19, 0, gray(' Space  Drop'));
     vb.writeStr(20, 0, gray(' H Hold  P Pause'));
     vb.writeStr(21, 0, gray(' Q Quit'));
@@ -565,10 +565,10 @@ export class TetrisCmd extends CmdBase {
         return false;
     }
 
-    _rotate() {
+    _rotate(dir = 1) {
         if (!this._current) return false;
         const { type, rot, x, y } = this._current;
-        const newRot = (rot + 1) % 4;
+        const newRot = (rot + (dir < 0 ? 3 : 1)) % 4;
         if (type === 'O') return false;
         const kicks = type === 'I' ? KICKS_I : KICKS_3x3;
         const key = rot + '>' + newRot;
@@ -825,7 +825,7 @@ export class TetrisCmd extends CmdBase {
 
         if (code === 0x1B) {
             const s = typeof data === 'string' ? data : '';
-            if (s === '\x1B[A') { this._rotate(); return; }
+            if (s === '\x1B[A') { this._rotate(1); return; }
             if (s === '\x1B[B') { this._softDrop(); return; }
             if (s === '\x1B[D') { if (this._move(-1, 0)) this._renderBoard(); return; }
             if (s === '\x1B[C') { if (this._move(1, 0)) this._renderBoard(); return; }
@@ -844,6 +844,8 @@ export class TetrisCmd extends CmdBase {
 
         if (typeof data === 'string') {
             const ch = data.toLowerCase();
+            if (ch === 'z') { this._rotate(-1); return; }
+            if (ch === 'x') { this._rotate(1); return; }
             if (ch === 'h') { this._hold(); return; }
             if (ch === 'p') { this._pause(); return; }
             if (ch === 'q') { this._quit(); return; }
