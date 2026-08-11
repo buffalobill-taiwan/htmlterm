@@ -60,9 +60,10 @@ export class SystemManager {
             const name = Cls.commandName;
             const help = Cls.help;
             const menu = Cls.menu;
+            const usage = Cls.usage;
             this._cmdInstances[name] = cmd;
             this.commands[name] = cmd.execute.bind(cmd);
-            this.cmdList.push({ name, help });
+            this.cmdList.push({ name, help, usage });
             if (menu) this.menuItems.push({ name, desc: menu });
         }
         this.cmdList.sort((a, b) => a.name.localeCompare(b.name));
