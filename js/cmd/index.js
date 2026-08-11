@@ -28,4 +28,5 @@ export { Game2048Cmd } from './game2048.js';
 export { SnakeCmd } from './snake.js';
 export { WordleCmd } from './wordle.js';
 export { NurikabeCmd } from './nurikabe.js';
+export { PuyoCmd } from './puyo.js';
 

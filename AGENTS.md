@@ -12,7 +12,7 @@ Live demo: <https://buffalobill-taiwan.github.io/htmlterm/>
 | Terminal core (Screen/Parser/Renderer) | Complete |
 | Overlay compositing (widgets + dialogs) | Complete |
 | Frame-stack shell + Typewriter | Complete |
-| Demo commands | 23 registered (see Command Architecture) |
+| Demo commands | 27 registered (see Command Architecture) |
 | Automated tests | Excluded — manual testing only |
 | CI | Excluded — not planned |
 
@@ -103,6 +103,16 @@ Wordle (Jul 2026): `js/cmd/wordle.js` added — full Wordle clone with fullwidth
 box-drawing grid borders, 100ms left-to-right color reveal animation, 3-row on-screen keyboard
 with per-key state tracking (green/yellow/gray), 799-word answer pool, 15926-word guess validation,
 Ctrl+C/ESC/q to close, n to start a new game. `js/cmd/valid-words.js` auto-generated.
+Puyo (Aug 2026): `js/cmd/puyo.js` added — Puyo Puyo with chain elimination. 6×12 classic field
+rendered as single wide `⬤` cells (2 terminal columns, snake-style continuation cells). Difficulty
+limits color pool: easy=3 colors, medium=4, hard=5 (gravity 900/650/450ms). Column-based gravity (each
+puyo falls straight down its own column — matches real Puyo Puyo, no gaps can remain) drives authentic
+chains; after a pop the survivors **visibly fall one row at a time** (40ms/row via `_fallStep` →
+`_fallOneStep`) until settled, then chain detection runs. No overhangs: a rigid pair stops when either
+puyo is blocked, but `_lock` checks `_hasFloatingPuyo()` and an unsupported puyo keeps falling
+independently (puyos never float). Classic chain-power scoring (1,8,16,32,64,96…),
+white pop-flash animation, `Chain N!` +score overlay, landing ghost, next-pair preview, pause/game-over
+overlays, SelectDialog difficulty picker, `--easy|--medium|--hard` flags.
 
 ## Architecture
 
@@ -561,15 +571,16 @@ js/cmd/
 ├── tetris.js          Tetris      — play Tetris (SRS rotation, wall kicks, T-Spin, ghost, hold, combo, B2B, lock delay, line-flash)
 ├── wordle.js          WordleCmd   — play Wordle (fullwidth display, 3-row keyboard, 16k valid words)
 ├── valid-words.js     Auto-generated 15926-word guess dictionary
+├── puyo.js            PuyoCmd     — play Puyo Puyo (wide ⬤ cells, no-overhang column gravity, chain elimination, 3-5 colors)
 ├── art/               Static pixel data modules (adam, blacklotus, glaneuses, anime, …)
 └── widgets/
     ├── ClockWidget.js
     └── DVDWidget.js
 ```
 
-**23 registered commands:** `5willow`, `anime`, `art`, `ascii`, `astrology`, `calc`, `clear`, `clock`,
-`cowsay`, `date`, `dvd`, `echo`, `flash`, `help`, `menu`,
-`mbti`, `minesweeper`, `quiz`, `sleep`, `sudoku`, `tetris`, `time`, `wordle`
+**27 registered commands:** `5willow`, `anime`, `art`, `ascii`, `astrology`, `calc`, `clear`, `clock`,
+`cowsay`, `date`, `dvd`, `echo`, `flash`, `game2048`, `help`, `menu`,
+`mbti`, `minesw`, `nurikabe`, `puyo`, `quiz`, `sleep`, `snake`, `sudoku`, `tetris`, `time`, `wordle`
 
 **CmdBase contract:**
 
@@ -1034,6 +1045,7 @@ draw() {
 - `sudoku.js`: Sudoku puzzle game (backtracking generator, grid rendering, custom `_onKey`, auto-check, timer)
 - `tetris.js`: Tetris game (SRS rotation, wall kicks, T-Spin detection, ghost piece, hold, combo, B2B, lock delay, line-clear flash, 2×1 cell rendering)
 - `wordle.js`: WordleCmd — play Wordle (fullwidth uppercase display, box-drawing grid, 100ms left-to-right color reveal, 3-row on-screen keyboard with per-key state, 799-word answer pool)
+- `puyo.js`: PuyoCmd — play Puyo Puyo (wide ⬤ cells, no-overhang column gravity, chain elimination, classic chain-power scoring, 3-5 colors by difficulty)
 - `valid-words.js`: Auto-generated 15926-word guess dictionary
 
 ## Command Development Templates
