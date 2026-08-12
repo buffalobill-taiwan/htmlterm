@@ -12,7 +12,7 @@ Live demo: <https://buffalobill-taiwan.github.io/htmlterm/>
 | Terminal core (Screen/Parser/Renderer) | Complete |
 | Overlay compositing (widgets + dialogs) | Complete |
 | Frame-stack shell + Typewriter | Complete |
-| Demo commands | 28 registered (see Command Architecture) |
+| Demo commands | 29 registered (see Command Architecture) |
 | Automated tests | Excluded — manual testing only |
 | CI | Excluded — not planned |
 
@@ -130,6 +130,26 @@ chain-power scoring table + color/group bonuses scaled to the color pool. `_genB
 initial match AND ≥1 valid move; `_checkNoMoves` reshuffles (with a brief "No moves! Reshuffling"
 overlay) when the board stalls. Difficulty limits color pool: easy=5, medium=6, hard=7. Pause overlay,
 SelectDialog difficulty picker, `--easy|--medium|--hard` flags, N=new game.
+Klotski (Aug 2026): `js/cmd/klotski.js` added — 華容道 sliding-block puzzle with 11 classic fayaa
+layouts (比翼橫空 28 … 層層設防 102 mini steps). 4×5 board rendered as 2 terminal cols per logical cell;
+each piece shows its general's full name (曹 red 2×2 rendered via clip-cell big mode — same 4×2 window as
+`echo --big '曹'`; 關羽/關平/關興/關索/關統 on 2×1 horizontals, 張飛/趙雲/馬超/黃忠 on 1×2 verticals,
+兵 white soldiers) on a dark themed tile
+background (256-color palette: 曹 bg52, 關 bg22, 張 bg17, 趙 bg23, 馬 bg58, 黃 bg53, 兵 bg236; 關家 text
+colors are distinct per person — 關羽 white q15, 關平 gold q220, 關興 orange q214, 關索 coral q209,
+關統 turquoise q80) so pieces
+read as distinct tiles. Custom LevelSelectDialog lists
+編號/名稱/步數 with ↑↓ highlight bar. Space selects the block under the cursor (white bg), arrows slide
+it one cell at a time — consecutive slides of the same block (regardless of direction) count as a single
+move (run-based, matching fayaa step counts); Z undo reverts the whole run, P pause, N back to level
+menu, Q/ESC/Ctrl+C quit. Cursor shows as a blue highlight on the whole block, or as a blue 2-wide square
+on an empty cell. On winning (曹's top-left reaches (3,1)) a 300ms rAF animation slides the 曹 tile down
+2 rows off the board bottom (drawn via a dedicated `_rootSlotCao` overlay slot, blitted last) before the
+Win overlay (恭喜通關!) appears showing 步數/目標 with ★
+if under the fayaa record, plus time. Naming rule: verticals 1×2 get 張飛/趙雲/馬超/黃忠 in scan order,
+horizontals 2×1 get 關羽/關平/關興/關索/關統 in scan order. Sidebar shows
+關卡/步數/目標/時間 + controls, 1s timer, `term.writeVB` compositing (no overlay), no animation loop
+(renders only on input/timer).
 
 ## Architecture
 
@@ -590,14 +610,15 @@ js/cmd/
 ├── valid-words.js     Auto-generated 15926-word guess dictionary
 ├── puyo.js            PuyoCmd     — play Puyo Puyo (wide ⬤ cells, no-overhang column gravity, chain elimination, 3-5 colors)
 ├── gweled.js          GweledCmd   — play Gweled (Bejeweled match-3, space-select then arrow-swap, chain cascade, 5-7 colors)
+├── klotski.js         KlotskiCmd  — play Klotski 華容道 (11 fayaa layouts, space-select then arrow-slide, undo, 1 cell = 1 move)
 ├── art/               Static pixel data modules (adam, blacklotus, glaneuses, anime, …)
 └── widgets/
     ├── ClockWidget.js
     └── DVDWidget.js
 ```
 
-**28 registered commands:** `5willow`, `anime`, `art`, `ascii`, `astrology`, `calc`, `clear`, `clock`,
-`cowsay`, `date`, `dvd`, `echo`, `flash`, `game2048`, `gweled`, `help`, `menu`,
+**29 registered commands:** `5willow`, `anime`, `art`, `ascii`, `astrology`, `calc`, `clear`, `clock`,
+`cowsay`, `date`, `dvd`, `echo`, `flash`, `game2048`, `gweled`, `help`, `klotski`, `menu`,
 `mbti`, `minesw`, `nurikabe`, `puyo`, `quiz`, `sleep`, `snake`, `sudoku`, `tetris`, `time`, `wordle`
 
 **CmdBase contract:**
@@ -1065,6 +1086,7 @@ draw() {
 - `wordle.js`: WordleCmd — play Wordle (fullwidth uppercase display, box-drawing grid, 100ms left-to-right color reveal, 3-row on-screen keyboard with per-key state, 799-word answer pool)
 - `puyo.js`: PuyoCmd — play Puyo Puyo (wide ⬤ cells, no-overhang column gravity, chain elimination, classic chain-power scoring, 3-5 colors by difficulty)
 - `gweled.js`: GweledCmd — play Gweled (Bejeweled match-3, space-select then arrow-swap, run-based chain cascade, classic chain-power scoring, 5-7 colors by difficulty)
+- `klotski.js`: KlotskiCmd — play Klotski 華容道 (11 fayaa layouts, decode-by-bounding-box, space-select then arrow-slide, undo, win overlay, pause, 1s timer)
 - `valid-words.js`: Auto-generated 15926-word guess dictionary
 
 ## Command Development Templates

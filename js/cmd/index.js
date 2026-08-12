@@ -30,4 +30,5 @@ export { WordleCmd } from './wordle.js';
 export { NurikabeCmd } from './nurikabe.js';
 export { PuyoCmd } from './puyo.js';
 export { GweledCmd } from './gweled.js';
+export { KlotskiCmd } from './klotski.js';
 
