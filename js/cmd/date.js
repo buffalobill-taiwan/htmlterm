@@ -7,4 +7,5 @@ export class DateCmd extends CmdBase {
     static get commandName() { return 'date'; }
     static get help() { return 'Show current date/time'; }
     static get menu() { return 'Current Date/Time'; }
+    static get usage() { return 'date'; }
 }

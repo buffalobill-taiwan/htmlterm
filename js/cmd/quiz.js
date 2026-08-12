@@ -31,6 +31,7 @@ export class Quiz extends CmdBase {
     static get commandName() { return 'quiz'; }
     static get help() { return 'Math quiz'; }
     static get menu() { return 'Math Quiz'; }
+    static get usage() { return 'quiz'; }
 
     static openMenuDialog() {
         const { a, b, op, answer } = Quiz._genQuestion();

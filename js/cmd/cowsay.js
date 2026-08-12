@@ -65,4 +65,5 @@ export class Cowsay extends CmdBase {
     static get commandName() { return 'cowsay'; }
     static get help() { return 'Let a cow speak'; }
     static get menu() { return 'Talking Cow'; }
+    static get usage() { return 'cowsay [text...]'; }
 }

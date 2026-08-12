@@ -16,6 +16,7 @@ export class Art extends CmdBase {
     static get commandName() { return 'art'; }
     static get help() { return 'Render ASCII art from a random artwork'; }
     static get menu() { return 'ASCII art'; }
+    static get usage() { return 'art'; }
 
     async execute(args) {
         const loader = ARTWORKS[Math.floor(Math.random() * ARTWORKS.length)];

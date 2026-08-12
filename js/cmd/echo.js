@@ -21,4 +21,5 @@ export class Echo extends CmdBase {
     static get commandName() { return 'echo'; }
     static get help() { return 'Echo text'; }
     static get menu() { return null; }
+    static get usage() { return 'echo [--big] text...'; }
 }

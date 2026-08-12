@@ -392,4 +392,5 @@ export class WordleCmd extends CmdBase {
     static get commandName() { return 'wordle'; }
     static get help() { return 'Play Wordle — guess the 5-letter word'; }
     static get menu() { return 'Wordle'; }
+    static get usage() { return 'wordle'; }
 }

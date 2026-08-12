@@ -214,4 +214,5 @@ export class MbtiCmd extends CmdBase {
     static get commandName() { return 'mbti'; }
     static get help() { return 'MBTI personality test (interactive)'; }
     static get menu() { return 'MBTI Personality Test'; }
+    static get usage() { return 'mbti'; }
 }

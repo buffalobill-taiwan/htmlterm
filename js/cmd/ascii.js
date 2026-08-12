@@ -25,4 +25,5 @@ export class Ascii extends CmdBase {
     static get commandName() { return 'ascii'; }
     static get help() { return 'Show ANSI color chart'; }
     static get menu() { return 'ANSI Color Chart'; }
+    static get usage() { return 'ascii'; }
 }

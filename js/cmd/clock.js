@@ -8,4 +8,5 @@ export class ClockCmd extends CmdBase {
     static get commandName() { return 'clock'; }
     static get help() { return 'Toggle TSR clock widget'; }
     static get menu() { return 'TSR clock (top-right)'; }
+    static get usage() { return 'clock'; }
 }

@@ -13,4 +13,5 @@ export class FiveWillow extends CmdBase {
     static get commandName() { return '5willow'; }
     static get help() { return 'Print 五柳先生傳'; }
     static get menu() { return '五柳先生傳'; }
+    static get usage() { return '5willow [--big]'; }
 }

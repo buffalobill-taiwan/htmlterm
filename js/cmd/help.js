@@ -35,4 +35,5 @@ export class Help extends CmdBase {
     static get commandName() { return 'help'; }
     static get help() { return 'Show command list; help <cmd> for details'; }
     static get menu() { return 'Available Commands'; }
+    static get usage() { return 'help [cmd]'; }
 }

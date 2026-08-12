@@ -7,4 +7,5 @@ export class Clear extends CmdBase {
     static get commandName() { return 'clear'; }
     static get help() { return 'Clear the screen'; }
     static get menu() { return 'Clear Screen'; }
+    static get usage() { return 'clear'; }
 }

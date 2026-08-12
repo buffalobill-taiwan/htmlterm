@@ -120,4 +120,5 @@ export class AstrologyCmd extends CmdBase {
     static get commandName() { return 'astrology'; }
     static get help() { return 'Today\'s horoscope for your zodiac sign'; }
     static get menu() { return 'Astrology Horoscope'; }
+    static get usage() { return 'astrology'; }
 }

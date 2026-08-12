@@ -47,4 +47,5 @@ export class TimeCmd extends CmdBase {
     static get commandName() { return 'time'; }
     static get help() { return 'Measure execution time of a command'; }
     static get menu() { return 'Time a Command'; }
+    static get usage() { return 'time <command> [args...]'; }
 }

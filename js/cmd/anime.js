@@ -23,6 +23,7 @@ export class AnimeCmd extends CmdBase {
     static get commandName() { return 'anime'; }
     static get help() { return 'Play anime frames (124 frames, 30fps, Ctrl+C to stop)'; }
     static get menu() { return 'Anime player'; }
+    static get usage() { return 'anime'; }
 
     async execute(args) {
         const { default: data } = await import('./art/anime.js');
