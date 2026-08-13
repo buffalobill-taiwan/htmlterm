@@ -2,6 +2,20 @@ import { term } from '../system/sys.js';
 import { CmdBase } from './CmdBase.js';
 import { bold, gray, yellow, CURSOR_HIDE } from '../util/sgr.js';
 import { VirtualBuffer } from '../util/VirtualBuffer.js';
+import { isWide } from '../util/display-width.js';
+
+const FW_DIGITS = '０１２３４５６７８９';
+
+function _tileStr(n) {
+    const s = String(n);
+    return s.length === 1 ? FW_DIGITS[parseInt(s, 10)] : s;
+}
+
+function _tileWidth(str) {
+    let w = 0;
+    for (let i = 0; i < str.length; i++) w += isWide(str[i]) ? 2 : 1;
+    return w;
+}
 
 const SIZE = 4;
 const CELL_W = 6;
@@ -212,7 +226,7 @@ function _buildTilePalette() {
     for (const v of Object.keys(TILE_COLORS)) {
         const n = parseInt(v, 10);
         const { fg, bg } = TILE_COLORS[n];
-        const ch = n > 0 ? String(n) : ' ';
+        const ch = n > 0 ? _tileStr(n) : ' ';
         palette[n] = {
             blank: cell(' ', fg, bg, false),
             chars: n > 0 ? _centerTiles(ch, fg, bg) : null,
@@ -222,17 +236,21 @@ function _buildTilePalette() {
 }
 
 function _centerTiles(str, fg, bg) {
-    const cell = (ch, fg, bg, bld) => ({
+    const cell = (ch, fg, bg, bld, width = 1) => ({
         ch, fg, bg, bold: bld, dim: false, italic: false,
         underline: false, blink: false, inverse: false,
-        conceal: false, crossedOut: false, width: 1,
+        conceal: false, crossedOut: false, width,
     });
-    const len = str.length;
-    const left = Math.floor((CELL_W - len) / 2);
-    const right = CELL_W - left - len;
+    const w = _tileWidth(str);
+    const left = Math.floor((CELL_W - w) / 2);
+    const right = CELL_W - left - w;
     const cells = [];
     for (let i = 0; i < left; i++) cells.push(cell(' ', fg, bg, false));
-    for (let i = 0; i < len; i++) cells.push(cell(str[i], fg, bg, len >= 4));
+    for (let i = 0; i < str.length; i++) {
+        const wide = isWide(str[i]);
+        cells.push(cell(str[i], fg, bg, w >= 4, wide ? 2 : 1));
+        if (wide) cells.push(cell('', fg, bg, false, 0));
+    }
     for (let i = 0; i < right; i++) cells.push(cell(' ', fg, bg, false));
     return cells;
 }
@@ -530,10 +548,10 @@ export class Game2048Cmd extends CmdBase {
     _renderMoveOverlay(moveCells) {
         const buf = this._boardVB._buffer;
 
-        const makeCell = (ch, fg, bg, bold) => ({
+        const makeCell = (ch, fg, bg, bold, width = 1) => ({
             ch, fg, bg, bold, dim: false, italic: false,
             underline: false, blink: false, inverse: false,
-            conceal: false, crossedOut: false, width: 1,
+            conceal: false, crossedOut: false, width,
         });
 
         for (const mc of moveCells) {
@@ -561,11 +579,20 @@ export class Game2048Cmd extends CmdBase {
                 }
             }
 
-            const numStr = String(value);
-            const numLeft = left + Math.floor((w - numStr.length) / 2);
+            const numStr = _tileStr(value);
+            const numW = _tileWidth(numStr);
+            const numLeft = left + Math.floor((w - numW) / 2);
             const numRow = top + Math.floor(h / 2);
+            let nx = 0;
             for (let i = 0; i < numStr.length; i++) {
-                buf[numRow][numLeft + i] = makeCell(numStr[i], fg, bg, numStr.length >= 4);
+                const wide = isWide(numStr[i]);
+                buf[numRow][numLeft + nx] = makeCell(numStr[i], fg, bg, numW >= 4, wide ? 2 : 1);
+                if (wide) {
+                    buf[numRow][numLeft + nx + 1] = makeCell('', fg, bg, false, 0);
+                    nx += 2;
+                } else {
+                    nx++;
+                }
             }
         }
 
@@ -575,10 +602,10 @@ export class Game2048Cmd extends CmdBase {
     _renderMergeOverlay(mergeCells) {
         const buf = this._boardVB._buffer;
 
-        const makeCell = (ch, fg, bg, bold) => ({
+        const makeCell = (ch, fg, bg, bold, width = 1) => ({
             ch, fg, bg, bold, dim: false, italic: false,
             underline: false, blink: false, inverse: false,
-            conceal: false, crossedOut: false, width: 1,
+            conceal: false, crossedOut: false, width,
         });
 
         for (const mc of mergeCells) {
@@ -606,11 +633,20 @@ export class Game2048Cmd extends CmdBase {
                 }
             }
 
-            const numStr = String(value);
-            const numLeft = left + Math.floor((w - numStr.length) / 2);
+            const numStr = _tileStr(value);
+            const numW = _tileWidth(numStr);
+            const numLeft = left + Math.floor((w - numW) / 2);
             const numRow = top + Math.floor(h / 2);
+            let nx = 0;
             for (let i = 0; i < numStr.length; i++) {
-                buf[numRow][numLeft + i] = makeCell(numStr[i], fg, bg, numStr.length >= 4);
+                const wide = isWide(numStr[i]);
+                buf[numRow][numLeft + nx] = makeCell(numStr[i], fg, bg, numW >= 4, wide ? 2 : 1);
+                if (wide) {
+                    buf[numRow][numLeft + nx + 1] = makeCell('', fg, bg, false, 0);
+                    nx += 2;
+                } else {
+                    nx++;
+                }
             }
         }
 
