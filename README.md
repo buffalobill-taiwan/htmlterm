@@ -28,7 +28,7 @@ dialogs, and TSR-style widgets.
 ### Demo shell
 
 - Frame-stack command runner with rAF-based Typewriter output
-- 28 built-in commands (games, widgets, interactive tests — see below)
+- 29 built-in commands (games, widgets, interactive tests — see below)
 - Dialog framework (`MenuDialog`, `InputDialog`, `ShowDialog`) with overlay compositing
 - VirtualBuffer compositing abstraction for nested UI layout
 - TSR widgets (clock, DVD logo) — draggable, position remembered
@@ -91,7 +91,8 @@ Open `index.html` in a modern browser, or visit the live demo:
 | `echo` | Print arguments |
 | `flash` | Flash the screen N times (default 1). `--border` for border flash, `--art` for random artwork flash |
 | `gweled` | Play Gweled (Bejeweled match-3, space-select then arrow-swap, chain cascade, 5-7 colors) |
-| `help` | List available commands |
+| `help` | Show command list; `help <cmd>` for details and usage |
+| `klotski` | Play Klotski 華容道 sliding-block puzzle (11 fayaa layouts) |
 | `menu` | Open command menu dialog |
 | `mbti` | MBTI personality test (interactive) |
 | `minesw` | Play Minesweeper (three difficulty levels) |
@@ -128,9 +129,9 @@ Open `index.html` in a modern browser, or visit the live demo:
 js/
 ├── main.js
 ├── terminal/    Screen.js Parser.js Renderer.js terminal.js   # VT100 core
-├── system/      sys.js system.js CmdFrame.js LineEditor.js typewriter.js TextInputModel.js
-├── util/        constants.js sgr.js unicode-width.js display-width.js VirtualBuffer.js drag.js tokenize.js calc-expr.js select-grid.js pixel-codec.js flash-helper.js random.js
-├── dialog/      Dialog.js MenuDialog.js InputDialog.js ShowDialog.js ConfirmDialog.js write.js position.js  # Dialog framework
+├── system/      sys.js system.js CmdFrame.js LineEditor.js typewriter.js TextInputModel.js BusyAsyncHelper.js InteractiveCommandHelper.js QuestionnaireHelper.js RAFAnimationHelper.js
+├── util/        constants.js sgr.js unicode-width.js display-width.js VirtualBuffer.js drag.js tokenize.js calc-expr.js select-grid.js pixel-codec.js flash-helper.js random.js nurikabe-engine.js
+├── dialog/      Dialog.js MenuDialog.js InputDialog.js ShowDialog.js ConfirmDialog.js SelectDialog.js write.js position.js  # Dialog framework
 └── cmd/         CmdBase.js ShellCmd.js ... + widgets/        # Demo commands + widgets
 css/style.css
 index.html

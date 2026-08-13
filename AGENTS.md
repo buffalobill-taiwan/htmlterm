@@ -151,6 +151,14 @@ if under the fayaa record, plus time. Naming rule: verticals 1×2 get 張飛/趙
 horizontals 2×1 get 關羽/關平/關興/關索/關統 in scan order. Sidebar shows
 關卡/步數/目標/時間 + controls, 1s timer, `term.writeVB` compositing (no overlay), no animation loop
 (renders only on input/timer).
+Help/usage (Aug 2026): `help` rewritten — bare `help` prints a name-only grid list
+(8 per row, width-10 columns) instead of name+description pairs; `help <cmd>` shows
+the command's name, description, and usage line. `CmdBase` gained a `static get usage()`
+property (null default); all commands now define it and `_registerCommands` stores it
+in `cmdList` entries. Puyo/Gweled pop flash upgraded to a tetris-style white/color
+blink (`_flashPop`, 6 steps × 80ms) before matched cells are cleared.
+Klotski win polish: the 曹 tile falls deeper (6 rows) and the cursor skips over
+already-passed empty cells.
 
 ## Architecture
 
@@ -585,7 +593,7 @@ unaddressed:
 js/cmd/
 ├── index.js           Barrel export — shell auto-registers all exported command classes
 ├── CmdBase.js         execute(args) | print(text) | readLine(cb) | select() | holdBusy/releaseBusy | cmdList
-├── help.js            Help        — iterates this.cmdList (via CmdBase convenience)
+├── help.js            Help        — name-only grid list; `help <cmd>` shows name/description/usage
 ├── clear.js           Clear
 ├── echo.js            Echo
 ├── date.js            DateCmd
@@ -639,6 +647,7 @@ js/cmd/
 | `get cmdList()` | `system.cmdList` — registered command list for help etc. |
 | `static get commandName()` | Command name string, e.g. `'cowsay'` |
 | `static get help()` | Description shown in `help` output |
+| `static get usage()` | Usage line shown by `help <cmd>` (null default) |
 | `static get menu()` | Menu description or `null` to hide from menu |
 | `static openMenuDialog()` | (optional) Creates a menu dialog; import `system` from `'../system/sys.js'` |
 
@@ -686,10 +695,16 @@ No wrap-around, no cross-dimension movement.
 _registerCommands(cmdModule) {
     for (const Cls of Object.values(cmdModule)) {
         if (typeof Cls !== 'function' || !Cls.commandName) continue;
+        if (Cls.commandName === 'shell') continue; // persistent shell, not a user command
         const cmd = new Cls();
-        this.commands[Cls.commandName] = cmd.execute.bind(cmd);
-        this.cmdList.push({ name: Cls.commandName, help: Cls.help });
-        if (Cls.menu) this.menuItems.push({ name: Cls.commandName, desc: Cls.menu });
+        const name = Cls.commandName;
+        const help = Cls.help;
+        const menu = Cls.menu;
+        const usage = Cls.usage;
+        this._cmdInstances[name] = cmd;
+        this.commands[name] = cmd.execute.bind(cmd);
+        this.cmdList.push({ name, help, usage });
+        if (menu) this.menuItems.push({ name, desc: menu });
     }
     this.cmdList.sort((a, b) => a.name.localeCompare(b.name));
     this.menuItems.sort((a, b) => a.name.localeCompare(b.name));
