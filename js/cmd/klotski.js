@@ -18,6 +18,7 @@ const SIDEBAR_X = 40;
 const SIDEBAR_Y = 3;
 const SIDEBAR_W = 36;
 const SIDEBAR_H = 14;
+const FINISH_FALL = 6;
 
 const LEVELS = [
     { name: '比翼橫空', mini: 28, board: 'BBAA' + 'CCAA' + 'DDEE' + 'N@OH' + 'P@QH' },
@@ -526,10 +527,16 @@ export class KlotskiCmd extends CmdBase {
     }
 
     _moveCursor(dr, dc) {
-        const nr = this._cursor.r + dr, nc = this._cursor.c + dc;
-        if (nr < 0 || nr >= ROWS || nc < 0 || nc >= COLS) return;
-        this._cursor.r = nr;
-        this._cursor.c = nc;
+        const startId = this._board[this._cursor.r][this._cursor.c];
+        let r = this._cursor.r + dr, c = this._cursor.c + dc;
+        if (r < 0 || r >= ROWS || c < 0 || c >= COLS) return;
+        while (startId >= 0 && this._board[r][c] === startId) {
+            const nr = r + dr, nc = c + dc;
+            if (nr < 0 || nr >= ROWS || nc < 0 || nc >= COLS) break;
+            r = nr; c = nc;
+        }
+        this._cursor.r = r;
+        this._cursor.c = c;
         this._render();
     }
 
@@ -555,8 +562,8 @@ export class KlotskiCmd extends CmdBase {
         const t0 = performance.now();
         const step = (now) => {
             const t = now - t0;
-            const frac = Math.min(t / 300, 1);
-            this._animOffset = Math.min(2, Math.floor(frac * 2));
+            const frac = Math.min(t / 550, 1);
+            this._animOffset = Math.min(FINISH_FALL, Math.floor(FINISH_FALL * frac * frac));
             this._render();
             if (frac < 1) this._finishRAF = requestAnimationFrame(step);
             else this._finishWin();
@@ -566,8 +573,7 @@ export class KlotskiCmd extends CmdBase {
 
     _finishWin() {
         this._finishRAF = null;
-        this._finishing = false;
-        this._animOffset = 0;
+        this._animOffset = FINISH_FALL;
         this._win();
     }
 
@@ -619,7 +625,7 @@ export class KlotskiCmd extends CmdBase {
             this._levelDialog.handleKey(data);
             return;
         }
-        if (this._finishing) return;
+        if (this._finishing && !this._completed) return;
 
         const code = typeof data === 'string' ? data.charCodeAt(0) : data;
 

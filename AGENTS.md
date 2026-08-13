@@ -143,8 +143,9 @@ read as distinct tiles. Custom LevelSelectDialog lists
 it one cell at a time — consecutive slides of the same block (regardless of direction) count as a single
 move (run-based, matching fayaa step counts); Z undo reverts the whole run, P pause, N back to level
 menu, Q/ESC/Ctrl+C quit. Cursor shows as a blue highlight on the whole block, or as a blue 2-wide square
-on an empty cell. On winning (曹's top-left reaches (3,1)) a 300ms rAF animation slides the 曹 tile down
-2 rows off the board bottom (drawn via a dedicated `_rootSlotCao` overlay slot, blitted last) before the
+on an empty cell. On winning (曹's top-left reaches (3,1)) a 550ms rAF animation slides the 曹 tile down
+6 rows off the board bottom with ease-in gravity feel (drawn via a dedicated `_rootSlotCao` overlay slot,
+blitted last); the tile stays fallen at the bottom while the
 Win overlay (恭喜通關!) appears showing 步數/目標 with ★
 if under the fayaa record, plus time. Naming rule: verticals 1×2 get 張飛/趙雲/馬超/黃忠 in scan order,
 horizontals 2×1 get 關羽/關平/關興/關索/關統 in scan order. Sidebar shows
