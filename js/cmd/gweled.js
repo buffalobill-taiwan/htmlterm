@@ -6,7 +6,8 @@ import { VirtualBuffer } from '../util/VirtualBuffer.js';
 
 const COLS = 8;
 const ROWS = 8;
-const POP_DELAY = 500;
+const FLASH_STEP_MS = 80;
+const FLASH_CYCLES = 6;
 const FALL_DELAY = 400;
 const FALL_STEP_MS = 70;
 const SWAP_BACK_MS = 250;
@@ -286,6 +287,7 @@ export class GweledCmd extends CmdBase {
         this._chain = 0;
         this._lastChainScore = 0;
         this._popping = null;
+        this._popFlashCount = 0;
         this._chainTimer = null;
         this._fallTimer = null;
         this._swapBackTimer = null;
@@ -479,8 +481,19 @@ export class GweledCmd extends CmdBase {
         this._score += this._lastChainScore;
         this._popping = popped;
 
+        this._popFlashCount = 0;
+        this._flashPop();
+    }
+
+    _flashPop() {
+        if (this._completed) return;
+        if (this._popFlashCount >= FLASH_CYCLES) {
+            this._popAndFall();
+            return;
+        }
+        this._popFlashCount++;
         this._render();
-        this._chainTimer = setTimeout(() => this._popAndFall(), POP_DELAY);
+        this._chainTimer = setTimeout(() => this._flashPop(), FLASH_STEP_MS);
     }
 
     _popAndFall() {
@@ -683,7 +696,7 @@ export class GweledCmd extends CmdBase {
                 const v = this._board[r][c];
                 if (v === 0) continue;
                 let cell = pal[v];
-                if (popping && popping.has(r * COLS + c)) cell = popWhite;
+                if (popping && popping.has(r * COLS + c) && this._popFlashCount % 2 === 1) cell = popWhite;
                 else if (sel && sel.r === r && sel.c === c) cell = sels[v];
                 else if (cur && cur.r === r && cur.c === c && !this._resolving) cell = curs[v];
                 buf[1 + r][1 + c * 2] = cell;

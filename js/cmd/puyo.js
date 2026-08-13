@@ -7,7 +7,8 @@ import { VirtualBuffer } from '../util/VirtualBuffer.js';
 const COLS = 6;
 const ROWS = 12;
 const LOCK_DELAY = 400;
-const POP_DELAY = 300;
+const FLASH_STEP_MS = 80;
+const FLASH_CYCLES = 6;
 const FALL_DELAY = 250;
 const FALL_STEP_MS = 40;
 
@@ -258,6 +259,7 @@ export class PuyoCmd extends CmdBase {
         this._chain = 0;
         this._lastChainScore = 0;
         this._popping = null;
+        this._popFlashCount = 0;
         this._current = null;
         this._lockTimer = null;
         this._chainTimer = null;
@@ -552,8 +554,19 @@ export class PuyoCmd extends CmdBase {
         this._score += this._lastChainScore;
         this._popping = popping;
 
+        this._popFlashCount = 0;
+        this._flashPop();
+    }
+
+    _flashPop() {
+        if (this._completed) return;
+        if (this._popFlashCount >= FLASH_CYCLES) {
+            this._popAndFall();
+            return;
+        }
+        this._popFlashCount++;
         this._render();
-        this._chainTimer = setTimeout(() => this._popAndFall(), POP_DELAY);
+        this._chainTimer = setTimeout(() => this._flashPop(), FLASH_STEP_MS);
     }
 
     _popAndFall() {
@@ -793,7 +806,7 @@ export class PuyoCmd extends CmdBase {
             for (let c = 0; c < COLS; c++) {
                 const v = this._board[r][c];
                 if (v !== 0) {
-                    const popping = this._popping && this._popping.has(r * COLS + c);
+                    const popping = this._popping && this._popping.has(r * COLS + c) && this._popFlashCount % 2 === 1;
                     const cell = popping ? popWhite : pal[v];
                     buf[1 + r][1 + c * 2] = cell;
                     buf[1 + r][1 + c * 2 + 1] = cont;
