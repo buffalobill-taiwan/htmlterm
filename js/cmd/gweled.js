@@ -11,6 +11,7 @@ const FLASH_CYCLES = 6;
 const FALL_DELAY = 400;
 const FALL_STEP_MS = 70;
 const SWAP_BACK_MS = 250;
+const AUTO_DELAY_MS = 500;
 
 const BOARD_W = COLS * 2 + 2;
 const BOARD_H = ROWS + 2;
@@ -293,6 +294,8 @@ export class GweledCmd extends CmdBase {
         this._swapBackTimer = null;
         this._noMovesTimer = null;
         this._noMovesMsg = false;
+        this._auto = false;
+        this._autoTimer = null;
         this._difficultyDialog = null;
         this._colorPool = [1, 2, 3, 4, 5, 6, 7].slice(0, cfg.colors);
         this._owedGems = new Array(COLS).fill(0);
@@ -455,8 +458,52 @@ export class GweledCmd extends CmdBase {
                 this._swapCells(r, c, nr, nc);
                 this._reverting = false;
                 this._render();
+                this._scheduleAutoMove();
             }, SWAP_BACK_MS);
         }
+    }
+
+    _toggleAuto() {
+        this._auto = !this._auto;
+        this._selected = null;
+        if (this._auto) {
+            if (!this._paused) this._scheduleAutoMove();
+        } else {
+            this._clearAutoTimer();
+        }
+        this._render();
+    }
+
+    _scheduleAutoMove() {
+        if (!this._auto) return;
+        this._clearAutoTimer();
+        this._autoTimer = setTimeout(() => this._autoStep(), AUTO_DELAY_MS);
+    }
+
+    _clearAutoTimer() {
+        if (this._autoTimer) { clearTimeout(this._autoTimer); this._autoTimer = null; }
+    }
+
+    _autoStep() {
+        if (this._completed) return;
+        if (!this._auto || this._paused || this._resolving || this._reverting || this._noMovesMsg) return;
+        const moves = [];
+        const board = this._board;
+        for (let r = 0; r < ROWS; r++) {
+            for (let c = 0; c < COLS; c++) {
+                if (c + 1 < COLS && _swapCreatesMatch(board, r, c, r, c + 1))
+                    moves.push({ r, c, dr: 0, dc: 1 });
+                if (r + 1 < ROWS && _swapCreatesMatch(board, r, c, r + 1, c))
+                    moves.push({ r, c, dr: 1, dc: 0 });
+            }
+        }
+        if (moves.length === 0) {
+            this._checkNoMoves();
+            return;
+        }
+        const m = moves[Math.floor(Math.random() * moves.length)];
+        this._selected = { r: m.r, c: m.c };
+        this._trySwap({ dr: m.dr, dc: m.dc });
     }
 
     _chainStep() {
@@ -466,6 +513,7 @@ export class GweledCmd extends CmdBase {
             this._resolving = false;
             this._popping = null;
             this._chain = 0;
+            if (_hasAnyMove(this._board)) this._scheduleAutoMove();
             this._checkNoMoves();
             this._render();
             return;
@@ -534,6 +582,7 @@ export class GweledCmd extends CmdBase {
         this._noMovesTimer = setTimeout(() => {
             this._noMovesMsg = false;
             this._render();
+            if (this._auto) this._scheduleAutoMove();
         }, 1200);
     }
 
@@ -542,12 +591,14 @@ export class GweledCmd extends CmdBase {
         if (this._fallTimer) { clearTimeout(this._fallTimer); this._fallTimer = null; }
         if (this._swapBackTimer) { clearTimeout(this._swapBackTimer); this._swapBackTimer = null; }
         if (this._noMovesTimer) { clearTimeout(this._noMovesTimer); this._noMovesTimer = null; }
+        if (this._autoTimer) { clearTimeout(this._autoTimer); this._autoTimer = null; }
     }
 
     _pause() {
         if (this._completed || this._resolving || this._reverting) return;
         this._paused = !this._paused;
         if (this._paused) this._clearTimers();
+        else if (this._auto) this._scheduleAutoMove();
         this._render();
     }
 
@@ -584,6 +635,7 @@ export class GweledCmd extends CmdBase {
             }
             if (typeof data === 'string') {
                 const ch = data.toLowerCase();
+                if (ch === 'a') { this._toggleAuto(); return; }
                 if (ch === 'p') { this._pause(); return; }
                 if (ch === 'q') { this._quit(); return; }
                 if (ch === 'n') { this._pickDifficulty(); return; }
@@ -594,6 +646,19 @@ export class GweledCmd extends CmdBase {
         if (this._resolving || this._reverting) {
             if (typeof data === 'string') {
                 const ch = data.toLowerCase();
+                if (ch === 'a') { this._toggleAuto(); return; }
+                if (ch === 'q') { this._quit(); return; }
+            }
+            return;
+        }
+
+        if (this._auto) {
+            if (code === 0x03) { this._quit(); return; }
+            if (typeof data === 'string') {
+                const ch = data.toLowerCase();
+                if (ch === 'a') { this._toggleAuto(); return; }
+                if (ch === 'p') { this._pause(); return; }
+                if (ch === 'n') { this._pickDifficulty(); return; }
                 if (ch === 'q') { this._quit(); return; }
             }
             return;
@@ -629,6 +694,7 @@ export class GweledCmd extends CmdBase {
 
         if (typeof data === 'string') {
             const ch = data.toLowerCase();
+            if (ch === 'a') { this._toggleAuto(); return; }
             if (ch === 'p') { this._pause(); return; }
             if (ch === 'n') { this._pickDifficulty(); return; }
             if (ch === 'q') { this._quit(); return; }
@@ -659,6 +725,7 @@ export class GweledCmd extends CmdBase {
         }
 
         vb.writeStr(6, 0, gray('[' + DIFFICULTY[this._difficulty].label + ']'));
+        vb.writeStr(13, 0, this._auto ? bold(yellow(' [a]uto: ON')) : gray(' [a]uto: OFF'));
 
         _writeDynRow(buf[2], this._dynScore, this._score);
         _writeDynRow(buf[3], this._dynChain, this._chain);
@@ -698,7 +765,7 @@ export class GweledCmd extends CmdBase {
                 let cell = pal[v];
                 if (popping && popping.has(r * COLS + c) && this._popFlashCount % 2 === 1) cell = popWhite;
                 else if (sel && sel.r === r && sel.c === c) cell = sels[v];
-                else if (cur && cur.r === r && cur.c === c && !this._resolving) cell = curs[v];
+                else if (cur && cur.r === r && cur.c === c && !this._resolving && !this._auto) cell = curs[v];
                 buf[1 + r][1 + c * 2] = cell;
                 buf[1 + r][1 + c * 2 + 1] = cont;
             }
