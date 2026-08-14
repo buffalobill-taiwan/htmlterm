@@ -322,6 +322,7 @@ export class KlotskiCmd extends CmdBase {
 
     _renderSidebar() {
         const vb = this._sidebarVB;
+        vb.clear();
         const lv = LEVELS[this._levelIdx];
         vb.writeStr(0, 0, bold(cyan('  Klotski')));
         vb.writeStr(1, 0, bold(cyan('  華容道')));
