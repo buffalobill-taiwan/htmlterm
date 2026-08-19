@@ -231,7 +231,7 @@ export class JpmjCmd extends CmdBase {
             if (g.availableActions.includes('kyuushu')) {
                 if (p.ai.decideKyuushu(g, 0)) {
                     g.handleKyuushuKyuuhai(0);
-                    this._render();
+                    this._gameTimer = setTimeout(() => this._continueGame(), 100);
                     return;
                 }
                 g.availableActions = g.availableActions.filter(a => a !== 'kyuushu');
@@ -281,7 +281,7 @@ export class JpmjCmd extends CmdBase {
         if (g.availableActions) {
             if (g.availableActions.includes('tsumo')) {
                 g.executeWin(0, 'tsumo', p.lastDraw);
-                this._render();
+                this._gameTimer = setTimeout(() => this._continueGame(), 100);
                 return;
             }
             if (g.availableActions.includes('tsumo-no-yaku') || g.availableActions.includes('pass')) {
