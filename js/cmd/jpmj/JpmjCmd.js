@@ -4,7 +4,7 @@ import { CURSOR_HIDE, CURSOR_SHOW, bold, cyan, yellow, green, red, magenta, gray
 import { SettingsDialog } from '../../dialog/SettingsDialog.js';
 import { SelectDialog } from '../../dialog/SelectDialog.js';
 import { VirtualBuffer, _blankCell } from '../../util/VirtualBuffer.js';
-import { isWide } from '../../util/display-width.js';
+import { isWide, displayWidth } from '../../util/display-width.js';
 import { tileFg } from './tiles.js';
 import { Game } from './game.js';
 import { getWaitingTiles, checkTenpai } from './yaku.js';
@@ -867,17 +867,20 @@ export class JpmjCmd extends CmdBase {
         vb.writeStr(6, 1, '─'.repeat(34));
 
         const winds = ['東', '南', '西', '北'];
-        const playerPositions = [0, 3, 2, 1];
+        const sorted = [0, 1, 2, 3].sort((a, b) => {
+            const pa = g.players[a], pb = g.players[b];
+            if (pb.score !== pa.score) return pb.score - pa.score;
+            return a - b;
+        });
         for (let row = 0; row < 4; row++) {
-            const pi = playerPositions[row];
+            const pi = sorted[row];
             const p = g.players[pi];
             const windChar = winds[p.seatWind - 1] || '?';
-            const name = p.name;
-            let marker = '';
-            if (p.isRiichi) marker = '立直';
-            else if (pi === g.dealerIndex) marker = '親';
-            const scoreStr = formatScore(p.score);
-            const line = windChar + ' ' + name.padEnd(4) + '  ' + marker.padEnd(4) + scoreStr;
+            const riichi = p.isRiichi ? '\x1B[91;107m⬤\x1B[0m' : ' ';
+            const namePad = ' '.repeat(6 - displayWidth(p.name));
+            const dealer = pi === g.dealerIndex ? '親' : '  ';
+            const scoreStr = String(p.score).replace(/\B(?=(\d{3})+(?!\d))/g, ',').padStart(6);
+            const line = windChar + ' ' + riichi + p.name + namePad + ' ' + dealer + ' ' + scoreStr;
             const y = 7 + row;
             vb.writeStr(y, 1, line);
         }
