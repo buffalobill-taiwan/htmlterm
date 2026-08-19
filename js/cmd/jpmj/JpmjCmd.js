@@ -646,20 +646,23 @@ export class JpmjCmd extends CmdBase {
         const drawTile = across.lastDraw;
         const melds = across.melds;
 
+        const drawIdx = drawTile ? hand.indexOf(drawTile) : -1;
+        const handDisplay = hand.length - (drawTile ? 1 : 0);
+
         const meldTileCount = melds.reduce((s, m) => s + m.tiles.length, 0);
-        const handCols = hand.length * 2;
+        const meldCols = meldTileCount * 2;
         const gapBeforeDraw = 1;
         const drawCols = 2;
         const gapBeforeHand = 1;
-        const meldCols = meldTileCount * 2;
+        const handCols = handDisplay * 2;
         const totalCols = meldCols + gapBeforeDraw + drawCols + gapBeforeHand + handCols;
         const startCol = Math.floor((40 - totalCols) / 2);
 
         let col = startCol;
-        for (let mi = 0; mi < melds.length; mi++) {
+        for (let mi = melds.length - 1; mi >= 0; mi--) {
             const m = melds[mi];
             const bgType = meldTypeToBg(m);
-            const bg = meldBg(bgType, countCallType(melds.slice(0, mi), bgType));
+            const bg = meldBg(bgType, countCallType(melds.slice(mi + 1), bgType));
             const isClosedKan = m.type === 'kan' && !m.open;
             for (let ti = 0; ti < m.tiles.length; ti++) {
                 if (isClosedKan && (ti === 1 || ti === 2)) {
@@ -670,6 +673,7 @@ export class JpmjCmd extends CmdBase {
                 col += 2;
             }
         }
+        col += gapBeforeDraw;
         if (drawTile) {
             if (this._phase === 'result') {
                 this._renderTile2x2(vb, 0, col, drawTile, 0, false);
@@ -677,9 +681,10 @@ export class JpmjCmd extends CmdBase {
                 this._renderFacedown2x2(vb, 0, col, '▓', 240, 236);
             }
         }
-        col += 2;
+        col += drawCols;
         col += gapBeforeHand;
         for (let i = 0; i < hand.length; i++) {
+            if (i === drawIdx) continue;
             if (this._phase === 'result') {
                 this._renderTile2x2(vb, 0, col, hand[i], 0, false);
             } else {
