@@ -780,6 +780,99 @@ input arrives only through the callback parameter.
   be implemented. `cd`/`pwd` may still be added as purely virtual path state
   (CWD string only) for prompt/UX purposes.
 
+## Common Pitfalls
+
+Lessons learned from Dialog/Overlay command development. Read before writing
+new Dialog subclasses or CmdBase overlay commands.
+
+### Derived class constructor — `super()` before `this`
+
+ES6 derived classes MUST NOT access `this` before calling `super()`. Compute
+all needed values in local variables first, pass them via `opts`, then assign
+`this.xxx` after `super()` returns.
+
+```js
+// ✗ Bad — crashes with "Must call super constructor before accessing 'this'"
+class MyDialog extends Dialog {
+    constructor(term, opts) {
+        this.h = 10;           // ← crash
+        super(term, opts);
+    }
+}
+
+// ✓ Good
+class MyDialog extends Dialog {
+    constructor(term, opts) {
+        const h = 10;          // local variable
+        super(term, { ...opts, h });
+        this.h = h;            // safe after super()
+    }
+}
+```
+
+### Dialog `this.h` is hardcoded to 0
+
+`Dialog` constructor sets `this.h = 0` and does NOT read `opts.h`. Every
+subclass must set `this.h` after `super()` or the overlay will have height 0
+(invisible).
+
+### `Dialog.close()` vs nulling the reference
+
+Setting `this._dialog = null` only drops the JS reference — the overlay
+stays registered with the term and remains visible. MUST call `dialog.close()`
+first to remove the overlay, THEN null the reference.
+
+```js
+// ✗ Bad — overlay stays visible
+onStart: () => { this._dialog = null; this.close(); }
+
+// ✓ Good
+onStart: () => { dialog.close(); this._dialog = null; this.close(); }
+```
+
+### Callback nulls reference → parent dereferences null
+
+When a child dialog's `onSelect`/`onStart` callback sets
+`this._childDialog = null`, the parent's `handleKey` may still be on the
+stack checking `this._childDialog.closed`. Always null-check before `.closed`:
+
+```js
+// ✗ Bad — null dereference
+if (this._childDialog.closed) { ... }
+
+// ✓ Good
+if (!this._childDialog || this._childDialog.closed) { ... }
+```
+
+### `bufWidth` counts SGR escape bytes
+
+`bufWidth('\x1B[7m\x1B[1mtext')` counts `\x1B`, `[`, `7`, `m` etc. as
+visible characters. Never pass SGR-prefixed strings to `bufWidth` for
+centering/padding calculations — use the raw text's display width instead.
+
+### `writeStr` does not clear previous content
+
+Rewriting a row with `writeStr` only overwrites cells it touches. Old
+characters beyond the new string remain. Clear first:
+
+```js
+// ✓ Clear row before rewriting
+vb.writeStr(row, 0, ' '.repeat(width));
+vb.writeStr(row, labelX, labelStr, width - 1);
+```
+
+### Box-drawing borders — use `setCell`, not string concat
+
+`'│' + content + '│'` breaks when `content` contains CJK wide characters
+that push total width past `maxX`, silently clipping the right border.
+Write content via `writeStr(row, 1, content, width - 1)` and place borders
+via `setCell(row, 0, borderL)` / `setCell(row, width - 1, borderR)`.
+
+### Relative import paths from `js/dialog/`
+
+Files in `js/dialog/` import from `js/util/` as `../util/...` (one `../`),
+not `../../util/...`. The double `../../` escapes to repo root → 404.
+
 ## Buffer & Memory Management
 
 The render loop runs at 60fps (rAF). Every allocation inside the hot path

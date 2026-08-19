@@ -2,6 +2,18 @@ import { _writeStr } from '../dialog/write.js';
 import { bufWidth } from './display-width.js';
 import { createEmptyBuffer } from './sgr.js';
 
+export const _blankCell = Object.freeze({ ch: ' ', fg: 7, bg: 0, bold: false, dim: false, italic: false, underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: 1 });
+
+export function createBlankBuffer(w, h) {
+    const buf = [];
+    for (let r = 0; r < h; r++) {
+        const row = new Array(w);
+        for (let c = 0; c < w; c++) row[c] = _blankCell;
+        buf.push(row);
+    }
+    return buf;
+}
+
 export class VirtualBuffer {
     constructor(w, h) {
         this.width = w;
