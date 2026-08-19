@@ -147,9 +147,9 @@ export class JpmjCmd extends CmdBase {
         const opts = {
             length: { '東風戰': 'east', '半莊戰': 'half', '一莊戰': 'full' }[settings.gameLength] || 'east',
             difficulties: [
-                AI_MAP[settings.aiLeft] || 'normal',
-                AI_MAP[settings.aiAcross] || 'normal',
                 AI_MAP[settings.aiRight] || 'normal',
+                AI_MAP[settings.aiAcross] || 'normal',
+                AI_MAP[settings.aiLeft] || 'normal',
             ],
             autoPlayDifficulty: AI_MAP[settings.autoPlayAI] || 'normal',
             startingSeat: { '隨機': 'random', '東': 'east', '南': 'south', '西': 'west', '北': 'north' }[settings.seat] || 'random',
