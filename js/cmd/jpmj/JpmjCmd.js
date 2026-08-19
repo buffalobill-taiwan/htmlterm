@@ -7,7 +7,7 @@ import { VirtualBuffer, _blankCell } from '../../util/VirtualBuffer.js';
 import { isWide } from '../../util/display-width.js';
 import { tileFg } from './tiles.js';
 import { Game } from './game.js';
-import { getWaitingTiles } from './yaku.js';
+import { getWaitingTiles, checkTenpai } from './yaku.js';
 
 const SETTINGS = [
     { key: 'gameLength', label: '對戰長度', value: '東風戰',
@@ -223,39 +223,74 @@ export class JpmjCmd extends CmdBase {
         if (!this._game || this._game.gameOver || this._game.roundOver) return;
         if (!this._game.waitingHuman || !this._autoPlay) return;
 
-        const actions = this._game.availableActions;
-        if (actions.includes('tsumo') || actions.includes('tsumo-no-yaku')) {
-            const hasYaku = actions.includes('tsumo');
-            if (hasYaku) {
-                this._game.humanCall({ type: 'tsumo' });
-            } else {
-                this._game.humanCall({ type: 'pass' });
+        const g = this._game;
+        const p = g.players[0];
+
+        // A. Discard phase
+        if (g.phase === 'dealer_first_discard' || g.phase === 'discard') {
+            if (g.availableActions.includes('kyuushu')) {
+                if (p.ai.decideKyuushu(g, 0)) {
+                    g.handleKyuushuKyuuhai(0);
+                    this._render();
+                    return;
+                }
+                g.availableActions = g.availableActions.filter(a => a !== 'kyuushu');
             }
-        } else if (actions.some(a => a && a.type === 'ron')) {
-            const ronCalls = actions.filter(a => a && a.type === 'ron');
-            if (ronCalls.length > 0) {
-                this._game.humanCall(ronCalls[0]);
-            } else {
-                this._game.humanCall({ type: 'pass' });
+            if (!g.availableActions.includes('discard')) return;
+            if (g.handleAIKan(0)) {
+                this._gameTimer = setTimeout(() => this._continueGame(), 100);
+                return;
             }
-        } else if (actions.some(a => a && a.type === 'chi')) {
-            this._game.humanCall({ type: 'pass' });
-        } else if (actions.some(a => a && a.type === 'pon')) {
-            this._game.humanCall({ type: 'pass' });
-        } else if (actions.some(a => a && a.type === 'kan')) {
-            this._game.humanCall({ type: 'pass' });
-        } else if (actions.includes('kyuushu')) {
-            this._game.humanCall({ type: 'pass' });
-        } else if (actions.includes('discard')) {
-            const p = this._game.players[0];
-            const idx = p.ai.chooseDiscard(this._game, 0);
-            this._game.humanDiscard(idx);
-        } else if (actions.includes('pass')) {
-            this._game.humanCall({ type: 'pass' });
-        } else if (this._game.availableCalls && this._game.availableCalls.length > 0) {
-            this._game.humanCall({ type: 'pass' });
+            if (!p.isRiichi && p.score >= 1000 && g.wall.getRemainingCount() >= 4 && p.ai.decideRiichi(g, 0)) {
+                for (let i = 0; i < p.hand.length; i++) {
+                    const testHand = p.hand.filter((_, j) => j !== i);
+                    if (checkTenpai(testHand, p.melds)) {
+                        g.humanRiichi(i);
+                        this._gameTimer = setTimeout(() => this._continueGame(), 100);
+                        return;
+                    }
+                }
+            }
+            const idx = p.ai.chooseDiscard(g, 0);
+            g.humanDiscard(idx);
+            this._gameTimer = setTimeout(() => this._continueGame(), 100);
+            return;
         }
-        this._gameTimer = setTimeout(() => this._continueGame(), 100);
+
+        // B. Call pending
+        if (g.phase === 'call_pending') {
+            const humanCalls = g.availableCalls.filter(c => c.playerIdx === 0);
+            if (humanCalls.length === 0) {
+                const passAction = g.availableActions.find(a => a.type === 'pass');
+                if (passAction) g.humanCall(passAction);
+                this._gameTimer = setTimeout(() => this._continueGame(), 100);
+                return;
+            }
+            const chosenCall = p.ai.decideCall(g, humanCalls);
+            if (chosenCall) {
+                g.humanCall(chosenCall);
+            } else {
+                const passAction = g.availableActions.find(a => a.type === 'pass');
+                if (passAction) g.humanCall(passAction);
+            }
+            this._gameTimer = setTimeout(() => this._continueGame(), 100);
+            return;
+        }
+
+        // C. Tsumo / pass
+        if (g.availableActions) {
+            if (g.availableActions.includes('tsumo')) {
+                g.executeWin(0, 'tsumo', p.lastDraw);
+                this._render();
+                return;
+            }
+            if (g.availableActions.includes('tsumo-no-yaku') || g.availableActions.includes('pass')) {
+                g.availableActions = [];
+                g.phase = 'discard';
+                this._gameTimer = setTimeout(() => this._continueGame(), 100);
+                return;
+            }
+        }
     }
 
     _stopTimer() {
