@@ -232,7 +232,12 @@ export class JpmjCmd extends CmdBase {
                 this._game.humanCall({ type: 'pass' });
             }
         } else if (actions.some(a => a && a.type === 'ron')) {
-            this._game.humanCall({ type: 'pass' });
+            const ronCalls = actions.filter(a => a && a.type === 'ron');
+            if (ronCalls.length > 0) {
+                this._game.humanCall(ronCalls[0]);
+            } else {
+                this._game.humanCall({ type: 'pass' });
+            }
         } else if (actions.some(a => a && a.type === 'chi')) {
             this._game.humanCall({ type: 'pass' });
         } else if (actions.some(a => a && a.type === 'pon')) {
