@@ -856,10 +856,21 @@ export class JpmjCmd extends CmdBase {
             const tile = doraIndicators[i];
             this._renderTile2x2(vb, 2, 3 + i * 6, tile, 0, false);
         }
+        const showUra = g.roundResult && g.roundResult.winnerRiichi;
         for (let i = 0; i < Math.min(doraIndicators.length, 5); i++) {
             const col = 3 + i * 6;
-            vb.setCell(4, col, { ch: '▒', fg: 240, bg: 0, bold: false, dim: true, italic: false, underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: 1 });
-            vb.setCell(4, col + 1, { ch: '▒', fg: 240, bg: 0, bold: false, dim: true, italic: false, underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: 1 });
+            if (showUra) {
+                const uraTile = g.wall.getUraDoraIndicators()[i];
+                if (uraTile) {
+                    this._renderTile2x2(vb, 4, col, uraTile, 0, false);
+                } else {
+                    vb.setCell(4, col, { ch: '▒', fg: 240, bg: 0, bold: false, dim: true, italic: false, underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: 1 });
+                    vb.setCell(4, col + 1, { ch: '▒', fg: 240, bg: 0, bold: false, dim: true, italic: false, underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: 1 });
+                }
+            } else {
+                vb.setCell(4, col, { ch: '▒', fg: 240, bg: 0, bold: false, dim: true, italic: false, underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: 1 });
+                vb.setCell(4, col + 1, { ch: '▒', fg: 240, bg: 0, bold: false, dim: true, italic: false, underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: 1 });
+            }
             vb.setCell(5, col, { ch: '▒', fg: 240, bg: 0, bold: false, dim: true, italic: false, underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: 1 });
             vb.setCell(5, col + 1, { ch: '▒', fg: 240, bg: 0, bold: false, dim: true, italic: false, underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: 1 });
         }

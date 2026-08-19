@@ -1058,6 +1058,7 @@ export class Game {
       doraHan: result.doraHan || 0,
       uraDoraHan: result.uraDoraHan || 0,
       isRenchan,
+      winnerRiichi: p.isRiichi,
       nextRoundLabel,
     };
 
