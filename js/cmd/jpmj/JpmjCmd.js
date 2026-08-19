@@ -701,18 +701,20 @@ export class JpmjCmd extends CmdBase {
         const drawTile = left.lastDraw;
         const melds = left.melds;
 
+        const drawIdx = drawTile ? hand.findIndex(t => t.equals(drawTile)) : -1;
+        const handDisplay = hand.length - (drawTile ? 1 : 0);
         const meldCount = melds.reduce((s, m) => s + m.tiles.length, 0);
-        const totalCount = hand.length + 1 + meldCount;
-        const startRow = Math.floor((18 - totalCount) / 2);
+        const base = handDisplay + 1 + meldCount;
+        const spare = 18 - base;
+        const gapAfterHand = spare >= 2 ? 1 : 0;
+        const gapAfterDraw = spare >= 1 ? 1 : 0;
+        const startRow = Math.floor((18 - base) / 2);
 
         let row = startRow;
-        let drawSkipped = false;
         const reveal = this._phase === 'result';
+
         for (let i = 0; i < hand.length; i++) {
-            if (!drawSkipped && drawTile && hand[i].equals(drawTile)) {
-                drawSkipped = true;
-                continue;
-            }
+            if (i === drawIdx) continue;
             if (reveal) {
                 this._renderTileHorizontal(vb, row, 0, hand[i], 0);
             } else {
@@ -720,7 +722,7 @@ export class JpmjCmd extends CmdBase {
             }
             row++;
         }
-        row++;
+        row += gapAfterHand;
         if (drawTile) {
             if (reveal) {
                 this._renderTileHorizontal(vb, row, 0, drawTile, 0);
@@ -729,21 +731,19 @@ export class JpmjCmd extends CmdBase {
             }
         }
         row++;
-        if (melds.length > 0) {
-            row++;
-            for (let mi = 0; mi < melds.length; mi++) {
-                const m = melds[mi];
-                const bgType = meldTypeToBg(m);
-                const bg = meldBg(bgType, countCallType(melds.slice(0, mi), bgType));
-                const isClosedKan = m.type === 'kan' && !m.open;
-                for (let ti = 0; ti < m.tiles.length; ti++) {
-                    if (isClosedKan && (ti === 1 || ti === 2)) {
-                        this._renderFacedown4x1(vb, row, 0, bg);
-                    } else {
-                        this._renderTileHorizontal(vb, row, 0, m.tiles[ti], bg);
-                    }
-                    row++;
+        row += gapAfterDraw;
+        for (let mi = 0; mi < melds.length; mi++) {
+            const m = melds[mi];
+            const bgType = meldTypeToBg(m);
+            const bg = meldBg(bgType, countCallType(melds.slice(0, mi), bgType));
+            const isClosedKan = m.type === 'kan' && !m.open;
+            for (let ti = 0; ti < m.tiles.length; ti++) {
+                if (isClosedKan && (ti === 1 || ti === 2)) {
+                    this._renderFacedown4x1(vb, row, 0, bg);
+                } else {
+                    this._renderTileHorizontal(vb, row, 0, m.tiles[ti], bg);
                 }
+                row++;
             }
         }
     }
