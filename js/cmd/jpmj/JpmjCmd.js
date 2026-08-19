@@ -843,23 +843,28 @@ export class JpmjCmd extends CmdBase {
             vb.setCell(r, 0, { ch: '│', fg: 8, bg: 0, bold: false, dim: false, italic: false, underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: 1 });
         }
 
-        vb.writeStr(1, 1, '\x1B[1;36m' + g.roundLabel + '\x1B[0m');
-        vb.writeStr(2, 1, g.honbaLabel);
+        vb.writeStr(0, 1, '\x1B[1;36m' + g.roundLabel + '\x1B[0m');
+
+        const statsLine = g.honbaLabel
+            + ' 残り:' + String(g.wall.getRemainingCount()).padStart(2, '0') + '枚'
+            + ' 供托:' + String(g.riichiSticks) + '本'
+            + ' 本棒:' + String(g.honba);
+        vb.writeStr(1, 1, statsLine);
 
         const doraIndicators = g.doraIndicators;
         for (let i = 0; i < Math.min(doraIndicators.length, 5); i++) {
             const tile = doraIndicators[i];
-            this._renderTile2x2(vb, 3, 3 + i * 6, tile, 0, false);
+            this._renderTile2x2(vb, 2, 3 + i * 6, tile, 0, false);
         }
         for (let i = 0; i < Math.min(doraIndicators.length, 5); i++) {
             const col = 3 + i * 6;
+            vb.setCell(4, col, { ch: '▒', fg: 240, bg: 0, bold: false, dim: true, italic: false, underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: 1 });
+            vb.setCell(4, col + 1, { ch: '▒', fg: 240, bg: 0, bold: false, dim: true, italic: false, underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: 1 });
             vb.setCell(5, col, { ch: '▒', fg: 240, bg: 0, bold: false, dim: true, italic: false, underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: 1 });
             vb.setCell(5, col + 1, { ch: '▒', fg: 240, bg: 0, bold: false, dim: true, italic: false, underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: 1 });
-            vb.setCell(6, col, { ch: '▒', fg: 240, bg: 0, bold: false, dim: true, italic: false, underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: 1 });
-            vb.setCell(6, col + 1, { ch: '▒', fg: 240, bg: 0, bold: false, dim: true, italic: false, underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: 1 });
         }
 
-        vb.writeStr(7, 1, '─'.repeat(34));
+        vb.writeStr(6, 1, '─'.repeat(34));
 
         const winds = ['東', '南', '西', '北'];
         const playerPositions = [0, 3, 2, 1];
@@ -873,23 +878,19 @@ export class JpmjCmd extends CmdBase {
             else if (pi === g.dealerIndex) marker = '親';
             const scoreStr = formatScore(p.score);
             const line = windChar + ' ' + name.padEnd(4) + '  ' + marker.padEnd(4) + scoreStr;
-            const y = 8 + row;
+            const y = 7 + row;
             vb.writeStr(y, 1, line);
         }
 
-        vb.writeStr(12, 1, '─'.repeat(34));
-        vb.writeStr(13, 1, '残り: ' + String(g.wall.getRemainingCount()).padStart(2, '0') + '枚');
-        vb.writeStr(14, 1, '供托: ' + String(g.riichiSticks) + '本');
-        vb.writeStr(15, 1, '本棒: ' + String(g.honba));
-        vb.writeStr(16, 1, '─'.repeat(34));
+        vb.writeStr(11, 1, '─'.repeat(34));
 
-        const logs = g.log.slice(-4);
-        for (let i = 0; i < 4; i++) {
+        const logs = g.log.slice(-9);
+        for (let i = 0; i < 9; i++) {
             if (i < logs.length) {
                 const entry = logs[i];
                 const text = entry.player + ' ' + entry.action + (entry.detail ? ' ' + entry.detail : '');
                 const truncated = text.length > 33 ? text.substring(0, 32) + '…' : text;
-                vb.writeStr(17 + i, 1, truncated);
+                vb.writeStr(12 + i, 1, truncated);
             }
         }
     }
