@@ -971,7 +971,7 @@ export class Game {
       }
     }
 
-    for (const mi = 0; mi < p.melds.length; mi++) {
+    for (let mi = 0; mi < p.melds.length; mi++) {
       const m = p.melds[mi];
       if (m.type === 'triplet' && !m.isKan) {
         const ponKey = m.tiles[0].key();
