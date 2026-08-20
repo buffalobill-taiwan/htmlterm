@@ -1,6 +1,6 @@
 import { system, term } from '../../system/sys.js';
 import { CmdBase } from '../CmdBase.js';
-import { CURSOR_HIDE, CURSOR_SHOW, bold, cyan, yellow, green, red, magenta, gray, white } from '../../util/sgr.js';
+import { CURSOR_HIDE, CURSOR_SHOW, OverlayZ, makeOverlayGetCell, bold, cyan, yellow, green, red, magenta, gray, white } from '../../util/sgr.js';
 import { SettingsDialog } from '../../dialog/SettingsDialog.js';
 import { SelectDialog } from '../../dialog/SelectDialog.js';
 import { ConfirmDialog } from '../../dialog/ConfirmDialog.js';
@@ -67,7 +67,6 @@ function formatScore(n) {
 export class JpmjCmd extends CmdBase {
     constructor() {
         super();
-        this._vb = new VirtualBuffer(80, 25);
         this._acrossVB = new VirtualBuffer(40, 2);
         this._leftVB = new VirtualBuffer(4, 18);
         this._rightVB = new VirtualBuffer(4, 18);
@@ -75,13 +74,6 @@ export class JpmjCmd extends CmdBase {
         this._discardVB = new VirtualBuffer(34, 15);
         this._infoVB = new VirtualBuffer(36, 21);
         this._resultVB = new VirtualBuffer(36, 16);
-        this._slotAcross = this._vb.addChildSlot();
-        this._slotLeft = this._vb.addChildSlot();
-        this._slotRight = this._vb.addChildSlot();
-        this._slotDiscard = this._vb.addChildSlot();
-        this._slotPlayer = this._vb.addChildSlot();
-        this._slotInfo = this._vb.addChildSlot();
-        this._slotResult = this._vb.addChildSlot();
         this._game = null;
         this._phase = 'settings';
         this._settingsValues = null;
@@ -97,6 +89,9 @@ export class JpmjCmd extends CmdBase {
         this._kanOptions = [];
         this._pausedIsAuto = false;
         this._palettesReady = false;
+        this._pauseVB = new VirtualBuffer(36, 15);
+        this._pauseOverlay = null;
+        this._pauseVBBuffer = null;
     }
 
     _loadSettings() {
@@ -296,6 +291,18 @@ export class JpmjCmd extends CmdBase {
         this.open();
         term.write('\x1B[2J\x1B[1;1H');
         term.write(CURSOR_HIDE);
+
+        if (!this._rootVB) {
+            this._rootVB = new VirtualBuffer(term.cols, term.rows);
+            this._slotAcross = this._rootVB.addChildSlot();
+            this._slotLeft = this._rootVB.addChildSlot();
+            this._slotRight = this._rootVB.addChildSlot();
+            this._slotDiscard = this._rootVB.addChildSlot();
+            this._slotPlayer = this._rootVB.addChildSlot();
+            this._slotInfo = this._rootVB.addChildSlot();
+            this._slotResult = this._rootVB.addChildSlot();
+        }
+
         this._phase = 'settings';
         this._showSettings();
     }
@@ -511,14 +518,20 @@ export class JpmjCmd extends CmdBase {
 
     close() {
         this._stopTimer();
+        this._removeOverlays();
         term.write('\x1B[2J\x1B[23;1H');
         super.close();
     }
 
     onCancel() {
         this._stopTimer();
+        this._removeOverlays();
         term.write('\x1B[2J\x1B[23;1H');
         super.onCancel();
+    }
+
+    _removeOverlays() {
+        if (this._pauseOverlay) { term.removeOverlay(this._pauseOverlay); this._pauseOverlay = null; }
     }
 
     _buildActionItems() {
@@ -604,7 +617,7 @@ export class JpmjCmd extends CmdBase {
 
     _render() {
         term.cursorHidden = true;
-        this._clearVB(this._vb);
+        this._clearVB(this._rootVB);
         this._clearVB(this._acrossVB);
         this._clearVB(this._leftVB);
         this._clearVB(this._rightVB);
@@ -615,8 +628,8 @@ export class JpmjCmd extends CmdBase {
 
         if (this._phase === 'gameOver') {
             this._deactivateSlots();
-            this._clearVB(this._vb);
-            this._renderGameOver(this._vb);
+            this._clearVB(this._rootVB);
+            this._renderGameOver(this._rootVB);
         } else {
             if (this._game) {
                 this._renderAcrossHand(this._acrossVB);
@@ -637,12 +650,12 @@ export class JpmjCmd extends CmdBase {
                 this._renderInfoPanel(this._infoVB);
             } else {
                 this._deactivateSlots();
-                this._clearVB(this._vb);
+                this._clearVB(this._rootVB);
             }
             this._updateSlots();
         }
 
-        term.writeVB(this._vb);
+        term.writeVB(this._rootVB);
     }
 
     _deactivateSlots() {
@@ -1340,6 +1353,7 @@ export class JpmjCmd extends CmdBase {
             if (code === 0x70 || code === 0x50) {
                 this._phase = 'paused';
                 this._render();
+                this._drawPauseOverlay();
                 return;
             }
             if (code === 0x71 || code === 0x51) {
@@ -1358,6 +1372,7 @@ export class JpmjCmd extends CmdBase {
                 if (code === 0x70 || code === 0x50) {
                     this._phase = 'playing';
                     this._autoPlay = true;
+                    this._removePauseOverlay();
                     this._render();
                     this._continueGame();
                     return;
@@ -1365,6 +1380,7 @@ export class JpmjCmd extends CmdBase {
             } else {
                 if (code === 0x70 || code === 0x50) {
                     this._phase = 'playing';
+                    this._removePauseOverlay();
                     this._render();
                     return;
                 }
@@ -1381,6 +1397,7 @@ export class JpmjCmd extends CmdBase {
                 const s = typeof data === 'string' ? data : '';
                 if (s === '\x1B' || s.length === 1) {
                     this._phase = 'playing';
+                    this._removePauseOverlay();
                     this._render();
                     return;
                 }
@@ -1763,23 +1780,43 @@ export class JpmjCmd extends CmdBase {
     }
 
     _drawPauseOverlay() {
-        const vb = this._vb;
+        const vb = this._pauseVB;
         const buf = vb._buffer;
-        const ox = 4, oy = 2, ow = 36, oh = 15;
+        const ow = 36, oh = 15;
         const bc = this._blankCell;
         const by = this._cellBorderY;
 
-        for (let r = oy; r < oy + oh; r++) {
-            for (let c = ox; c < ox + ow; c++) buf[r][c] = bc;
+        for (let r = 0; r < oh; r++) {
+            const row = buf[r];
+            for (let c = 0; c < ow; c++) row[c] = bc;
         }
 
-        vb.writeStr(oy, ox, '\x1B[1;33m┌' + '─'.repeat(ow - 2) + '┐\x1B[0m');
-        for (let r = 1; r < oh - 1; r++) { buf[oy + r][ox] = by; buf[oy + r][ox + ow - 1] = by; }
-        vb.writeStr(oy + oh - 1, ox, '\x1B[1;33m└' + '─'.repeat(ow - 2) + '┘\x1B[0m');
+        vb.writeStr(0, 0, '\x1B[1;33m┌' + '─'.repeat(ow - 2) + '┐\x1B[0m');
+        for (let r = 1; r < oh - 1; r++) { buf[r][0] = by; buf[r][ow - 1] = by; }
+        vb.writeStr(oh - 1, 0, '\x1B[1;33m└' + '─'.repeat(ow - 2) + '┘\x1B[0m');
 
-        vb.writeStr(oy + 3, ox + 2, '\x1B[1;33m' + ' '.repeat(8) + '暫停中' + ' '.repeat(8) + '\x1B[0m');
-        vb.writeStr(oy + 7, ox + 2, '  P 取消暫停    Q 退出');
-        term.writeVB(vb);
+        vb.writeStr(3, 2, '\x1B[1;33m' + ' '.repeat(8) + '暫停中' + ' '.repeat(8) + '\x1B[0m');
+        vb.writeStr(7, 2, '  P 取消暫停    Q 退出');
+
+        this._pauseVBBuffer = vb.render();
+        if (!this._pauseOverlay) {
+            this._pauseOverlay = {
+                x: 4, y: 2, w: ow, h: oh,
+                z: 5,
+                owner: this,
+                getCell: makeOverlayGetCell(() => this._pauseVBBuffer, ow, oh),
+            };
+            term.addOverlay(this._pauseOverlay);
+        }
+        for (let r = 2; r < 2 + oh; r++) term.markRowDirty(r);
+    }
+
+    _removePauseOverlay() {
+        if (this._pauseOverlay) {
+            term.removeOverlay(this._pauseOverlay);
+            this._pauseOverlay = null;
+            for (let r = 2; r < 17; r++) term.markRowDirty(r);
+        }
     }
 
     static get commandName() { return 'jpmj'; }
