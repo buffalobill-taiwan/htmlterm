@@ -42,7 +42,8 @@ export class SettingsDialog extends Dialog {
             }
             return;
         }
-        this._onKey(data);
+        const result = this._onKey(data);
+        if (result === 'close') this.close();
     }
 
     _renderContent() {
@@ -89,24 +90,24 @@ export class SettingsDialog extends Dialog {
 
         if (code === 0x1B) {
             const csi = parseCSI(data);
-            if (!csi) { this._onCancel(); return; }
+            if (!csi) { this._onCancel(); return 'close'; }
             const { final } = csi;
-            if (final === 'A' && this._selected > 0) {
-                this._selected--;
+            if (final === 'A') {
+                this._selected = this._selected > 0 ? this._selected - 1 : this._startIdx;
                 this.refreshContent();
-            } else if (final === 'B' && this._selected < this._startIdx) {
-                this._selected++;
+            } else if (final === 'B') {
+                this._selected = this._selected < this._startIdx ? this._selected + 1 : 0;
                 this.refreshContent();
             }
             return;
         }
-        if (code === 0x03) { this._onCancel(); return; }
+        if (code === 0x03) { this._onCancel(); return 'close'; }
         if (code === 0x0D || code === 0x0A) {
             if (this._selected === this._startIdx) {
                 const result = {};
                 for (const s of this._settings) result[s.key] = s.value;
                 this._onStart(result);
-                return;
+                return 'close';
             }
             this._openSubmenu(this._selected);
             return;

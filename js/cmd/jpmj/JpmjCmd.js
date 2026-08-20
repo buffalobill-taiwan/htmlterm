@@ -3,11 +3,16 @@ import { CmdBase } from '../CmdBase.js';
 import { CURSOR_HIDE, CURSOR_SHOW, bold, cyan, yellow, green, red, magenta, gray, white } from '../../util/sgr.js';
 import { SettingsDialog } from '../../dialog/SettingsDialog.js';
 import { SelectDialog } from '../../dialog/SelectDialog.js';
-import { VirtualBuffer, _blankCell } from '../../util/VirtualBuffer.js';
+import { VirtualBuffer } from '../../util/VirtualBuffer.js';
 import { isWide, displayWidth } from '../../util/display-width.js';
-import { tileFg } from './tiles.js';
+import { Tile, tileFg } from './tiles.js';
 import { Game } from './game.js';
 import { getWaitingTiles, checkTenpai } from './yaku.js';
+
+function _makeCell(ch, fg, bg, bold, width = 1) {
+    return { ch, fg, bg, bold, dim: false, italic: false, underline: false,
+             blink: false, inverse: false, conceal: false, crossedOut: false, width };
+}
 
 const SETTINGS = [
     { key: 'gameLength', label: '對戰長度', value: '東風戰',
@@ -79,7 +84,6 @@ export class JpmjCmd extends CmdBase {
         this._game = null;
         this._phase = 'settings';
         this._settingsValues = null;
-        this._settingsDialog = null;
         this._autoPlay = false;
         this._gameTimer = null;
         this._cursorMode = 'hand';
@@ -91,6 +95,7 @@ export class JpmjCmd extends CmdBase {
         this._chiOptions = [];
         this._kanOptions = [];
         this._pausedIsAuto = false;
+        this._palettesReady = false;
     }
 
     _loadSettings() {
@@ -100,6 +105,185 @@ export class JpmjCmd extends CmdBase {
         } catch { return {}; }
     }
 
+    _initPalettes() {
+        if (this._palettesReady) return;
+        this._palettesReady = true;
+
+        this._cellW0 = { ch: ' ', fg: 0, bg: 0, bold: false, dim: false, italic: false,
+            underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: 0 };
+
+        this._blankCell = { ch: ' ', fg: 7, bg: 0, bold: false, dim: false, italic: false,
+            underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: 1 };
+
+        this._cellBorderV = { ch: '│', fg: 8, bg: 0, bold: false, dim: false, italic: false,
+            underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: 1 };
+
+        this._cellBorderW = { ch: '│', fg: 7, bg: 0, bold: false, dim: false, italic: false,
+            underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: 1 };
+
+        this._cellBorderY = { ch: '│', fg: 33, bg: 0, bold: false, dim: false, italic: false,
+            underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: 1 };
+
+        this._cellCover = { ch: '▒', fg: 240, bg: 0, bold: false, dim: true, italic: false,
+            underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: 1 };
+
+        this._coverRowCache = {};
+        this._cover2x2Cache = {};
+        this._meldPal2x2 = {};
+        this._meldPalHoriz = {};
+        this._dimPal2x2 = {};
+        this._dimPalHoriz = {};
+
+        this._palNormal = {};
+        this._palCursor = {};
+        this._palCursorDark = {};
+        this._palHorizNormal = {};
+        this._palHorizCursor = {};
+
+        const allTiles = Tile.allTiles();
+        const seen = new Set();
+        for (const tile of allTiles) {
+            const key = tile.key();
+            if (seen.has(key)) continue;
+            seen.add(key);
+            const fg = tileFg(tile.suit, tile.value);
+
+            const topCh = tile.displayTop[0] || ' ';
+            const botCh = tile.displayBottom[0] || ' ';
+            this._palNormal[key] = {
+                top: _makeCell(topCh, fg, 0, true),
+                topCont: this._cellW0,
+                bot: _makeCell(botCh, fg, 0, true),
+                botCont: this._cellW0,
+            };
+            this._palCursor[key] = {
+                top: _makeCell(topCh, fg, 24, true),
+                topCont: this._cellW0,
+                bot: _makeCell(botCh, fg, 24, true),
+                botCont: this._cellW0,
+            };
+            this._palCursorDark[key] = {
+                top: _makeCell(topCh, fg, 236, true),
+                topCont: this._cellW0,
+                bot: _makeCell(botCh, fg, 236, true),
+                botCont: this._cellW0,
+            };
+
+            const horiz = tile.displayHorizontal;
+            const hCells = [];
+            for (let i = 0; i < horiz.length; i++) {
+                const ch = horiz[i];
+                const w = isWide(ch) ? 2 : 1;
+                hCells.push(_makeCell(ch, fg, 0, true, w));
+                if (w === 2) hCells.push(this._cellW0);
+            }
+            this._palHorizNormal[key] = hCells;
+
+            const hCellsC = [];
+            for (let i = 0; i < horiz.length; i++) {
+                const ch = horiz[i];
+                const w = isWide(ch) ? 2 : 1;
+                hCellsC.push(_makeCell(ch, fg, 24, true, w));
+                if (w === 2) hCellsC.push(this._cellW0);
+            }
+            this._palHorizCursor[key] = hCellsC;
+        }
+    }
+
+    _getMeldPal2x2(key, bg) {
+        const ck = key + '_' + bg;
+        if (!this._meldPal2x2[ck]) {
+            const tile = Tile.fromString(key);
+            if (!tile) return this._palNormal[key] || this._palNormal['m1'];
+            const fg = tileFg(tile.suit, tile.value);
+            const topCh = tile.displayTop[0] || ' ';
+            const botCh = tile.displayBottom[0] || ' ';
+            this._meldPal2x2[ck] = {
+                top: _makeCell(topCh, fg, bg, true),
+                topCont: this._cellW0,
+                bot: _makeCell(botCh, fg, bg, true),
+                botCont: this._cellW0,
+            };
+        }
+        return this._meldPal2x2[ck];
+    }
+
+    _getMeldPalHoriz(key, bg) {
+        const ck = key + '_' + bg;
+        if (!this._meldPalHoriz[ck]) {
+            const tile = Tile.fromString(key);
+            if (!tile) return this._palHorizNormal[key] || this._palHorizNormal['m1'];
+            const fg = tileFg(tile.suit, tile.value);
+            const horiz = tile.displayHorizontal;
+            const cells = [];
+            for (let i = 0; i < horiz.length; i++) {
+                const ch = horiz[i];
+                const w = isWide(ch) ? 2 : 1;
+                cells.push(_makeCell(ch, fg, bg, true, w));
+                if (w === 2) cells.push(this._cellW0);
+            }
+            this._meldPalHoriz[ck] = cells;
+        }
+        return this._meldPalHoriz[ck];
+    }
+
+    _getDimPal2x2(key) {
+        if (!this._dimPal2x2[key]) {
+            const tile = Tile.fromString(key);
+            if (!tile) return this._palNormal['m1'];
+            const topCh = tile.displayTop[0] || ' ';
+            const botCh = tile.displayBottom[0] || ' ';
+            this._dimPal2x2[key] = {
+                top: _makeCell(topCh, 8, 0, false, 1),
+                topCont: this._cellW0,
+                bot: _makeCell(botCh, 8, 0, false, 1),
+                botCont: this._cellW0,
+            };
+        }
+        return this._dimPal2x2[key];
+    }
+
+    _getDimPalHoriz(key) {
+        if (!this._dimPalHoriz[key]) {
+            const tile = Tile.fromString(key);
+            if (!tile) return this._palHorizNormal['m1'];
+            const fg = 8;
+            const horiz = tile.displayHorizontal;
+            const cells = [];
+            for (let i = 0; i < horiz.length; i++) {
+                const ch = horiz[i];
+                const w = isWide(ch) ? 2 : 1;
+                cells.push(_makeCell(ch, fg, 0, false, w));
+                if (w === 2) cells.push(this._cellW0);
+            }
+            this._dimPalHoriz[key] = cells;
+        }
+        return this._dimPalHoriz[key];
+    }
+
+    _getCoverRow(bg) {
+        let row = this._coverRowCache[bg];
+        if (!row) {
+            const cell = _makeCell('▒', 240, bg, false);
+            cell.dim = true;
+            row = [cell, cell, cell, cell];
+            this._coverRowCache[bg] = row;
+        }
+        return row;
+    }
+
+    _getCover2x2(ch, fg, bg) {
+        const k = ch + '_' + fg + '_' + bg;
+        let cells = this._cover2x2Cache[k];
+        if (!cells) {
+            const cell = _makeCell(ch, fg, bg, false);
+            cell.dim = true;
+            cells = [cell, cell, cell, cell];
+            this._cover2x2Cache[k] = cells;
+        }
+        return cells;
+    }
+
     _saveSettings(values) {
         try {
             localStorage.setItem('jpmj_settings', JSON.stringify(values));
@@ -107,6 +291,7 @@ export class JpmjCmd extends CmdBase {
     }
 
     execute(args) {
+        this._initPalettes();
         this.open();
         term.write('\x1B[2J\x1B[1;1H');
         term.write(CURSOR_HIDE);
@@ -121,25 +306,32 @@ export class JpmjCmd extends CmdBase {
                 s.value = saved[s.key];
             }
         }
-        const dialog = new SettingsDialog(term, {
+        const stackDepth = system.cmdStack.length;
+        system.createDialog(SettingsDialog, 'jpmj-settings', {
             title: 'jpmj — 日本麻將',
             settings: SETTINGS,
             footer: '↑↓ Move  ↩ Select  ESC Quit',
             onStart: (result) => {
-                dialog.close();
-                this._settingsDialog = null;
-                this._saveSettings(result);
-                this._startGame(result);
+                const removeHook = system.addFramePopHook(() => {
+                    if (system.cmdStack.length === stackDepth) {
+                        removeHook();
+                        this._saveSettings(result);
+                        this._startGame(result);
+                    }
+                });
+                return 'close';
             },
             onCancel: () => {
-                dialog.close();
-                this._settingsDialog = null;
-                term.write(CURSOR_SHOW);
-                this.close();
+                const removeHook = system.addFramePopHook(() => {
+                    if (system.cmdStack.length === stackDepth) {
+                        removeHook();
+                        term.write(CURSOR_SHOW);
+                        this.close();
+                    }
+                });
+                return 'close';
             },
         });
-        dialog.open();
-        this._settingsDialog = dialog;
     }
 
     _startGame(settings) {
@@ -379,18 +571,17 @@ export class JpmjCmd extends CmdBase {
     }
 
     _clearVB(vb) {
+        const bc = this._blankCell;
         for (let r = 0; r < vb.height; r++) {
-            for (let c = 0; c < vb.width; c++) {
-                vb.setCell(r, c, _blankCell);
-            }
+            const row = vb._buffer[r];
+            for (let c = 0; c < vb.width; c++) row[c] = bc;
         }
     }
 
     _clearVBNull(vb) {
         for (let r = 0; r < vb.height; r++) {
-            for (let c = 0; c < vb.width; c++) {
-                vb.setCell(r, c, null);
-            }
+            const row = vb._buffer[r];
+            for (let c = 0; c < vb.width; c++) row[c] = null;
         }
     }
 
@@ -457,69 +648,26 @@ export class JpmjCmd extends CmdBase {
         this._slotResult.vb = this._resultVB; this._slotResult.x = 4; this._slotResult.y = 2;
     }
 
-    _renderTile2x2(vb, row, col, tile, bgColor, inverse) {
-        const fg = tileFg(tile.suit, tile.value);
-        const bg = inverse ? 24 : (bgColor || 0);
-        const fgC = inverse ? fg : fg;
-        const top = tile.displayTop;
-        const bot = tile.displayBottom;
-        const c1 = top[0] || ' ';
-        const c3 = bot[0] || ' ';
-        const W0 = { ch: ' ', fg: 0, bg: 0, bold: false, dim: false, italic: false, underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: 0 };
-        const cell = (ch) => ({ ch, fg: fgC, bg, bold: true, dim: false, italic: false, underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: 1 });
-        vb.setCell(row, col, cell(c1));
-        vb.setCell(row, col + 1, W0);
-        vb.setCell(row + 1, col, cell(c3));
-        vb.setCell(row + 1, col + 1, W0);
+    _writeTile2x2(buf, row, col, pal) {
+        buf[row][col]     = pal.top;
+        buf[row][col + 1] = pal.topCont;
+        buf[row + 1][col] = pal.bot;
+        buf[row + 1][col + 1] = pal.botCont;
     }
 
-    _renderTile2x2Dim(vb, row, col, tile) {
-        const fg = 8;
-        const bg = 0;
-        const top = tile.displayTop;
-        const bot = tile.displayBottom;
-        const c1 = top[0] || ' ';
-        const c3 = bot[0] || ' ';
-        const W0 = { ch: ' ', fg: 0, bg: 0, bold: false, dim: false, italic: false, underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: 0 };
-        const cell = (ch) => ({ ch, fg, bg, bold: false, dim: true, italic: false, underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: 1 });
-        vb.setCell(row, col, cell(c1));
-        vb.setCell(row, col + 1, W0);
-        vb.setCell(row + 1, col, cell(c3));
-        vb.setCell(row + 1, col + 1, W0);
+    _writeTileH(buf, row, col, cells) {
+        for (let i = 0; i < cells.length; i++) buf[row][col + i] = cells[i];
     }
 
-    _renderTileHorizontal(vb, row, col, tile, bgColor) {
-        const fg = tileFg(tile.suit, tile.value);
-        const bg = bgColor || 0;
-        const W0 = { ch: ' ', fg: 0, bg: 0, bold: false, dim: false, italic: false, underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: 0 };
-        const mkCell = (ch, w) => ({ ch, fg, bg, bold: true, dim: false, italic: false, underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: w });
-        const horiz = tile.displayHorizontal;
-        let cx = col;
-        for (let i = 0; i < horiz.length; i++) {
-            const ch = horiz[i];
-            const w = isWide(ch) ? 2 : 1;
-            vb.setCell(row, cx, mkCell(ch, w));
-            if (w === 2) vb.setCell(row, cx + 1, W0);
-            cx += w;
-        }
+    _writeCover2x2(buf, row, col, cell) {
+        buf[row][col] = cell; buf[row][col + 1] = cell;
+        buf[row + 1][col] = cell; buf[row + 1][col + 1] = cell;
     }
 
-    _renderFacedown2x2(vb, row, col, ch, fg, bg) {
-        const c = ch || '▓';
-        const b = bg || 0;
-        const f = fg || 240;
-        vb.setCell(row, col, { ch: c, fg: f, bg: b, bold: false, dim: true, italic: false, underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: 1 });
-        vb.setCell(row, col + 1, { ch: c, fg: f, bg: b, bold: false, dim: true, italic: false, underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: 1 });
-        vb.setCell(row + 1, col, { ch: c, fg: f, bg: b, bold: false, dim: true, italic: false, underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: 1 });
-        vb.setCell(row + 1, col + 1, { ch: c, fg: f, bg: b, bold: false, dim: true, italic: false, underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: 1 });
-    }
-
-    _renderFacedown4x1(vb, row, col, bg) {
-        const b = bg || 0;
-        vb.setCell(row, col, { ch: '▒', fg: 240, bg: b, bold: false, dim: true, italic: false, underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: 1 });
-        vb.setCell(row, col + 1, { ch: '▒', fg: 240, bg: b, bold: false, dim: true, italic: false, underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: 1 });
-        vb.setCell(row, col + 2, { ch: '▒', fg: 240, bg: b, bold: false, dim: true, italic: false, underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: 1 });
-        vb.setCell(row, col + 3, { ch: '▒', fg: 240, bg: b, bold: false, dim: true, italic: false, underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: 1 });
+    _writeCoverRow(buf, row, col, bg) {
+        const cells = this._getCoverRow(bg);
+        buf[row][col] = cells[0]; buf[row][col + 1] = cells[1];
+        buf[row][col + 2] = cells[2]; buf[row][col + 3] = cells[3];
     }
 
     _renderPlayerHand(vb) {
@@ -529,6 +677,7 @@ export class JpmjCmd extends CmdBase {
         const drawTile = p.lastDraw;
         const melds = p.melds;
         const drawIdx = drawTile ? hand.indexOf(drawTile) : -1;
+        const buf = vb._buffer;
 
         const meldTiles = [];
         for (const m of melds) {
@@ -553,28 +702,32 @@ export class JpmjCmd extends CmdBase {
         for (let i = 0; i < hand.length; i++) {
             if (i === drawIdx) continue;
             const tile = hand[i];
+            const key = tile.key();
             const isCursor = showCursor && (
                              (this._cursorMode === 'hand' && this._handCursor === visPos) ||
                              (this._cursorMode === 'riichiSelect' && this._riichiCursor === visPos));
             const canDiscard = discardableIndices.includes(visPos);
-            let bg = 0;
-            if (isCursor) bg = 24;
-            if (isCursor && !canDiscard && isDiscardPhase) bg = 236;
-            this._renderTile2x2(vb, 1, col, tile, bg, false);
+            let pal;
+            if (isCursor && !canDiscard && isDiscardPhase) pal = this._palCursorDark[key];
+            else if (isCursor) pal = this._palCursor[key];
+            else pal = this._palNormal[key];
+            this._writeTile2x2(buf, 1, col, pal);
             col += 2;
             visPos++;
         }
 
         col += gapBeforeDraw;
         if (drawTile) {
+            const key = drawTile.key();
             const isCursor = showCursor && (
                              (this._cursorMode === 'hand' && this._handCursor === hand.length - 1) ||
                              (this._cursorMode === 'riichiSelect' && this._riichiCursor === hand.length - 1));
             const canDiscard = discardableIndices.includes(hand.length - 1);
-            let bg = 0;
-            if (isCursor) bg = 24;
-            if (isCursor && !canDiscard && isDiscardPhase) bg = 236;
-            this._renderTile2x2(vb, 1, col, drawTile, bg, false);
+            let pal;
+            if (isCursor && !canDiscard && isDiscardPhase) pal = this._palCursorDark[key];
+            else if (isCursor) pal = this._palCursor[key];
+            else pal = this._palNormal[key];
+            this._writeTile2x2(buf, 1, col, pal);
         }
         col += drawCols;
 
@@ -585,7 +738,8 @@ export class JpmjCmd extends CmdBase {
                 const bgType = meldTypeToBg(m);
                 const bg = meldBg(bgType, countCallType(melds.slice(0, mi), bgType));
                 for (let ti = 0; ti < m.tiles.length; ti++) {
-                    this._renderTile2x2(vb, 1, col, m.tiles[ti], bg, false);
+                    const pal = this._getMeldPal2x2(m.tiles[ti].key(), bg);
+                    this._writeTile2x2(buf, 1, col, pal);
                     col += 2;
                 }
             }
@@ -596,9 +750,9 @@ export class JpmjCmd extends CmdBase {
         const items = this._actionItems;
         if (items.length === 0 && this._cursorMode !== 'chiSelect' && this._cursorMode !== 'kanSelect') return;
 
-        for (let c = 0; c < 40; c++) {
-            vb.setCell(0, c, _blankCell);
-        }
+        const buf = vb._buffer;
+        const bc = this._blankCell;
+        for (let c = 0; c < 40; c++) buf[0][c] = bc;
 
         let displayItems;
         let selectedIdx = -1;
@@ -645,6 +799,9 @@ export class JpmjCmd extends CmdBase {
         const hand = across.hand;
         const drawTile = across.lastDraw;
         const melds = across.melds;
+        const buf = vb._buffer;
+        const reveal = this._phase === 'result';
+        const cover2x2 = this._getCover2x2('▓', 240, 236);
 
         const drawIdx = drawTile ? hand.indexOf(drawTile) : -1;
         const handDisplay = hand.length - (drawTile ? 1 : 0);
@@ -666,29 +823,30 @@ export class JpmjCmd extends CmdBase {
             const isClosedKan = m.type === 'kan' && !m.open;
             for (let ti = 0; ti < m.tiles.length; ti++) {
                 if (isClosedKan && (ti === 1 || ti === 2)) {
-                    this._renderFacedown2x2(vb, 0, col, '▓', 240, bg);
+                    this._writeCover2x2(buf, 0, col, this._getCover2x2('▓', 240, bg)[0]);
                 } else {
-                    this._renderTile2x2(vb, 0, col, m.tiles[ti], bg, false);
+                    const pal = reveal ? this._palNormal[m.tiles[ti].key()] : this._getMeldPal2x2(m.tiles[ti].key(), bg);
+                    this._writeTile2x2(buf, 0, col, pal);
                 }
                 col += 2;
             }
         }
         col += gapBeforeDraw;
         if (drawTile) {
-            if (this._phase === 'result') {
-                this._renderTile2x2(vb, 0, col, drawTile, 0, false);
+            if (reveal) {
+                this._writeTile2x2(buf, 0, col, this._palNormal[drawTile.key()]);
             } else {
-                this._renderFacedown2x2(vb, 0, col, '▓', 240, 236);
+                this._writeCover2x2(buf, 0, col, cover2x2[0]);
             }
         }
         col += drawCols;
         col += gapBeforeHand;
         for (let i = 0; i < hand.length; i++) {
             if (i === drawIdx) continue;
-            if (this._phase === 'result') {
-                this._renderTile2x2(vb, 0, col, hand[i], 0, false);
+            if (reveal) {
+                this._writeTile2x2(buf, 0, col, this._palNormal[hand[i].key()]);
             } else {
-                this._renderFacedown2x2(vb, 0, col, '▓', 240, 236);
+                this._writeCover2x2(buf, 0, col, cover2x2[0]);
             }
             col += 2;
         }
@@ -700,6 +858,9 @@ export class JpmjCmd extends CmdBase {
         const hand = left.hand;
         const drawTile = left.lastDraw;
         const melds = left.melds;
+        const buf = vb._buffer;
+        const reveal = this._phase === 'result';
+        const cover = this._getCoverRow(236);
 
         const drawIdx = drawTile ? hand.findIndex(t => t.equals(drawTile)) : -1;
         const handDisplay = hand.length - (drawTile ? 1 : 0);
@@ -711,23 +872,22 @@ export class JpmjCmd extends CmdBase {
         const startRow = Math.floor((18 - base) / 2);
 
         let row = startRow;
-        const reveal = this._phase === 'result';
 
         for (let i = 0; i < hand.length; i++) {
             if (i === drawIdx) continue;
             if (reveal) {
-                this._renderTileHorizontal(vb, row, 0, hand[i], 0);
+                this._writeTileH(buf, row, 0, this._palHorizNormal[hand[i].key()]);
             } else {
-                this._renderFacedown4x1(vb, row, 0, 236);
+                buf[row][0] = cover[0]; buf[row][1] = cover[1]; buf[row][2] = cover[2]; buf[row][3] = cover[3];
             }
             row++;
         }
         row += gapAfterHand;
         if (drawTile) {
             if (reveal) {
-                this._renderTileHorizontal(vb, row, 0, drawTile, 0);
+                this._writeTileH(buf, row, 0, this._palHorizNormal[drawTile.key()]);
             } else {
-                this._renderFacedown4x1(vb, row, 0, 236);
+                buf[row][0] = cover[0]; buf[row][1] = cover[1]; buf[row][2] = cover[2]; buf[row][3] = cover[3];
             }
         }
         row++;
@@ -739,9 +899,9 @@ export class JpmjCmd extends CmdBase {
             const isClosedKan = m.type === 'kan' && !m.open;
             for (let ti = 0; ti < m.tiles.length; ti++) {
                 if (isClosedKan && (ti === 1 || ti === 2)) {
-                    this._renderFacedown4x1(vb, row, 0, bg);
+                    this._writeCoverRow(buf, row, 0, bg);
                 } else {
-                    this._renderTileHorizontal(vb, row, 0, m.tiles[ti], bg);
+                    this._writeTileH(buf, row, 0, this._getMeldPalHoriz(m.tiles[ti].key(), bg));
                 }
                 row++;
             }
@@ -754,6 +914,9 @@ export class JpmjCmd extends CmdBase {
         const hand = right.hand;
         const drawTile = right.lastDraw;
         const melds = right.melds;
+        const buf = vb._buffer;
+        const reveal = this._phase === 'result';
+        const cover = this._getCoverRow(236);
 
         const drawIdx = drawTile ? hand.findIndex(t => t.equals(drawTile)) : -1;
         const handDisplay = hand.length - (drawTile ? 1 : 0);
@@ -765,7 +928,6 @@ export class JpmjCmd extends CmdBase {
         const startRow = Math.floor((18 - base) / 2);
 
         let row = startRow;
-        const reveal = this._phase === 'result';
 
         for (let mi = melds.length - 1; mi >= 0; mi--) {
             const m = melds[mi];
@@ -774,9 +936,9 @@ export class JpmjCmd extends CmdBase {
             const isClosedKan = m.type === 'kan' && !m.open;
             for (let ti = 0; ti < m.tiles.length; ti++) {
                 if (isClosedKan && (ti === 1 || ti === 2)) {
-                    this._renderFacedown4x1(vb, row, 0, bg);
+                    this._writeCoverRow(buf, row, 0, bg);
                 } else {
-                    this._renderTileHorizontal(vb, row, 0, m.tiles[ti], bg);
+                    this._writeTileH(buf, row, 0, this._getMeldPalHoriz(m.tiles[ti].key(), bg));
                 }
                 row++;
             }
@@ -784,9 +946,9 @@ export class JpmjCmd extends CmdBase {
         row += gapAfterMelds;
         if (drawTile) {
             if (reveal) {
-                this._renderTileHorizontal(vb, row, 0, drawTile, 0);
+                this._writeTileH(buf, row, 0, this._palHorizNormal[drawTile.key()]);
             } else {
-                this._renderFacedown4x1(vb, row, 0, 236);
+                buf[row][0] = cover[0]; buf[row][1] = cover[1]; buf[row][2] = cover[2]; buf[row][3] = cover[3];
             }
         }
         row++;
@@ -794,25 +956,30 @@ export class JpmjCmd extends CmdBase {
         for (let i = 0; i < hand.length; i++) {
             if (i === drawIdx) continue;
             if (reveal) {
-                this._renderTileHorizontal(vb, row, 0, hand[i], 0);
+                this._writeTileH(buf, row, 0, this._palHorizNormal[hand[i].key()]);
             } else {
-                this._renderFacedown4x1(vb, row, 0, 236);
+                buf[row][0] = cover[0]; buf[row][1] = cover[1]; buf[row][2] = cover[2]; buf[row][3] = cover[3];
             }
             row++;
         }
     }
 
-    _renderDiscardTile(vb, row, col, tile, isLatest, isCalled) {
+    _renderDiscardTile(buf, row, col, tile, isLatest, isCalled) {
+        const key = tile.key();
         if (isCalled) {
-            this._renderTile2x2Dim(vb, row, col, tile);
+            this._writeTile2x2(buf, row, col, this._getDimPal2x2(key));
         } else {
-            this._renderTile2x2(vb, row, col, tile, isLatest ? 240 : 0, isLatest);
+            let pal;
+            if (isLatest) pal = this._palCursor[key];
+            else pal = this._palNormal[key];
+            this._writeTile2x2(buf, row, col, pal);
         }
     }
 
     _renderDiscards(vb) {
         const g = this._game;
         if (!g) return;
+        const buf = vb._buffer;
 
         const quadrants = [
             { playerIdx: 2, startCol: 0, startRow: 0 },
@@ -830,7 +997,7 @@ export class JpmjCmd extends CmdBase {
                 const tile = discards[i];
                 const latest = isLatest && i === discards.length - 1;
                 const called = tile.called || false;
-                this._renderDiscardTile(vb, row, col, tile, latest, called);
+                this._renderDiscardTile(buf, row, col, tile, latest, called);
             }
         }
     }
@@ -838,10 +1005,11 @@ export class JpmjCmd extends CmdBase {
     _renderInfoPanel(vb) {
         const g = this._game;
         if (!g) return;
+        const buf = vb._buffer;
+        const bv = this._cellBorderV;
+        const cover = this._cellCover;
 
-        for (let r = 0; r < 21; r++) {
-            vb.setCell(r, 0, { ch: '│', fg: 8, bg: 0, bold: false, dim: false, italic: false, underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: 1 });
-        }
+        for (let r = 0; r < 21; r++) buf[r][0] = bv;
 
         vb.writeStr(0, 1, '\x1B[1;36m' + g.roundLabel + '\x1B[0m');
 
@@ -853,8 +1021,9 @@ export class JpmjCmd extends CmdBase {
 
         const doraIndicators = g.doraIndicators;
         for (let i = 0; i < Math.min(doraIndicators.length, 5); i++) {
-            const tile = doraIndicators[i];
-            this._renderTile2x2(vb, 2, 3 + i * 6, tile, 0, false);
+            const col = 3 + i * 6;
+            const pal = this._palNormal[doraIndicators[i].key()];
+            this._writeTile2x2(buf, 2, col, pal);
         }
         const showUra = g.roundResult && g.roundResult.winnerRiichi;
         for (let i = 0; i < Math.min(doraIndicators.length, 5); i++) {
@@ -862,17 +1031,14 @@ export class JpmjCmd extends CmdBase {
             if (showUra) {
                 const uraTile = g.wall.getUraDoraIndicators()[i];
                 if (uraTile) {
-                    this._renderTile2x2(vb, 4, col, uraTile, 0, false);
+                    this._writeTile2x2(buf, 4, col, this._palNormal[uraTile.key()]);
                 } else {
-                    vb.setCell(4, col, { ch: '▒', fg: 240, bg: 0, bold: false, dim: true, italic: false, underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: 1 });
-                    vb.setCell(4, col + 1, { ch: '▒', fg: 240, bg: 0, bold: false, dim: true, italic: false, underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: 1 });
+                    buf[4][col] = cover; buf[4][col + 1] = cover;
                 }
             } else {
-                vb.setCell(4, col, { ch: '▒', fg: 240, bg: 0, bold: false, dim: true, italic: false, underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: 1 });
-                vb.setCell(4, col + 1, { ch: '▒', fg: 240, bg: 0, bold: false, dim: true, italic: false, underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: 1 });
+                buf[4][col] = cover; buf[4][col + 1] = cover;
             }
-            vb.setCell(5, col, { ch: '▒', fg: 240, bg: 0, bold: false, dim: true, italic: false, underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: 1 });
-            vb.setCell(5, col + 1, { ch: '▒', fg: 240, bg: 0, bold: false, dim: true, italic: false, underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: 1 });
+            buf[5][col] = cover; buf[5][col + 1] = cover;
         }
 
         vb.writeStr(6, 1, '─'.repeat(34));
@@ -983,12 +1149,11 @@ export class JpmjCmd extends CmdBase {
     _renderGameOver(vb) {
         const g = this._game;
         if (!g) return;
+        const buf = vb._buffer;
+        const bw = this._cellBorderW;
 
         vb.writeStr(0, 0, '┌' + '─'.repeat(78) + '┐');
-        for (let r = 1; r < 24; r++) {
-            vb.setCell(r, 0, { ch: '│', fg: 7, bg: 0, bold: false, dim: false, italic: false, underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: 1 });
-            vb.setCell(r, 79, { ch: '│', fg: 7, bg: 0, bold: false, dim: false, italic: false, underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: 1 });
-        }
+        for (let r = 1; r < 24; r++) { buf[r][0] = bw; buf[r][79] = bw; }
         vb.writeStr(24, 0, '└' + '─'.repeat(78) + '┘');
 
         vb.writeStr(1, 0, '\x1B[1;33m' + ' '.repeat(30) + '最終結果' + ' '.repeat(31) + '\x1B[0m');
@@ -1100,12 +1265,6 @@ export class JpmjCmd extends CmdBase {
     }
 
     _onKey(data) {
-        if (this._settingsDialog) {
-            this._settingsDialog.handleKey(data);
-            if (!this._settingsDialog || this._settingsDialog.closed) this._settingsDialog = null;
-            return;
-        }
-
         const code = typeof data === 'string' ? data.charCodeAt(0) : data;
 
         if (this._phase === 'gameOver') {
@@ -1437,6 +1596,7 @@ export class JpmjCmd extends CmdBase {
     _executeAction(item) {
         const g = this._game;
         const action = item.action;
+        const stackDepth = system.cmdStack.length;
 
         if (action === 'pass') {
             if (g.phase === 'draw') {
@@ -1488,26 +1648,27 @@ export class JpmjCmd extends CmdBase {
 
         if (action && typeof action === 'object') {
             if (action.type === 'chi' && action.chiSets && action.chiSets.length > 1) {
-                const chiLabels = action.chiSets.map((set, i) => {
-                    return set.map(t => t.name).join(' ');
+                const chiLabels = action.chiSets.map(set => set.map(t => t.name).join(' '));
+                const removeHook = system.addFramePopHook(() => {
+                    if (system.cmdStack.length === stackDepth) {
+                        removeHook();
+                        this._gameTimer = setTimeout(() => this._continueGame(), 100);
+                    }
                 });
-                const dialog = new SelectDialog(term, {
+                system.createDialog(SelectDialog, 'jpmj-chi', {
                     title: 'チー選択',
                     message: 'どの組み合わせでチーしますか？',
                     options: chiLabels,
                     width: 40,
                     onSelect: (idx) => {
-                        dialog.close();
                         const call = { ...action, chosenChiSet: idx };
                         g.humanCall(call);
-                        this._gameTimer = setTimeout(() => this._continueGame(), 100);
+                        return 'close';
                     },
                     onCancel: () => {
-                        dialog.close();
-                        this._gameTimer = setTimeout(() => this._continueGame(), 100);
+                        return 'close';
                     },
                 });
-                dialog.open();
                 return;
             }
             if (action.type === 'kan') {
@@ -1563,19 +1724,17 @@ export class JpmjCmd extends CmdBase {
 
     _drawPauseOverlay() {
         const vb = this._vb;
+        const buf = vb._buffer;
         const ox = 4, oy = 2, ow = 36, oh = 15;
+        const bc = this._blankCell;
+        const by = this._cellBorderY;
 
         for (let r = oy; r < oy + oh; r++) {
-            for (let c = ox; c < ox + ow; c++) {
-                vb.setCell(r, c, _blankCell);
-            }
+            for (let c = ox; c < ox + ow; c++) buf[r][c] = bc;
         }
 
         vb.writeStr(oy, ox, '\x1B[1;33m┌' + '─'.repeat(ow - 2) + '┐\x1B[0m');
-        for (let r = 1; r < oh - 1; r++) {
-            vb.setCell(oy + r, ox, { ch: '│', fg: 33, bg: 0, bold: false, dim: false, italic: false, underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: 1 });
-            vb.setCell(oy + r, ox + ow - 1, { ch: '│', fg: 33, bg: 0, bold: false, dim: false, italic: false, underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: 1 });
-        }
+        for (let r = 1; r < oh - 1; r++) { buf[oy + r][ox] = by; buf[oy + r][ox + ow - 1] = by; }
         vb.writeStr(oy + oh - 1, ox, '\x1B[1;33m└' + '─'.repeat(ow - 2) + '┘\x1B[0m');
 
         vb.writeStr(oy + 3, ox + 2, '\x1B[1;33m' + ' '.repeat(8) + '暫停中' + ' '.repeat(8) + '\x1B[0m');

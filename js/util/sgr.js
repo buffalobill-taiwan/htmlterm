@@ -41,6 +41,8 @@ export function applySGR(attr, params) {
         else if (p === 29) attr.crossedOut = false;
         else if (p === 500) attr.big = true;
         else if (p === 501) attr.big = false;
+        else if (p === 38 && params[i + 1] === 5 && i + 2 < params.length) { attr.fg = params[i + 2]; i += 2; }
+        else if (p === 48 && params[i + 1] === 5 && i + 2 < params.length) { attr.bg = params[i + 2]; i += 2; }
         else if (p >= 30 && p <= 37) attr.fg = p - 30;
         else if (p === 39) attr.fg = DEFAULT_FG;
         else if (p >= 40 && p <= 47) attr.bg = p - 40;
@@ -90,6 +92,8 @@ export const coral = _sgrStyle([38, 5, 209]);
 export const turquoise = _sgrStyle([38, 5, 80]);
 export const orchid = _sgrStyle([38, 5, 170]);
 
+export function fg(n) { return _sgrStyle([38, 5, n]); }
+export function bg(n) { return _sgrStyle([48, 5, n]); }
 export function sgr(...params) { return _sgrStyle(params); }
 
 export const CURSOR_HIDE = '\x1B[?25l';
