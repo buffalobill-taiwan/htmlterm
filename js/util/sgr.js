@@ -116,7 +116,7 @@ export function makeCell(ch, arg2, arg3, arg4, arg5) {
         return { ch: ch || ' ', fg: arg2, bg: arg3, bold: arg4,
                  dim: false, italic: false, underline: false, blink: false,
                  inverse: false, conceal: false, crossedOut: false,
-                 width: arg5 || 1 };
+                 width: arg5 !== undefined ? arg5 : 1 };
     }
     return { ch: ch || ' ', fg: arg2.fg, bg: arg2.bg, bold: arg2.bold,
              dim: arg2.dim, italic: arg2.italic, underline: arg2.underline,

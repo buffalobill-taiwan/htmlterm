@@ -1,6 +1,6 @@
 import { term } from '../system/sys.js';
 import { CmdBase } from './CmdBase.js';
-import { bold, gray, yellow, CURSOR_HIDE } from '../util/sgr.js';
+import { bold, gray, yellow, CURSOR_HIDE, makeCell } from '../util/sgr.js';
 import { VirtualBuffer } from '../util/VirtualBuffer.js';
 import { isWide } from '../util/display-width.js';
 
@@ -462,11 +462,6 @@ export class Game2048Cmd extends CmdBase {
 
     _renderHint() {
         const buf = this._rootVB._buffer;
-        const makeCell = (ch, fg, bg, bold) => ({
-            ch, fg, bg, bold, dim: false, italic: false,
-            underline: false, blink: false, inverse: false,
-            conceal: false, crossedOut: false, width: 1,
-        });
         const hint = '←↑↓→ Move  [u]ndo  [r]estart  [q]uit';
         const row = buf[0];
         for (let i = 0; i < hint.length && i < row.length; i++) {
@@ -548,12 +543,6 @@ export class Game2048Cmd extends CmdBase {
     _renderMoveOverlay(moveCells) {
         const buf = this._boardVB._buffer;
 
-        const makeCell = (ch, fg, bg, bold, width = 1) => ({
-            ch, fg, bg, bold, dim: false, italic: false,
-            underline: false, blink: false, inverse: false,
-            conceal: false, crossedOut: false, width,
-        });
-
         for (const mc of moveCells) {
             const { r, c, srcR, srcC, value } = mc;
             const isHoriz = srcR === r;
@@ -601,12 +590,6 @@ export class Game2048Cmd extends CmdBase {
 
     _renderMergeOverlay(mergeCells) {
         const buf = this._boardVB._buffer;
-
-        const makeCell = (ch, fg, bg, bold, width = 1) => ({
-            ch, fg, bg, bold, dim: false, italic: false,
-            underline: false, blink: false, inverse: false,
-            conceal: false, crossedOut: false, width,
-        });
 
         for (const mc of mergeCells) {
             const { r, c, srcR, srcC, value } = mc;
