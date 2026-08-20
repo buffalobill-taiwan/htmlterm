@@ -1481,23 +1481,17 @@ export class JpmjCmd extends CmdBase {
         const p = g.players[0];
         const hand = p.hand;
         const hasDraw = !!p.lastDraw;
-        const maxRegular = hand.length - 1;
-        const maxDraw = maxRegular;
 
         if (code === 0x1B) {
             const s = typeof data === 'string' ? data : '';
             if (s === '\x1B[C') {
-                if (this._handCursor < maxDraw) {
-                    this._handCursor++;
-                    this._render();
-                }
+                this._handCursor = (this._handCursor + 1) % hand.length;
+                this._render();
                 return;
             }
             if (s === '\x1B[D') {
-                if (this._handCursor > 0) {
-                    this._handCursor--;
-                    this._render();
-                }
+                this._handCursor = (this._handCursor - 1 + hand.length) % hand.length;
+                this._render();
                 return;
             }
             if (s === '\x1B[A') {
