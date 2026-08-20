@@ -3,6 +3,7 @@ import { CmdBase } from '../CmdBase.js';
 import { CURSOR_HIDE, CURSOR_SHOW, bold, cyan, yellow, green, red, magenta, gray, white } from '../../util/sgr.js';
 import { SettingsDialog } from '../../dialog/SettingsDialog.js';
 import { SelectDialog } from '../../dialog/SelectDialog.js';
+import { ConfirmDialog } from '../../dialog/ConfirmDialog.js';
 import { VirtualBuffer } from '../../util/VirtualBuffer.js';
 import { isWide, displayWidth } from '../../util/display-width.js';
 import { Tile, tileFg } from './tiles.js';
@@ -400,8 +401,16 @@ export class JpmjCmd extends CmdBase {
                 this._cursorMode = 'hand';
                 this._handCursor = Math.max(0, p.hand.length - 1);
             }
+        } else {
+            const p = this._game.players[0];
+            if (p.lastDraw && p.hand.includes(p.lastDraw)) {
+                this._cursorMode = 'hand';
+                this._handCursor = p.hand.length - 1;
+            }
         }
-        this._render();
+        const skipRender = !needHuman && this._game.currentPlayer === 0
+            && this._game.phase === 'draw' && !this._game.players[0].lastDraw;
+        if (!skipRender) this._render();
         if (needHuman && this._autoPlay) {
             this._processAutoPlay();
             return;
@@ -490,6 +499,14 @@ export class JpmjCmd extends CmdBase {
             clearTimeout(this._gameTimer);
             this._gameTimer = null;
         }
+    }
+
+    _showQuitConfirm() {
+        system.createDialog(ConfirmDialog, 'jpmj-confirm', {
+            title: '確認',
+            message: '確定要離開嗎？',
+            onConfirm: () => this.close(),
+        });
     }
 
     close() {
@@ -1282,7 +1299,11 @@ export class JpmjCmd extends CmdBase {
                 this._showSettings();
                 return;
             }
-            if (code === 0x71 || code === 0x51 || code === 0x03) {
+            if (code === 0x71 || code === 0x51) {
+                this._showQuitConfirm();
+                return;
+            }
+            if (code === 0x03) {
                 this.close();
                 return;
             }
@@ -1299,7 +1320,11 @@ export class JpmjCmd extends CmdBase {
                 this._continueGame();
                 return;
             }
-            if (code === 0x03 || code === 0x71 || code === 0x51) {
+            if (code === 0x71 || code === 0x51) {
+                this._showQuitConfirm();
+                return;
+            }
+            if (code === 0x03) {
                 this.close();
                 return;
             }
@@ -1317,7 +1342,11 @@ export class JpmjCmd extends CmdBase {
                 this._render();
                 return;
             }
-            if (code === 0x71 || code === 0x51 || code === 0x03) {
+            if (code === 0x71 || code === 0x51) {
+                this._showQuitConfirm();
+                return;
+            }
+            if (code === 0x03) {
                 this.close();
                 return;
             }
@@ -1340,7 +1369,11 @@ export class JpmjCmd extends CmdBase {
                     return;
                 }
             }
-            if (code === 0x71 || code === 0x51 || code === 0x03) {
+            if (code === 0x71 || code === 0x51) {
+                this._showQuitConfirm();
+                return;
+            }
+            if (code === 0x03) {
                 this.close();
                 return;
             }
@@ -1356,7 +1389,11 @@ export class JpmjCmd extends CmdBase {
         }
 
         if (!this._game || !this._game.waitingHuman) return;
-        if (code === 0x03 || code === 0x71 || code === 0x51) {
+        if (code === 0x71 || code === 0x51) {
+            this._showQuitConfirm();
+            return;
+        }
+        if (code === 0x03) {
             this.close();
             return;
         }
@@ -1429,7 +1466,7 @@ export class JpmjCmd extends CmdBase {
                 return;
             }
             if (s === '\x1B[3~' || s === '\x1B[2~' || s === '\x1B[H' || s === '\x1B[F' || s === '\x1B[5~' || s === '\x1B[6~') return;
-            this.close();
+            this._showQuitConfirm();
             return;
         }
         if (code === 0x0D || code === 0x0A) {
@@ -1475,7 +1512,7 @@ export class JpmjCmd extends CmdBase {
                 return;
             }
             if (s === '\x1B[3~' || s === '\x1B[2~' || s === '\x1B[H' || s === '\x1B[F' || s === '\x1B[5~' || s === '\x1B[6~') return;
-            this.close();
+            this._showQuitConfirm();
             return;
         }
 
