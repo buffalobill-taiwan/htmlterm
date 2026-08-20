@@ -332,7 +332,7 @@ export class KlotskiCmd extends CmdBase {
         vb.writeStr(5, 0, gray(' 目標 ') + bold('≤ ' + lv.mini));
         vb.writeStr(6, 0, gray(' 時間 ') + bold(_fmtTime(this._time)));
         vb.writeStr(7, 0, gray('─'.repeat(20)));
-        vb.writeStr(9, 0, gray(' Space 選取方塊'));
+        vb.writeStr(9, 0, gray(' Space/↵ 選取方塊'));
         vb.writeStr(10, 0, gray(' ←↑↓→ 滑動'));
         vb.writeStr(11, 0, gray(' Z 撤銷'));
         vb.writeStr(12, 0, gray(' N 新關  P 暫停'));
@@ -672,7 +672,7 @@ export class KlotskiCmd extends CmdBase {
             this._quit(); return;
         }
 
-        if (code === 0x20) { this._toggleSelect(); return; }
+        if (code === 0x20 || code === 0x0D) { this._toggleSelect(); return; }
         if (code === 0x08 || code === 0x7F) return;
 
         if (typeof data === 'string') {
