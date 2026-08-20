@@ -334,7 +334,7 @@ export class KlotskiCmd extends CmdBase {
         vb.writeStr(7, 0, gray('─'.repeat(20)));
         vb.writeStr(9, 0, gray(' Space/↵ 選取方塊'));
         vb.writeStr(10, 0, gray(' ←↑↓→ 滑動'));
-        vb.writeStr(11, 0, gray(' Z 撤銷'));
+        vb.writeStr(11, 0, gray(' Z 撤銷  R 重設'));
         vb.writeStr(12, 0, gray(' N 新關  P 暫停'));
         vb.writeStr(13, 0, gray(' Q 離開'));
     }
@@ -527,6 +527,25 @@ export class KlotskiCmd extends CmdBase {
         this._render();
     }
 
+    _restart() {
+        const lv = LEVELS[this._levelIdx];
+        this._stopTimer();
+        this._cancelFinishAnim();
+        this._moves = 0;
+        this._time = 0;
+        this._completed = false;
+        this._finishing = false;
+        this._animOffset = 0;
+        this._paused = false;
+        this._selected = null;
+        this._history = [];
+        this._cursor = { r: 2, c: 1 };
+        this._buildBlocks(lv.board);
+        this._buildBoardGrid();
+        this._render();
+        this._startTimer();
+    }
+
     _moveCursor(dr, dc) {
         const startId = this._board[this._cursor.r][this._cursor.c];
         let r = this._cursor.r + dr, c = this._cursor.c + dc;
@@ -651,6 +670,7 @@ export class KlotskiCmd extends CmdBase {
             if (typeof data === 'string') {
                 const ch = data.toLowerCase();
                 if (ch === 'p') { this._togglePause(); return; }
+                if (ch === 'r') { this._restart(); return; }
                 if (ch === 'q') { this._quit(); return; }
                 if (ch === 'n') { this._showLevelMenu(); return; }
             }
@@ -679,6 +699,7 @@ export class KlotskiCmd extends CmdBase {
             const ch = data.toLowerCase();
             if (ch === 'z') { this._undo(); return; }
             if (ch === 'p') { this._togglePause(); return; }
+            if (ch === 'r') { this._restart(); return; }
             if (ch === 'n') { this._showLevelMenu(); return; }
             if (ch === 'q') { this._quit(); return; }
         }
