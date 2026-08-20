@@ -1020,25 +1020,34 @@ export class JpmjCmd extends CmdBase {
         vb.writeStr(1, 1, statsLine);
 
         const doraIndicators = g.doraIndicators;
-        for (let i = 0; i < Math.min(doraIndicators.length, 5); i++) {
-            const col = 3 + i * 6;
-            const pal = this._palNormal[doraIndicators[i].key()];
-            this._writeTile2x2(buf, 2, col, pal);
-        }
+        const doraCount = doraIndicators.length;
         const showUra = g.roundResult && g.roundResult.winnerRiichi;
-        for (let i = 0; i < Math.min(doraIndicators.length, 5); i++) {
-            const col = 3 + i * 6;
-            if (showUra) {
-                const uraTile = g.wall.getUraDoraIndicators()[i];
-                if (uraTile) {
-                    this._writeTile2x2(buf, 4, col, this._palNormal[uraTile.key()]);
-                } else {
-                    buf[4][col] = cover; buf[4][col + 1] = cover;
-                }
+        const uraIndicators = showUra ? g.wall.getUraDoraIndicators() : [];
+
+        vb.writeStr(2, 1, '　ドラ：');
+        for (let i = 0; i < 5; i++) {
+            const col = 9 + i * 4;
+            if (i < doraCount) {
+                const pal = this._palNormal[doraIndicators[i].key()];
+                buf[2][col] = pal.top; buf[2][col + 1] = pal.topCont;
+                buf[3][col] = pal.bot; buf[3][col + 1] = pal.botCont;
+            } else {
+                buf[2][col] = cover; buf[2][col + 1] = cover;
+                buf[3][col] = cover; buf[3][col + 1] = cover;
+            }
+        }
+
+        vb.writeStr(4, 1, '裏ドラ：');
+        for (let i = 0; i < 5; i++) {
+            const col = 9 + i * 4;
+            if (showUra && i < doraCount && uraIndicators[i]) {
+                const pal = this._palNormal[uraIndicators[i].key()];
+                buf[4][col] = pal.top; buf[4][col + 1] = pal.topCont;
+                buf[5][col] = pal.bot; buf[5][col + 1] = pal.botCont;
             } else {
                 buf[4][col] = cover; buf[4][col + 1] = cover;
+                buf[5][col] = cover; buf[5][col + 1] = cover;
             }
-            buf[5][col] = cover; buf[5][col + 1] = cover;
         }
 
         vb.writeStr(6, 1, '─'.repeat(34));
