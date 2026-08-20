@@ -111,21 +111,17 @@ export function formatTime(date) {
            String(date.getSeconds()).padStart(2, '0');
 }
 
-export function makeCell(ch, attr, width) {
-    return {
-        ch: ch || ' ',
-        fg: attr.fg,
-        bg: attr.bg,
-        bold: attr.bold,
-        dim: attr.dim,
-        italic: attr.italic,
-        underline: attr.underline,
-        blink: attr.blink,
-        inverse: attr.inverse,
-        conceal: attr.conceal,
-        crossedOut: attr.crossedOut,
-        width: width || 1,
-    };
+export function makeCell(ch, arg2, arg3, arg4, arg5) {
+    if (typeof arg2 === 'number' || typeof arg2 === 'boolean') {
+        return { ch: ch || ' ', fg: arg2, bg: arg3, bold: arg4,
+                 dim: false, italic: false, underline: false, blink: false,
+                 inverse: false, conceal: false, crossedOut: false,
+                 width: arg5 || 1 };
+    }
+    return { ch: ch || ' ', fg: arg2.fg, bg: arg2.bg, bold: arg2.bold,
+             dim: arg2.dim, italic: arg2.italic, underline: arg2.underline,
+             blink: arg2.blink, inverse: arg2.inverse, conceal: arg2.conceal,
+             crossedOut: arg2.crossedOut, width: arg3 || 1 };
 }
 
 /** Blinking block cursor for overlay buffers (dialogs, widgets).

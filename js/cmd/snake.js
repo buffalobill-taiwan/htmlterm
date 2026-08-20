@@ -1,7 +1,7 @@
 import { term } from '../system/sys.js';
 import { CmdBase } from './CmdBase.js';
 import { SelectDialog } from '../dialog/SelectDialog.js';
-import { bold, red, green, yellow, cyan, gray, CURSOR_HIDE } from '../util/sgr.js';
+import { bold, red, green, yellow, cyan, gray, CURSOR_HIDE, makeCell } from '../util/sgr.js';
 import { VirtualBuffer } from '../util/VirtualBuffer.js';
 
 const GRID_COLS = 20;
@@ -27,10 +27,7 @@ const DIFFICULTY = {
 
 const SPEED_LEVELS = [200, 180, 160, 140, 120, 100, 80, 65];
 
-function _makeCell(ch, fg, bg, bold, width = 1) {
-    return { ch, fg, bg, bold, dim: false, italic: false, underline: false,
-             blink: false, inverse: false, conceal: false, crossedOut: false, width };
-}
+
 
 export class SnakeCmd extends CmdBase {
     execute(args) {
@@ -143,8 +140,8 @@ export class SnakeCmd extends CmdBase {
         }
 
         if (!this._cellEmpty) {
-            this._cellEmpty = _makeCell(' ', 0, 0, false);
-            this._cellBorder = _makeCell('║', 8, 0, false);
+            this._cellEmpty = makeCell(' ', 0, 0, false);
+            this._cellBorder = makeCell('║', 8, 0, false);
             this._cellEmptyWide = { ch: '', fg: 0, bg: 0, bold: false, dim: false, italic: false,
                 underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: 0 };
         }
@@ -186,7 +183,7 @@ export class SnakeCmd extends CmdBase {
     }
 
     _buildOverlayFrame(fw, fh, color) {
-        const bc = (ch) => _makeCell(ch, color, 0, true);
+        const bc = (ch) => makeCell(ch, color, 0, true);
         const cells = [];
         for (let r = 0; r < fh; r++) {
             const row = new Array(fw).fill(null);
@@ -209,7 +206,7 @@ export class SnakeCmd extends CmdBase {
 
     _buildOverlayInner(cw, ch, text) {
         const vb = new VirtualBuffer(cw, ch);
-        const e = _makeCell(' ', 0, 0, false);
+        const e = makeCell(' ', 0, 0, false);
         for (let r = 0; r < ch; r++)
             for (let c = 0; c < cw; c++)
                 vb._buffer[r][c] = e;
@@ -221,7 +218,7 @@ export class SnakeCmd extends CmdBase {
 
     _buildGameOverInner(cw, ch) {
         const vb = new VirtualBuffer(cw, ch);
-        const e = _makeCell(' ', 0, 0, false);
+        const e = makeCell(' ', 0, 0, false);
         for (let r = 0; r < ch; r++)
             for (let c = 0; c < cw; c++)
                 vb._buffer[r][c] = { ...e };
@@ -240,9 +237,9 @@ export class SnakeCmd extends CmdBase {
     _buildDynRow(prefix) {
         const cells = [];
         for (let i = 0; i < 8; i++)
-            cells.push(_makeCell(prefix[i] || ' ', 7, 0, false));
+            cells.push(makeCell(prefix[i] || ' ', 7, 0, false));
         for (let i = 0; i < 8; i++)
-            cells.push(_makeCell(' ', 11, 0, true));
+            cells.push(makeCell(' ', 11, 0, true));
         return cells;
     }
 
@@ -500,18 +497,18 @@ export class SnakeCmd extends CmdBase {
             const px = 1 + seg.c * 2;
             const py = 1 + seg.r;
             if (isHead) {
-                const cell = _makeCell('■', 15, 2, true);
+                const cell = makeCell('■', 15, 2, true);
                 buf[py][px] = cell;
                 buf[py][px + 1] = cell;
             } else {
-                const cell = _makeCell('⬤', 2, 0, false, 2);
+                const cell = makeCell('⬤', 2, 0, false, 2);
                 buf[py][px] = cell;
                 buf[py][px + 1] = this._cellEmptyWide;
             }
         }
 
         if (this._food && !this._completed) {
-            const fc = _makeCell('⬤', 1, 0, true, 2);
+            const fc = makeCell('⬤', 1, 0, true, 2);
             const fx = 1 + this._food.c * 2;
             const fy = 1 + this._food.r;
             buf[fy][fx] = fc;

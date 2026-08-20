@@ -3,7 +3,7 @@ import { CmdBase } from './CmdBase.js';
 import { Dialog } from '../dialog/Dialog.js';
 import { centeredDialogPos } from '../dialog/position.js';
 import { parseCSI } from '../system/TextInputModel.js';
-import { bold, yellow, cyan, gray, CURSOR_HIDE } from '../util/sgr.js';
+import { bold, yellow, cyan, gray, CURSOR_HIDE, makeCell } from '../util/sgr.js';
 import { VirtualBuffer } from '../util/VirtualBuffer.js';
 import { bufWidth } from '../util/display-width.js';
 
@@ -55,10 +55,7 @@ const NAME_CHARS = {
     '兵': '兵',
 };
 
-function _makeCell(ch, fg, bg, bold, width = 1) {
-    return { ch, fg, bg, bold, dim: false, italic: false, underline: false,
-             blink: false, inverse: false, conceal: false, crossedOut: false, width };
-}
+
 
 function _fmtTime(t) {
     const m = String(Math.floor(t / 60)).padStart(2, '0');
@@ -268,7 +265,7 @@ export class KlotskiCmd extends CmdBase {
         }
 
         if (!this._pals) {
-            this._cellEmpty = _makeCell(' ', 0, 0, false);
+            this._cellEmpty = makeCell(' ', 0, 0, false);
             this._cellEmptyWide = { ch: '', fg: 0, bg: 0, bold: false, dim: false, italic: false,
                 underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: 0 };
             this._pals = {};
@@ -281,14 +278,14 @@ export class KlotskiCmd extends CmdBase {
                 this._cursorPals[name] = this._buildPalCells(name, color, 4);
                 this._selPals[name] = this._buildPalCells(name, color, 7);
             }
-            this._cellCursorEmpty = _makeCell('　', 0, 4, false, 2);
+            this._cellCursorEmpty = makeCell('　', 0, 4, false, 2);
 
-            this._cellTL = _makeCell('╔', 8, 0, false);
-            this._cellTR = _makeCell('╗', 8, 0, false);
-            this._cellBL = _makeCell('╚', 8, 0, false);
-            this._cellBR = _makeCell('╝', 8, 0, false);
-            this._cellH = _makeCell('═', 8, 0, false);
-            this._cellV = _makeCell('║', 8, 0, false);
+            this._cellTL = makeCell('╔', 8, 0, false);
+            this._cellTR = makeCell('╗', 8, 0, false);
+            this._cellBL = makeCell('╚', 8, 0, false);
+            this._cellBR = makeCell('╝', 8, 0, false);
+            this._cellH = makeCell('═', 8, 0, false);
+            this._cellV = makeCell('║', 8, 0, false);
 
             this._winVB = new VirtualBuffer(18, 7);
             this._rootSlotWin.vb = this._winVB;
@@ -355,7 +352,7 @@ export class KlotskiCmd extends CmdBase {
             const cells = [];
             for (let r = 0; r < 2; r++) {
                 for (let c = 0; c < 4; c++) {
-                    const cell = _makeCell(chars[0], fg, bg, true, 1);
+                    const cell = makeCell(chars[0], fg, bg, true, 1);
                     cell.clip = true;
                     cell.clipOffX = -c;
                     cell.clipOffY = -r;
@@ -364,7 +361,7 @@ export class KlotskiCmd extends CmdBase {
             }
             return cells;
         }
-        return chars.map(ch => _makeCell(ch, fg, bg, true, 2));
+        return chars.map(ch => makeCell(ch, fg, bg, true, 2));
     }
 
     _drawBlock(buf, b, pals) {

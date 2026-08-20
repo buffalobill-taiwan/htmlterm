@@ -1,6 +1,6 @@
 import { system, term } from '../../system/sys.js';
 import { CmdBase } from '../CmdBase.js';
-import { CURSOR_HIDE, CURSOR_SHOW, OverlayZ, makeOverlayGetCell, bold, cyan, yellow, green, red, magenta, gray, white } from '../../util/sgr.js';
+import { CURSOR_HIDE, CURSOR_SHOW, OverlayZ, makeOverlayGetCell, makeCell, bold, cyan, yellow, green, red, magenta, gray, white } from '../../util/sgr.js';
 import { SettingsDialog } from '../../dialog/SettingsDialog.js';
 import { SelectDialog } from '../../dialog/SelectDialog.js';
 import { ConfirmDialog } from '../../dialog/ConfirmDialog.js';
@@ -10,10 +10,7 @@ import { Tile, tileFg } from './tiles.js';
 import { Game } from './game.js';
 import { getWaitingTiles, checkTenpai } from './yaku.js';
 
-function _makeCell(ch, fg, bg, bold, width = 1) {
-    return { ch, fg, bg, bold, dim: false, italic: false, underline: false,
-             blink: false, inverse: false, conceal: false, crossedOut: false, width };
-}
+
 
 const SETTINGS = [
     { key: 'gameLength', label: '對戰長度', value: '東風戰',
@@ -147,21 +144,21 @@ export class JpmjCmd extends CmdBase {
             const topCh = tile.displayTop[0] || ' ';
             const botCh = tile.displayBottom[0] || ' ';
             this._palNormal[key] = {
-                top: _makeCell(topCh, fg, 0, true),
+                top: makeCell(topCh, fg, 0, true),
                 topCont: this._cellW0,
-                bot: _makeCell(botCh, fg, 0, true),
+                bot: makeCell(botCh, fg, 0, true),
                 botCont: this._cellW0,
             };
             this._palCursor[key] = {
-                top: _makeCell(topCh, fg, 24, true),
+                top: makeCell(topCh, fg, 24, true),
                 topCont: this._cellW0,
-                bot: _makeCell(botCh, fg, 24, true),
+                bot: makeCell(botCh, fg, 24, true),
                 botCont: this._cellW0,
             };
             this._palCursorDark[key] = {
-                top: _makeCell(topCh, fg, 236, true),
+                top: makeCell(topCh, fg, 236, true),
                 topCont: this._cellW0,
-                bot: _makeCell(botCh, fg, 236, true),
+                bot: makeCell(botCh, fg, 236, true),
                 botCont: this._cellW0,
             };
 
@@ -170,7 +167,7 @@ export class JpmjCmd extends CmdBase {
             for (let i = 0; i < horiz.length; i++) {
                 const ch = horiz[i];
                 const w = isWide(ch) ? 2 : 1;
-                hCells.push(_makeCell(ch, fg, 0, true, w));
+                hCells.push(makeCell(ch, fg, 0, true, w));
                 if (w === 2) hCells.push(this._cellW0);
             }
             this._palHorizNormal[key] = hCells;
@@ -179,7 +176,7 @@ export class JpmjCmd extends CmdBase {
             for (let i = 0; i < horiz.length; i++) {
                 const ch = horiz[i];
                 const w = isWide(ch) ? 2 : 1;
-                hCellsC.push(_makeCell(ch, fg, 24, true, w));
+                hCellsC.push(makeCell(ch, fg, 24, true, w));
                 if (w === 2) hCellsC.push(this._cellW0);
             }
             this._palHorizCursor[key] = hCellsC;
@@ -195,9 +192,9 @@ export class JpmjCmd extends CmdBase {
             const topCh = tile.displayTop[0] || ' ';
             const botCh = tile.displayBottom[0] || ' ';
             this._meldPal2x2[ck] = {
-                top: _makeCell(topCh, fg, bg, true),
+                top: makeCell(topCh, fg, bg, true),
                 topCont: this._cellW0,
-                bot: _makeCell(botCh, fg, bg, true),
+                bot: makeCell(botCh, fg, bg, true),
                 botCont: this._cellW0,
             };
         }
@@ -215,7 +212,7 @@ export class JpmjCmd extends CmdBase {
             for (let i = 0; i < horiz.length; i++) {
                 const ch = horiz[i];
                 const w = isWide(ch) ? 2 : 1;
-                cells.push(_makeCell(ch, fg, bg, true, w));
+                cells.push(makeCell(ch, fg, bg, true, w));
                 if (w === 2) cells.push(this._cellW0);
             }
             this._meldPalHoriz[ck] = cells;
@@ -230,9 +227,9 @@ export class JpmjCmd extends CmdBase {
             const topCh = tile.displayTop[0] || ' ';
             const botCh = tile.displayBottom[0] || ' ';
             this._dimPal2x2[key] = {
-                top: _makeCell(topCh, 8, 0, false, 1),
+                top: makeCell(topCh, 8, 0, false, 1),
                 topCont: this._cellW0,
-                bot: _makeCell(botCh, 8, 0, false, 1),
+                bot: makeCell(botCh, 8, 0, false, 1),
                 botCont: this._cellW0,
             };
         }
@@ -249,7 +246,7 @@ export class JpmjCmd extends CmdBase {
             for (let i = 0; i < horiz.length; i++) {
                 const ch = horiz[i];
                 const w = isWide(ch) ? 2 : 1;
-                cells.push(_makeCell(ch, fg, 0, false, w));
+                cells.push(makeCell(ch, fg, 0, false, w));
                 if (w === 2) cells.push(this._cellW0);
             }
             this._dimPalHoriz[key] = cells;
@@ -260,7 +257,7 @@ export class JpmjCmd extends CmdBase {
     _getCoverRow(bg) {
         let row = this._coverRowCache[bg];
         if (!row) {
-            const cell = _makeCell('▒', 240, bg, false);
+            const cell = makeCell('▒', 240, bg, false);
             cell.dim = true;
             row = [cell, cell, cell, cell];
             this._coverRowCache[bg] = row;
@@ -272,7 +269,7 @@ export class JpmjCmd extends CmdBase {
         const k = ch + '_' + fg + '_' + bg;
         let cells = this._cover2x2Cache[k];
         if (!cells) {
-            const cell = _makeCell(ch, fg, bg, false);
+            const cell = makeCell(ch, fg, bg, false);
             cell.dim = true;
             cells = [cell, cell, cell, cell];
             this._cover2x2Cache[k] = cells;

@@ -1,7 +1,7 @@
 import { term } from '../system/sys.js';
 import { CmdBase } from './CmdBase.js';
 import { SelectDialog } from '../dialog/SelectDialog.js';
-import { bold, red, yellow, cyan, gray, CURSOR_HIDE } from '../util/sgr.js';
+import { bold, red, yellow, cyan, gray, CURSOR_HIDE, makeCell } from '../util/sgr.js';
 import { VirtualBuffer } from '../util/VirtualBuffer.js';
 
 const COLS = 6;
@@ -33,10 +33,7 @@ const TAIL = [[0, 1], [1, 0], [0, -1], [-1, 0]];
 // Wall kicks tried in order when a rotation would collide.
 const KICKS = [[0, 0], [-1, 0], [1, 0], [-2, 0], [2, 0], [0, -1]];
 
-function _makeCell(ch, fg, bg, bold, width = 1) {
-    return { ch, fg, bg, bold, dim: false, italic: false, underline: false,
-             blink: false, inverse: false, conceal: false, crossedOut: false, width };
-}
+
 
 function _fmtTime(sec) {
     const m = Math.floor(sec / 60), s = sec % 60;
@@ -136,7 +133,7 @@ function _buildStaticSidebar() {
 
 /** Pre-build an overlay frame border (double-line box). */
 function _buildOverlayFrame(fw, fh, color) {
-    const bc = (ch) => _makeCell(ch, color, 0, true);
+    const bc = (ch) => makeCell(ch, color, 0, true);
     const cells = [];
     for (let r = 0; r < fh; r++) {
         const row = new Array(fw).fill(null);
@@ -160,7 +157,7 @@ function _buildOverlayFrame(fw, fh, color) {
 /** Pre-build overlay inner content cells (background + text). */
 function _buildOverlayInner(cw, ch, text) {
     const vb = new VirtualBuffer(cw, ch);
-    const e = _makeCell(' ', 0, 0, false);
+    const e = makeCell(' ', 0, 0, false);
     for (let r = 0; r < ch; r++)
         for (let c = 0; c < cw; c++)
             vb._buffer[r][c] = e;
@@ -173,7 +170,7 @@ function _buildOverlayInner(cw, ch, text) {
 /** Pre-build game over inner content cells (background + text). */
 function _buildGameOverInner(cw, ch) {
     const vb = new VirtualBuffer(cw, ch);
-    const e = _makeCell(' ', 0, 0, false);
+    const e = makeCell(' ', 0, 0, false);
     for (let r = 0; r < ch; r++)
         for (let c = 0; c < cw; c++)
             vb._buffer[r][c] = { ...e };
@@ -191,9 +188,9 @@ function _buildGameOverInner(cw, ch) {
 function _buildDynRow(prefix) {
     const cells = [];
     for (let i = 0; i < 8; i++)
-        cells.push(_makeCell(prefix[i] || ' ', 7, 0, false));
+        cells.push(makeCell(prefix[i] || ' ', 7, 0, false));
     for (let i = 0; i < 8; i++)
-        cells.push(_makeCell(' ', 11, 0, true));
+        cells.push(makeCell(' ', 11, 0, true));
     return cells;
 }
 
@@ -313,20 +310,20 @@ export class PuyoCmd extends CmdBase {
         }
 
         if (!this._cellEmpty) {
-            this._cellEmpty = _makeCell(' ', 0, 0, false);
-            this._cellBorder = _makeCell('║', 8, 0, false);
+            this._cellEmpty = makeCell(' ', 0, 0, false);
+            this._cellBorder = makeCell('║', 8, 0, false);
             this._cellEmptyWide = { ch: '', fg: 0, bg: 0, bold: false, dim: false, italic: false,
                 underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: 0 };
 
             this._palette = new Array(6);
             this._ghostCells = new Array(6);
             for (let c = 1; c <= 5; c++) {
-                this._palette[c] = _makeCell('⬤', c, 0, true, 2);
-                const g = _makeCell('⬤', c, 0, false, 2);
+                this._palette[c] = makeCell('⬤', c, 0, true, 2);
+                const g = makeCell('⬤', c, 0, false, 2);
                 g.dim = true;
                 this._ghostCells[c] = g;
             }
-            this._cellPop = _makeCell('⬤', 15, 0, true, 2);
+            this._cellPop = makeCell('⬤', 15, 0, true, 2);
         }
 
         if (!this._sidebarStatic) {
