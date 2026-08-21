@@ -766,9 +766,11 @@ export class JpmjCmd extends CmdBase {
             col++;
         }
         for (let wi = 0; wi < tenpai.waits.length && col < 80; wi++) {
-            const name = tenpai.waits[wi].name;
+            const w = tenpai.waits[wi];
+            const wfg = tileFg(w.suit, w.value);
+            const name = w.name;
             for (let i = 0; i < name.length && col < 80; i++) {
-                row[col] = makeCell(name[i], 7, 17, false);
+                row[col] = makeCell(name[i], wfg, 17, false);
                 col++;
             }
             if (col < 80) { row[col] = makeCell(' ', 7, 17, false); col++; }
