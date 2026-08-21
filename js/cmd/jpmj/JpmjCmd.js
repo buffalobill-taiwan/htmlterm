@@ -144,21 +144,21 @@ export class JpmjCmd extends CmdBase {
             const topCh = tile.displayTop[0] || ' ';
             const botCh = tile.displayBottom[0] || ' ';
             this._palNormal[key] = {
-                top: makeCell(topCh, fg, 0, true),
+                top: makeCell(topCh, fg, 0, true, isWide(topCh) ? 2 : 1),
                 topCont: this._cellW0,
-                bot: makeCell(botCh, fg, 0, true),
+                bot: makeCell(botCh, fg, 0, true, isWide(botCh) ? 2 : 1),
                 botCont: this._cellW0,
             };
             this._palCursor[key] = {
-                top: makeCell(topCh, fg, 24, true),
+                top: makeCell(topCh, fg, 24, true, isWide(topCh) ? 2 : 1),
                 topCont: this._cellW0,
-                bot: makeCell(botCh, fg, 24, true),
+                bot: makeCell(botCh, fg, 24, true, isWide(botCh) ? 2 : 1),
                 botCont: this._cellW0,
             };
             this._palCursorDark[key] = {
-                top: makeCell(topCh, fg, 236, true),
+                top: makeCell(topCh, fg, 236, true, isWide(topCh) ? 2 : 1),
                 topCont: this._cellW0,
-                bot: makeCell(botCh, fg, 236, true),
+                bot: makeCell(botCh, fg, 236, true, isWide(botCh) ? 2 : 1),
                 botCont: this._cellW0,
             };
 
@@ -192,9 +192,9 @@ export class JpmjCmd extends CmdBase {
             const topCh = tile.displayTop[0] || ' ';
             const botCh = tile.displayBottom[0] || ' ';
             this._meldPal2x2[ck] = {
-                top: makeCell(topCh, fg, bg, true),
+                top: makeCell(topCh, fg, bg, true, isWide(topCh) ? 2 : 1),
                 topCont: this._cellW0,
-                bot: makeCell(botCh, fg, bg, true),
+                bot: makeCell(botCh, fg, bg, true, isWide(botCh) ? 2 : 1),
                 botCont: this._cellW0,
             };
         }
@@ -227,9 +227,9 @@ export class JpmjCmd extends CmdBase {
             const topCh = tile.displayTop[0] || ' ';
             const botCh = tile.displayBottom[0] || ' ';
             this._dimPal2x2[key] = {
-                top: makeCell(topCh, 8, 0, false, 1),
+                top: makeCell(topCh, 8, 0, false, isWide(topCh) ? 2 : 1),
                 topCont: this._cellW0,
-                bot: makeCell(botCh, 8, 0, false, 1),
+                bot: makeCell(botCh, 8, 0, false, isWide(botCh) ? 2 : 1),
                 botCont: this._cellW0,
             };
         }
