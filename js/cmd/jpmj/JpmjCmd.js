@@ -879,9 +879,14 @@ export class JpmjCmd extends CmdBase {
                 const m = melds[mi];
                 const bgType = meldTypeToBg(m);
                 const bg = meldBg(bgType, countCallType(melds.slice(0, mi), bgType));
+                const isClosedKan = m.type === 'kan' && !m.open;
                 for (let ti = 0; ti < m.tiles.length; ti++) {
-                    const pal = this._getMeldPal2x2(m.tiles[ti].key(), bg);
-                    this._writeTile2x2(buf, 1, col, pal);
+                    if (isClosedKan && (ti === 1 || ti === 2)) {
+                        this._writeCover2x2(buf, 1, col, this._getCover2x2('▓', 240, bg)[0]);
+                    } else {
+                        const pal = this._getMeldPal2x2(m.tiles[ti].key(), bg);
+                        this._writeTile2x2(buf, 1, col, pal);
+                    }
                     col += 2;
                 }
             }
