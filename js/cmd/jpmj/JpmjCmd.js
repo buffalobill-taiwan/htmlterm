@@ -315,7 +315,7 @@ export class JpmjCmd extends CmdBase {
             statusRow[10] = makeCell('管', 8, 17, false, 2);
             statusRow[11] = makeCell(' ', 8, 17, false, 0);
             statusRow[12] = makeCell('|', 7, 17, false);
-            statusRow[13] = makeCell(' ', 8, 17, false, 2);
+            statusRow[13] = makeCell('　', 8, 17, false, 2);
             statusRow[14] = makeCell(' ', 8, 17, false, 0);
             statusRow[15] = makeCell('立', 8, 17, false, 2);
             statusRow[16] = makeCell(' ', 8, 17, false, 0);
@@ -723,7 +723,7 @@ export class JpmjCmd extends CmdBase {
             row[17] = makeCell('直', 15, 17, true, 2);
             row[18] = makeCell(' ', 15, 17, false, 0);
         } else {
-            row[13] = makeCell(' ', 8, 17, false, 2);
+            row[13] = makeCell('　', 8, 17, false, 2);
             row[14] = makeCell(' ', 8, 17, false, 0);
             row[15] = makeCell('立', 8, 17, false, 2);
             row[16] = makeCell(' ', 8, 17, false, 0);
