@@ -87,6 +87,7 @@ export class JpmjCmd extends CmdBase {
         this._pausedIsAuto = false;
         this._palettesReady = false;
         this._pauseVB = new VirtualBuffer(36, 15);
+        this._statusVB = new VirtualBuffer(80, 1);
         this._pauseOverlay = null;
         this._pauseVBBuffer = null;
     }
@@ -298,6 +299,10 @@ export class JpmjCmd extends CmdBase {
             this._slotPlayer = this._rootVB.addChildSlot();
             this._slotInfo = this._rootVB.addChildSlot();
             this._slotResult = this._rootVB.addChildSlot();
+            this._slotStatus = this._rootVB.addChildSlot();
+
+            const statusRow = this._statusVB._buffer[0];
+            for (let c = 0; c < 80; c++) statusRow[c] = makeCell(' ', 7, 4, false);
         }
 
         this._phase = 'settings';
@@ -673,6 +678,7 @@ export class JpmjCmd extends CmdBase {
         this._slotPlayer.vb = this._playerVB; this._slotPlayer.x = 4;  this._slotPlayer.y = 18; this._slotPlayer.active = true;
         this._slotInfo.vb = this._infoVB;     this._slotInfo.x = 44;   this._slotInfo.y = 0;    this._slotInfo.active = true;
         this._slotResult.vb = this._resultVB; this._slotResult.x = 4; this._slotResult.y = 2;
+        this._slotStatus.vb = this._statusVB; this._slotStatus.x = 0; this._slotStatus.y = 21; this._slotStatus.active = true;
     }
 
     _writeTile2x2(buf, row, col, pal) {
