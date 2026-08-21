@@ -311,7 +311,9 @@ export class JpmjCmd extends CmdBase {
             statusRow[6] = makeCell('A', 8, 17, false);
             statusRow[7] = makeCell(']', 8, 17, false);
             statusRow[8] = makeCell('託', 8, 17, false, 2);
+            statusRow[9] = makeCell(' ', 8, 17, false, 0);
             statusRow[10] = makeCell('管', 8, 17, false, 2);
+            statusRow[11] = makeCell(' ', 8, 17, false, 0);
             statusRow[12] = makeCell('|', 7, 17, false);
         }
 
@@ -700,7 +702,9 @@ export class JpmjCmd extends CmdBase {
         row[6] = makeCell('A', fg, 17, bold);
         row[7] = makeCell(']', fg, 17, bold);
         row[8] = makeCell('託', fg, 17, bold, 2);
+        row[9] = makeCell(' ', fg, 17, bold, 0);
         row[10] = makeCell('管', fg, 17, bold, 2);
+        row[11] = makeCell(' ', fg, 17, bold, 0);
     }
 
     _updateSlots() {
