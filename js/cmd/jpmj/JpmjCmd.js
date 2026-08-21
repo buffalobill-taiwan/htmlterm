@@ -692,6 +692,7 @@ export class JpmjCmd extends CmdBase {
     }
 
     _updateStatusBar() {
+        if (!this._statusVB) return;
         const row = this._statusVB._buffer[0];
         const fg = this._autoPlay ? 15 : 8;
         const bold = this._autoPlay;
