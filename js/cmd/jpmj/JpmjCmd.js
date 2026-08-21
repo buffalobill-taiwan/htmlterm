@@ -760,8 +760,8 @@ export class JpmjCmd extends CmdBase {
         }
 
         const tenpai = this._getTenpaiInfo();
-        const tenpaiStart = 19;
-        const maxCols = 80 - tenpaiStart;
+        row[19] = makeCell('|', 7, 17, false);
+        const tenpaiStart = 20;
         for (let c = tenpaiStart; c < 80; c++) row[c] = makeCell(' ', 7, 17, false);
         if (!tenpai) return;
 
