@@ -579,8 +579,10 @@ export class JpmjCmd extends CmdBase {
         if (p.melds.length > 0) return false;
         if (p.score < 1000) return false;
         if (g.wall.getRemainingCount() < 4) return false;
-        if (g.availableActions.includes('riichi')) return true;
-        return false;
+        return p.hand.some((_, i) => {
+            const testHand = p.hand.filter((__, j) => j !== i);
+            return checkTenpai(testHand, p.melds);
+        });
     }
 
     _getDiscardableIndices() {
@@ -1544,10 +1546,6 @@ export class JpmjCmd extends CmdBase {
             }
             if (g.availableActions.includes('discard') && this._actionItems.length === 0) {
                 this._doDiscard(this._handCursor);
-                return;
-            }
-            if (g.availableActions.includes('riichi') || this._canDeclareRiichi()) {
-                this._doDiscard(this._handCursor, true);
                 return;
             }
             this._doDiscard(this._handCursor);
