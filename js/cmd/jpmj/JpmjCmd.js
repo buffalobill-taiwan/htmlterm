@@ -76,6 +76,7 @@ export class JpmjCmd extends CmdBase {
         this._phase = 'settings';
         this._settingsValues = null;
         this._autoPlay = false;
+        this._updateStatusBar();
         this._gameTimer = null;
         this._cursorMode = 'hand';
         this._handCursor = 0;
@@ -306,6 +307,12 @@ export class JpmjCmd extends CmdBase {
             const title = 'JPMJ';
             for (let i = 0; i < title.length; i++) statusRow[i] = makeCell(title[i], 15, 17, true);
             statusRow[4] = makeCell('|', 7, 17, false);
+            statusRow[5] = makeCell('[', 8, 17, false);
+            statusRow[6] = makeCell('A', 8, 17, false);
+            statusRow[7] = makeCell(']', 8, 17, false);
+            statusRow[8] = makeCell('託', 8, 17, false, 2);
+            statusRow[10] = makeCell('管', 8, 17, false, 2);
+            statusRow[12] = makeCell('|', 7, 17, false);
         }
 
         this._phase = 'settings';
@@ -362,6 +369,7 @@ export class JpmjCmd extends CmdBase {
         this._game = new Game(opts);
         this._game.initGame();
         this._autoPlay = false;
+        this._updateStatusBar();
         this._phase = 'playing';
         this._handCursor = 0;
         this._actionCursor = 0;
@@ -372,12 +380,14 @@ export class JpmjCmd extends CmdBase {
     _continueGame() {
         if (!this._game || this._game.gameOver) {
             this._autoPlay = false;
+            this._updateStatusBar();
             this._phase = 'gameOver';
             this._render();
             return;
         }
         if (this._game.roundOver) {
             this._autoPlay = false;
+            this._updateStatusBar();
             this._game.endRound();
             if (this._game.gameOver) {
                 this._phase = 'gameOver';
@@ -679,6 +689,17 @@ export class JpmjCmd extends CmdBase {
         this._slotPlayer.active = false;
         this._slotInfo.active = false;
         this._slotResult.active = false;
+    }
+
+    _updateStatusBar() {
+        const row = this._statusVB._buffer[0];
+        const fg = this._autoPlay ? 15 : 8;
+        const bold = this._autoPlay;
+        row[5] = makeCell('[', fg, 17, bold);
+        row[6] = makeCell('A', fg, 17, bold);
+        row[7] = makeCell(']', fg, 17, bold);
+        row[8] = makeCell('託', fg, 17, bold, 2);
+        row[10] = makeCell('管', fg, 17, bold, 2);
     }
 
     _updateSlots() {
@@ -1354,6 +1375,7 @@ export class JpmjCmd extends CmdBase {
         if (this._phase === 'playing' && this._autoPlay) {
             if (code === 0x61 || code === 0x41) {
                 this._autoPlay = false;
+                this._updateStatusBar();
                 this._render();
                 return;
             }
@@ -1379,6 +1401,7 @@ export class JpmjCmd extends CmdBase {
                 if (code === 0x70 || code === 0x50) {
                     this._phase = 'playing';
                     this._autoPlay = true;
+                    this._updateStatusBar();
                     this._removePauseOverlay();
                     this._render();
                     this._continueGame();
@@ -1423,6 +1446,7 @@ export class JpmjCmd extends CmdBase {
         }
         if (code === 0x61 || code === 0x41) {
             this._autoPlay = true;
+            this._updateStatusBar();
             this._render();
             this._processAutoPlay();
             return;
