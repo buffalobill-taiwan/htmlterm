@@ -708,7 +708,7 @@ export class JpmjCmd extends CmdBase {
             : hand;
         if (baseHand.length !== expectedLen) return null;
 
-        const handStr = baseHand.map(t => t.key()).join(',') + '|' + meldCount;
+        const handStr = baseHand.map(t => t.key()).join(',') + '|' + meldCount + '|' + p.discards.length;
         if (!this._tenpaiCache || handStr === this._tenpaiCache.handStr) return this._tenpaiCache ? this._tenpaiCache.info : null;
 
         const waits = getWaitingTiles(baseHand, p.melds);
@@ -718,7 +718,9 @@ export class JpmjCmd extends CmdBase {
         }
         const gs = g.getGameState(0, waits[0], 'tsumo');
         const hasYaku = waits.some(w => evaluateHand(baseHand, p.melds, w, 'tsumo', gs) !== null);
-        const info = { waits, hasYaku };
+        const discardKeys = new Set(p.discards.map(d => d.key()));
+        const furitenWaits = waits.filter(w => discardKeys.has(w.key()));
+        const info = { waits, hasYaku, furitenWaits };
         this._tenpaiCache = { handStr, info };
         return info;
     }
@@ -759,9 +761,11 @@ export class JpmjCmd extends CmdBase {
         for (let c = tenpaiStart; c < 80; c++) row[c] = makeCell(' ', 7, 17, false);
         if (!tenpai) return;
 
-        const label = tenpai.hasYaku ? '聽: ' : '聽(無役): ';
-        const labelFg = tenpai.hasYaku ? 15 : 1;
-        const labelBold = tenpai.hasYaku;
+        const isFuriten = tenpai.furitenWaits.length > 0;
+        const furitenSet = new Set(tenpai.furitenWaits.map(w => w.key()));
+        const label = isFuriten ? '聽(振聽): ' : tenpai.hasYaku ? '聽: ' : '聽(無役): ';
+        const labelFg = isFuriten ? 1 : tenpai.hasYaku ? 15 : 1;
+        const labelBold = !isFuriten && tenpai.hasYaku;
         let col = tenpaiStart;
         for (let i = 0; i < label.length && col < 80; i++) {
             row[col] = makeCell(label[i], labelFg, 17, labelBold);
@@ -769,7 +773,7 @@ export class JpmjCmd extends CmdBase {
         }
         for (let wi = 0; wi < tenpai.waits.length && col < 80; wi++) {
             const w = tenpai.waits[wi];
-            const wfg = tileFg(w.suit, w.value);
+            const wfg = furitenSet.has(w.key()) ? 8 : tileFg(w.suit, w.value);
             const name = w.name;
             for (let i = 0; i < name.length && col < 80; i++) {
                 row[col] = makeCell(name[i], wfg, 17, false);
