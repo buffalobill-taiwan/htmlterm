@@ -53,7 +53,7 @@ export class Wall {
     }
 
     getUraDoraIndicators() {
-        return this.tiles.slice(this.deadWallStart + 5, this.deadWallStart + 5 + this.doraCount);
+        return this.tiles.slice(this.deadWallStart + this.doraCount, this.deadWallStart + 2 * this.doraCount);
     }
 
     drawRinshan() {
