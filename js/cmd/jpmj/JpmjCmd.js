@@ -715,7 +715,7 @@ export class JpmjCmd extends CmdBase {
         if (hand13.length !== 13) return null;
 
         const handStr = hand13.map(t => t.key()).join(',') + '|' + p.melds.length;
-        if (handStr === this._tenpaiCache.handStr) return this._tenpaiCache.info;
+        if (!this._tenpaiCache || handStr === this._tenpaiCache.handStr) return this._tenpaiCache ? this._tenpaiCache.info : null;
 
         const waits = getWaitingTiles(hand13, p.melds);
         if (waits.length === 0) {
