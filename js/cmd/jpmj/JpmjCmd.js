@@ -315,6 +315,13 @@ export class JpmjCmd extends CmdBase {
             statusRow[10] = makeCell('管', 8, 17, false, 2);
             statusRow[11] = makeCell(' ', 8, 17, false, 0);
             statusRow[12] = makeCell('|', 7, 17, false);
+            statusRow[13] = makeCell(' ', 8, 17, false, 2);
+            statusRow[14] = makeCell(' ', 8, 17, false, 0);
+            statusRow[15] = makeCell('立', 8, 17, false, 2);
+            statusRow[16] = makeCell(' ', 8, 17, false, 0);
+            statusRow[17] = makeCell('直', 8, 17, false, 2);
+            statusRow[18] = makeCell(' ', 8, 17, false, 0);
+            statusRow[19] = makeCell('|', 7, 17, false);
         }
 
         this._phase = 'settings';
@@ -650,6 +657,7 @@ export class JpmjCmd extends CmdBase {
         this._clearVB(this._discardVB);
         this._clearVB(this._infoVB);
         this._clearVB(this._resultVB);
+        this._updateStatusBar();
 
         if (this._phase === 'gameOver') {
             this._deactivateSlots();
@@ -705,6 +713,23 @@ export class JpmjCmd extends CmdBase {
         row[9] = makeCell(' ', fg, 17, bold, 0);
         row[10] = makeCell('管', fg, 17, bold, 2);
         row[11] = makeCell(' ', fg, 17, bold, 0);
+
+        const riichi = this._game && this._game.players && this._game.players[0] && this._game.players[0].isRiichi;
+        if (riichi) {
+            row[13] = makeCell('⬤', 9, 15, true, 2);
+            row[14] = makeCell(' ', 9, 15, false, 0);
+            row[15] = makeCell('立', 15, 17, true, 2);
+            row[16] = makeCell(' ', 15, 17, false, 0);
+            row[17] = makeCell('直', 15, 17, true, 2);
+            row[18] = makeCell(' ', 15, 17, false, 0);
+        } else {
+            row[13] = makeCell(' ', 8, 17, false, 2);
+            row[14] = makeCell(' ', 8, 17, false, 0);
+            row[15] = makeCell('立', 8, 17, false, 2);
+            row[16] = makeCell(' ', 8, 17, false, 0);
+            row[17] = makeCell('直', 8, 17, false, 2);
+            row[18] = makeCell(' ', 8, 17, false, 0);
+        }
     }
 
     _updateSlots() {
