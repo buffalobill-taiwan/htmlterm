@@ -697,25 +697,27 @@ export class JpmjCmd extends CmdBase {
         const g = this._game;
         if (!g || g.gameOver || g.roundOver) return null;
         const p = g.players[0];
-        if (p.melds.length > 0) return null;
         const hand = p.hand;
+        const meldCount = p.melds.length;
+        const expectedLen = 13 - 3 * meldCount;
+        if (expectedLen < 0) return null;
         const drawnTile = p.lastDraw;
         const drawnInHand = drawnTile ? hand.indexOf(drawnTile) : -1;
-        const hand13 = drawnInHand >= 0
+        const baseHand = drawnInHand >= 0
             ? hand.filter((_, i) => i !== drawnInHand)
             : hand;
-        if (hand13.length !== 13) return null;
+        if (baseHand.length !== expectedLen) return null;
 
-        const handStr = hand13.map(t => t.key()).join(',') + '|' + p.melds.length;
+        const handStr = baseHand.map(t => t.key()).join(',') + '|' + meldCount;
         if (!this._tenpaiCache || handStr === this._tenpaiCache.handStr) return this._tenpaiCache ? this._tenpaiCache.info : null;
 
-        const waits = getWaitingTiles(hand13, p.melds);
+        const waits = getWaitingTiles(baseHand, p.melds);
         if (waits.length === 0) {
             this._tenpaiCache = { handStr, info: null };
             return null;
         }
         const gs = g.getGameState(0, waits[0], 'tsumo');
-        const hasYaku = waits.some(w => evaluateHand(hand13, p.melds, w, 'tsumo', gs) !== null);
+        const hasYaku = waits.some(w => evaluateHand(baseHand, p.melds, w, 'tsumo', gs) !== null);
         const info = { waits, hasYaku };
         this._tenpaiCache = { handStr, info };
         return info;
