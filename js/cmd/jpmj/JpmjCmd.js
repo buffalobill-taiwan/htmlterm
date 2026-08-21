@@ -9,7 +9,7 @@ import { VirtualBuffer } from '../../util/VirtualBuffer.js';
 import { isWide, displayWidth } from '../../util/display-width.js';
 import { Tile, tileFg } from './tiles.js';
 import { Game } from './game.js';
-import { getWaitingTiles, checkTenpai } from './yaku.js';
+import { getWaitingTiles, checkTenpai, evaluateHand } from './yaku.js';
 
 
 
@@ -701,6 +701,34 @@ export class JpmjCmd extends CmdBase {
         this._slotResult.active = false;
     }
 
+    _getTenpaiInfo() {
+        const g = this._game;
+        if (!g || g.gameOver || g.roundOver) return null;
+        const p = g.players[0];
+        if (p.melds.length > 0) return null;
+        const hand = p.hand;
+        const drawnTile = p.lastDraw;
+        const drawnInHand = drawnTile ? hand.indexOf(drawnTile) : -1;
+        const hand13 = drawnInHand >= 0
+            ? hand.filter((_, i) => i !== drawnInHand)
+            : hand;
+        if (hand13.length !== 13) return null;
+
+        const handStr = hand13.map(t => t.key()).join(',') + '|' + p.melds.length;
+        if (handStr === this._tenpaiCache.handStr) return this._tenpaiCache.info;
+
+        const waits = getWaitingTiles(hand13, p.melds);
+        if (waits.length === 0) {
+            this._tenpaiCache = { handStr, info: null };
+            return null;
+        }
+        const gs = g.getGameState(0, waits[0], 'tsumo');
+        const hasYaku = waits.some(w => evaluateHand(hand13, p.melds, w, 'tsumo', gs) !== null);
+        const info = { waits, hasYaku };
+        this._tenpaiCache = { handStr, info };
+        return info;
+    }
+
     _updateStatusBar() {
         if (!this._statusVB) return;
         const row = this._statusVB._buffer[0];
@@ -729,6 +757,29 @@ export class JpmjCmd extends CmdBase {
             row[16] = makeCell(' ', 8, 17, false, 0);
             row[17] = makeCell('直', 8, 17, false, 2);
             row[18] = makeCell(' ', 8, 17, false, 0);
+        }
+
+        const tenpai = this._getTenpaiInfo();
+        const tenpaiStart = 19;
+        const maxCols = 80 - tenpaiStart;
+        for (let c = tenpaiStart; c < 80; c++) row[c] = makeCell(' ', 7, 17, false);
+        if (!tenpai) return;
+
+        const label = tenpai.hasYaku ? '聽: ' : '聽(無役): ';
+        const labelFg = tenpai.hasYaku ? 15 : 1;
+        const labelBold = tenpai.hasYaku;
+        let col = tenpaiStart;
+        for (let i = 0; i < label.length && col < 80; i++) {
+            row[col] = makeCell(label[i], labelFg, 17, labelBold);
+            col++;
+        }
+        for (let wi = 0; wi < tenpai.waits.length && col < 80; wi++) {
+            const name = tenpai.waits[wi].name;
+            for (let i = 0; i < name.length && col < 80; i++) {
+                row[col] = makeCell(name[i], 7, 17, false);
+                col++;
+            }
+            if (col < 80) { row[col] = makeCell(' ', 7, 17, false); col++; }
         }
     }
 
@@ -1404,8 +1455,9 @@ export class JpmjCmd extends CmdBase {
 
         if (this._phase === 'playing' && this._autoPlay) {
             if (code === 0x61 || code === 0x41) {
-                this._autoPlay = false;
-                this._updateStatusBar();
+        this._autoPlay = false;
+        this._tenpaiCache = { handStr: '', info: null };
+        this._updateStatusBar();
                 this._render();
                 return;
             }
