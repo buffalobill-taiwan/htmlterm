@@ -302,7 +302,7 @@ export class JpmjCmd extends CmdBase {
             this._slotStatus = this._rootVB.addChildSlot();
 
             const statusRow = this._statusVB._buffer[0];
-            for (let c = 0; c < 80; c++) statusRow[c] = makeCell(' ', 7, 4, false);
+            for (let c = 0; c < 80; c++) statusRow[c] = makeCell(' ', 7, 17, false);
         }
 
         this._phase = 'settings';
