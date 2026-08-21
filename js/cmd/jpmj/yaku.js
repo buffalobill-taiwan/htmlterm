@@ -420,6 +420,7 @@ function checkIttsuu(handInfo, gameState) {
 }
 
 function checkChanta(handInfo, gameState) {
+    if (handInfo.isKokushi || handInfo.isChiitoitsu) return [];
     if (checkJunchan(handInfo, gameState).length > 0) return [];
     for (const m of handInfo.melds) {
         let hasTerminal = false;
@@ -434,6 +435,7 @@ function checkChanta(handInfo, gameState) {
 }
 
 function checkJunchan(handInfo, gameState) {
+    if (handInfo.isKokushi || handInfo.isChiitoitsu) return [];
     for (const m of handInfo.melds) {
         let hasTerm = false;
         for (const t of m.tiles) {
@@ -450,6 +452,7 @@ function checkJunchan(handInfo, gameState) {
 }
 
 function checkToitoi(handInfo, gameState) {
+    if (handInfo.isKokushi || handInfo.isChiitoitsu) return [];
     for (const m of handInfo.melds) {
         if (m.type !== 'triplet' && m.type !== 'kan') return [];
     }
@@ -472,6 +475,7 @@ function checkSanankou(handInfo, gameState) {
 }
 
 function checkHonroutou(handInfo, gameState) {
+    if (handInfo.isKokushi || handInfo.isChiitoitsu) return [];
     for (const m of handInfo.melds) {
         if (m.type === 'sequence') return [];
         for (const t of m.tiles) {

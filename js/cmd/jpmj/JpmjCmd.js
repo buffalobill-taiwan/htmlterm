@@ -3,6 +3,7 @@ import { CmdBase } from '../CmdBase.js';
 import { CURSOR_HIDE, CURSOR_SHOW, OverlayZ, makeOverlayGetCell, makeCell, bold, cyan, yellow, green, red, magenta, gray, white } from '../../util/sgr.js';
 import { SettingsDialog } from '../../dialog/SettingsDialog.js';
 import { SelectDialog } from '../../dialog/SelectDialog.js';
+import { VerticalSelectDialog } from '../../dialog/VerticalSelectDialog.js';
 import { ConfirmDialog } from '../../dialog/ConfirmDialog.js';
 import { VirtualBuffer } from '../../util/VirtualBuffer.js';
 import { isWide, displayWidth } from '../../util/display-width.js';
@@ -81,7 +82,6 @@ export class JpmjCmd extends CmdBase {
         this._actionCursor = 0;
         this._actionItems = [];
         this._subMenuCursor = 0;
-        this._riichiCursor = 0;
         this._chiOptions = [];
         this._kanOptions = [];
         this._pausedIsAuto = false;
@@ -539,6 +539,8 @@ export class JpmjCmd extends CmdBase {
     _buildActionItems() {
         const items = [];
         const actions = this._game.availableActions;
+        const ankans = [];
+        const kakans = [];
         for (const a of actions) {
             if (a === 'discard' || a === 'pass' || a === 'tsumo-no-yaku' || a === 'ron-no-yaku' || a === 'ron-furiten') continue;
             if (a === 'pass') { items.push({ label: '過', action: 'pass' }); continue; }
@@ -550,12 +552,16 @@ export class JpmjCmd extends CmdBase {
                 if (a.type === 'pon') items.push({ label: 'ポン', action: a });
                 else if (a.type === 'chi') items.push({ label: 'チー', action: a });
                 else if (a.type === 'kan') items.push({ label: '槓', action: a });
-                else if (a.type === 'ankan') items.push({ label: '暗槓', action: a });
-                else if (a.type === 'kakan') items.push({ label: '加槓', action: a });
+                else if (a.type === 'ankan') ankans.push(a);
+                else if (a.type === 'kakan') kakans.push(a);
                 else if (a.type === 'ron') items.push({ label: 'ロン', action: a });
                 else if (a.type === 'pass') items.push({ label: '過', action: { type: 'pass' } });
             }
         }
+        if (ankans.length === 1) items.push({ label: '暗槓', action: ankans[0] });
+        else if (ankans.length > 1) items.push({ label: '暗槓', action: { type: 'ankans', options: ankans } });
+        if (kakans.length === 1) items.push({ label: '加槓', action: kakans[0] });
+        else if (kakans.length > 1) items.push({ label: '加槓', action: { type: 'kakans', options: kakans } });
         if (this._canDeclareRiichi() && !items.find(i => i.action === 'riichi')) {
             const passIdx = items.findIndex(i => i.action === 'pass' || (i.action && i.action.type === 'pass'));
             if (passIdx >= 0) items.splice(passIdx, 0, { label: '立直', action: 'riichi' });
@@ -738,9 +744,7 @@ export class JpmjCmd extends CmdBase {
             if (i === drawIdx) continue;
             const tile = hand[i];
             const key = tile.key();
-            const isCursor = showCursor && (
-                             (this._cursorMode === 'hand' && this._handCursor === visPos) ||
-                             (this._cursorMode === 'riichiSelect' && this._riichiCursor === visPos));
+            const isCursor = showCursor && (this._cursorMode === 'hand' && this._handCursor === visPos);
             const canDiscard = discardableIndices.includes(visPos);
             let pal;
             if (isCursor && !canDiscard && isDiscardPhase) pal = this._palCursorDark[key];
@@ -754,9 +758,7 @@ export class JpmjCmd extends CmdBase {
         col += gapBeforeDraw;
         if (drawTile) {
             const key = drawTile.key();
-            const isCursor = showCursor && (
-                             (this._cursorMode === 'hand' && this._handCursor === hand.length - 1) ||
-                             (this._cursorMode === 'riichiSelect' && this._riichiCursor === hand.length - 1));
+            const isCursor = showCursor && (this._cursorMode === 'hand' && this._handCursor === hand.length - 1);
             const canDiscard = discardableIndices.includes(hand.length - 1);
             let pal;
             if (isCursor && !canDiscard && isDiscardPhase) pal = this._palCursorDark[key];
@@ -1061,7 +1063,7 @@ export class JpmjCmd extends CmdBase {
 
         vb.writeStr(2, 1, '　ドラ：');
         for (let i = 0; i < 5; i++) {
-            const col = 9 + i * 4;
+            const col = 9 + i * 3;
             if (i < doraCount) {
                 const pal = this._palNormal[doraIndicators[i].key()];
                 buf[2][col] = pal.top; buf[2][col + 1] = pal.topCont;
@@ -1074,7 +1076,7 @@ export class JpmjCmd extends CmdBase {
 
         vb.writeStr(4, 1, '裏ドラ：');
         for (let i = 0; i < 5; i++) {
-            const col = 9 + i * 4;
+            const col = 9 + i * 3;
             if (showUra && i < doraCount && uraIndicators[i]) {
                 const pal = this._palNormal[uraIndicators[i].key()];
                 buf[4][col] = pal.top; buf[4][col + 1] = pal.topCont;
@@ -1143,7 +1145,7 @@ export class JpmjCmd extends CmdBase {
             let y = 3;
             if (r.yaku) {
                 for (const yaku of r.yaku) {
-                    const hanStr = yaku.han + '翻';
+                    const hanStr = yaku.han + '飜';
                     const nameStr = yaku.name;
                     vb.writeStr(y, 2, hanStr + ' ' + nameStr);
                     y++;
@@ -1152,7 +1154,7 @@ export class JpmjCmd extends CmdBase {
             }
 
             y = oh - 5;
-            const hanFu = r.isYakuman ? '役滿' : (r.totalHan + '翻' + r.fu + '符');
+            const hanFu = r.isYakuman ? '役滿' : (r.totalHan + '飜' + r.fu + '符');
             const points = r.payments ? r.payments.total : 0;
             vb.writeStr(y, 2, '\x1B[1m' + hanFu + '  ' + String(points) + '点\x1B[0m');
 
@@ -1237,9 +1239,6 @@ export class JpmjCmd extends CmdBase {
         }
         if (this._cursorMode === 'action') {
             return this._getActionBarCursorPos();
-        }
-        if (this._cursorMode === 'riichiSelect') {
-            return this._getHandCursorPos(this._riichiCursor);
         }
         if (this._cursorMode === 'chiSelect' || this._cursorMode === 'kanSelect') {
             return null;
@@ -1441,10 +1440,6 @@ export class JpmjCmd extends CmdBase {
             this._handleKanSelectKey(data);
             return;
         }
-        if (this._cursorMode === 'riichiSelect') {
-            this._handleRiichiSelectKey(data);
-            return;
-        }
 
         if (this._cursorMode === 'action') {
             this._handleActionBarKey(data);
@@ -1553,50 +1548,6 @@ export class JpmjCmd extends CmdBase {
         }
     }
 
-    _handleRiichiSelectKey(data) {
-        const code = typeof data === 'string' ? data.charCodeAt(0) : data;
-        const g = this._game;
-        const p = g.players[0];
-        const hand = p.hand;
-        const discardable = this._getDiscardableIndices();
-        if (discardable.length === 0) {
-            this._cursorMode = 'hand';
-            this._render();
-            return;
-        }
-
-        if (code === 0x1B) {
-            const s = typeof data === 'string' ? data : '';
-            if (s === '\x1B[C' || s === '\x1B[D') {
-                const curIdx = discardable.indexOf(this._riichiCursor);
-                if (s === '\x1B[C') {
-                    this._riichiCursor = discardable[(curIdx + 1) % discardable.length];
-                } else {
-                    this._riichiCursor = discardable[(curIdx - 1 + discardable.length) % discardable.length];
-                }
-                this._render();
-                return;
-            }
-            if (s === '\x1B[3~' || s === '\x1B[2~' || s === '\x1B[H' || s === '\x1B[F' || s === '\x1B[5~' || s === '\x1B[6~') return;
-            this._cursorMode = 'hand';
-            this._render();
-            return;
-        }
-
-        if (code === 0x0D || code === 0x0A) {
-            const idx = this._riichiCursor;
-            const handIdx = this._visualToHandIdx(idx);
-            const testHand = hand.filter((_, i) => i !== handIdx);
-            if (checkTenpaiLocal(testHand, p.melds)) {
-                this._game.humanRiichi(handIdx);
-                this._cursorMode = 'hand';
-                this._handCursor = 0;
-                this._gameTimer = setTimeout(() => this._continueGame(), 100);
-            }
-            return;
-        }
-    }
-
     _handleChiSelectKey(data) {
         const code = typeof data === 'string' ? data.charCodeAt(0) : data;
         const opts = this._chiOptions;
@@ -1697,10 +1648,51 @@ export class JpmjCmd extends CmdBase {
         }
 
         if (action === 'riichi') {
-            this._cursorMode = 'riichiSelect';
-            const discardable = this._getDiscardableIndices();
-            this._riichiCursor = discardable.length > 0 ? discardable[0] : 0;
-            this._render();
+            const p = g.players[0];
+            const hand = p.hand;
+            const options = [];
+            for (let i = 0; i < hand.length; i++) {
+                const testHand = hand.filter((_, j) => j !== i);
+                const waits = getWaitingTiles(testHand, p.melds);
+                if (waits.length > 0) {
+                    options.push({ handIdx: i, tile: hand[i], waits });
+                }
+            }
+            if (options.length === 0) return;
+            if (options.length === 1) {
+                this._game.humanRiichi(options[0].handIdx);
+                this._cursorMode = 'hand';
+                this._handCursor = 0;
+                this._gameTimer = setTimeout(() => this._continueGame(), 100);
+                return;
+            }
+            const labels = options.map(o =>
+                '捨' + o.tile.name + '→聽' + o.waits.map(w => w.name).join('')
+            );
+            const maxLen = Math.max(...labels.map(l => displayWidth(l)));
+            const stackDepth = system.cmdStack.length;
+            const removeHook = system.addFramePopHook(() => {
+                if (system.cmdStack.length === stackDepth) {
+                    removeHook();
+                    this._gameTimer = setTimeout(() => this._continueGame(), 100);
+                }
+            });
+            system.createDialog(VerticalSelectDialog, 'jpmj-riichi', {
+                title: '立直',
+                message: 'どの牌を捨てますか？',
+                options: labels,
+                width: maxLen + 6,
+                cols: 1,
+                onSelect: (idx) => {
+                    this._game.humanRiichi(options[idx].handIdx);
+                    this._cursorMode = 'hand';
+                    this._handCursor = 0;
+                    return 'close';
+                },
+                onCancel: () => {
+                    return 'close';
+                },
+            });
             return;
         }
 
@@ -1744,6 +1736,42 @@ export class JpmjCmd extends CmdBase {
                 this._gameTimer = setTimeout(() => this._continueGame(), 100);
                 return;
             }
+            if (action.type === 'ankans' || action.type === 'kakans') {
+                const opts = action.options;
+                if (opts.length === 1) {
+                    g.executeKan(opts[0]);
+                    this._cursorMode = 'hand';
+                    this._handCursor = 0;
+                    this._gameTimer = setTimeout(() => this._continueGame(), 100);
+                    return;
+                }
+                const labels = opts.map(o => o.desc);
+                const maxLen = Math.max(...labels.map(l => displayWidth(l)));
+                const key = action.type === 'ankans' ? 'jpmj-ankans' : 'jpmj-kakans';
+                const stackDepth = system.cmdStack.length;
+                const removeHook = system.addFramePopHook(() => {
+                    if (system.cmdStack.length === stackDepth) {
+                        removeHook();
+                        this._gameTimer = setTimeout(() => this._continueGame(), 100);
+                    }
+                });
+                system.createDialog(VerticalSelectDialog, key, {
+                    title: action.type === 'ankans' ? '暗槓選択' : '加槓選択',
+                    options: labels,
+                    width: maxLen + 6,
+                    cols: 1,
+                    onSelect: (idx) => {
+                        g.executeKan(opts[idx]);
+                        this._cursorMode = 'hand';
+                        this._handCursor = 0;
+                        return 'close';
+                    },
+                    onCancel: () => {
+                        return 'close';
+                    },
+                });
+                return;
+            }
             if (action.type === 'ankan' || action.type === 'kakan') {
                 g.executeKan(action);
                 this._cursorMode = 'hand';
@@ -1759,22 +1787,13 @@ export class JpmjCmd extends CmdBase {
         }
     }
 
-    _doDiscard(visualPos, isRiichi = false) {
+    _doDiscard(visualPos) {
         const g = this._game;
         const p = g.players[0];
         const tileIdx = this._visualToHandIdx(visualPos);
         if (tileIdx < 0 || tileIdx >= p.hand.length) return;
 
-        if (isRiichi) {
-            const testHand = p.hand.filter((_, i) => i !== tileIdx);
-            if (checkTenpaiLocal(testHand, p.melds)) {
-                g.humanRiichi(tileIdx);
-            } else {
-                g.humanDiscard(tileIdx);
-            }
-        } else {
-            g.humanDiscard(tileIdx);
-        }
+        g.humanDiscard(tileIdx);
         this._cursorMode = 'hand';
         this._handCursor = 0;
         this._gameTimer = setTimeout(() => this._continueGame(), 100);
@@ -1824,8 +1843,4 @@ export class JpmjCmd extends CmdBase {
     static get help() { return 'Japanese Mahjong (14 tiles, 6 AI types)'; }
     static get menu() { return 'Japanese Mahjong'; }
     static get usage() { return 'jpmj'; }
-}
-
-function checkTenpaiLocal(hand, melds) {
-    return getWaitingTiles(hand, melds).length > 0;
 }
