@@ -303,6 +303,9 @@ export class JpmjCmd extends CmdBase {
 
             const statusRow = this._statusVB._buffer[0];
             for (let c = 0; c < 80; c++) statusRow[c] = makeCell(' ', 7, 17, false);
+            const title = 'JPMJ';
+            for (let i = 0; i < title.length; i++) statusRow[i] = makeCell(title[i], 15, 17, true);
+            statusRow[4] = makeCell('|', 7, 17, false);
         }
 
         this._phase = 'settings';
