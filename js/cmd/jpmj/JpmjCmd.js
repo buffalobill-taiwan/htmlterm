@@ -398,11 +398,6 @@ export class JpmjCmd extends CmdBase {
             this._autoPlay = false;
             this._updateStatusBar();
             this._game.endRound();
-            if (this._game.gameOver) {
-                this._phase = 'gameOver';
-                this._render();
-                return;
-            }
             this._phase = 'result';
             this._render();
             return;
@@ -410,11 +405,7 @@ export class JpmjCmd extends CmdBase {
         const needHuman = this._game.advance();
         if (this._game.roundOver) {
             this._game.endRound();
-            if (this._game.gameOver) {
-                this._phase = 'gameOver';
-            } else {
-                this._phase = 'result';
-            }
+            this._phase = 'result';
             this._render();
             return;
         }
@@ -699,6 +690,7 @@ export class JpmjCmd extends CmdBase {
         this._slotPlayer.active = false;
         this._slotInfo.active = false;
         this._slotResult.active = false;
+        this._slotStatus.active = false;
     }
 
     _getTenpaiInfo() {
@@ -1434,12 +1426,17 @@ export class JpmjCmd extends CmdBase {
 
         if (this._phase === 'result') {
             if (code === 0x0D || code === 0x0A) {
-                this._game.startNewRound();
-                this._phase = 'playing';
-                this._handCursor = 0;
-                this._actionCursor = 0;
-                this._cursorMode = 'hand';
-                this._continueGame();
+                if (this._game.gameOver) {
+                    this._phase = 'gameOver';
+                    this._render();
+                } else {
+                    this._game.startNewRound();
+                    this._phase = 'playing';
+                    this._handCursor = 0;
+                    this._actionCursor = 0;
+                    this._cursorMode = 'hand';
+                    this._continueGame();
+                }
                 return;
             }
             if (code === 0x71 || code === 0x51) {
