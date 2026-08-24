@@ -69,7 +69,7 @@ export class JpmjCmd extends CmdBase {
         this._leftVB = new VirtualBuffer(4, 18);
         this._rightVB = new VirtualBuffer(4, 18);
         this._playerVB = new VirtualBuffer(40, 3);
-        this._discardVB = new VirtualBuffer(34, 15);
+        this._discardVB = new VirtualBuffer(38, 15);
         this._infoVB = new VirtualBuffer(36, 21);
         this._resultVB = new VirtualBuffer(36, 16);
         this._game = null;
@@ -787,7 +787,7 @@ export class JpmjCmd extends CmdBase {
         this._slotAcross.vb = this._acrossVB; this._slotAcross.x = 0;  this._slotAcross.y = 0;  this._slotAcross.active = true;
         this._slotLeft.vb = this._leftVB;     this._slotLeft.x = 0;    this._slotLeft.y = 2;    this._slotLeft.active = true;
         this._slotRight.vb = this._rightVB;   this._slotRight.x = 40;  this._slotRight.y = 0;   this._slotRight.active = true;
-        this._slotDiscard.vb = this._discardVB; this._slotDiscard.x = 6; this._slotDiscard.y = 3; this._slotDiscard.active = true;
+        this._slotDiscard.vb = this._discardVB; this._slotDiscard.x = 5; this._slotDiscard.y = 3; this._slotDiscard.active = true;
         this._slotPlayer.vb = this._playerVB; this._slotPlayer.x = 4;  this._slotPlayer.y = 18; this._slotPlayer.active = true;
         this._slotInfo.vb = this._infoVB;     this._slotInfo.x = 44;   this._slotInfo.y = 0;    this._slotInfo.active = true;
         this._slotResult.vb = this._resultVB; this._slotResult.x = 4; this._slotResult.y = 2;
