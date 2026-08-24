@@ -1272,6 +1272,12 @@ export class JpmjCmd extends CmdBase {
                     if (y >= oh - 4) break;
                 }
             }
+            if (r.doraHan > 0 && y < oh - 4) {
+                vb.writeStr(y++, 2, r.doraHan + '飜 ドラ');
+            }
+            if (r.uraDoraHan > 0 && y < oh - 4) {
+                vb.writeStr(y++, 2, r.uraDoraHan + '飜 裏ドラ');
+            }
 
             y = oh - 5;
             const hanFu = r.isYakuman ? '役滿' : (r.totalHan + '飜' + r.fu + '符');
