@@ -69,7 +69,7 @@ export class JpmjCmd extends CmdBase {
         this._leftVB = new VirtualBuffer(4, 18);
         this._rightVB = new VirtualBuffer(4, 18);
         this._playerVB = new VirtualBuffer(40, 3);
-        this._discardVB = new VirtualBuffer(38, 15);
+        this._discardVB = new VirtualBuffer(34, 15);
         this._infoVB = new VirtualBuffer(36, 21);
         this._resultVB = new VirtualBuffer(36, 16);
         this._game = null;
