@@ -76,6 +76,7 @@ export class JpmjCmd extends CmdBase {
         this._phase = 'settings';
         this._settingsValues = null;
         this._autoPlay = false;
+        this._tenpaiCache = { handStr: '', info: null };
         this._updateStatusBar();
         this._gameTimer = null;
         this._cursorMode = 'hand';
@@ -378,6 +379,7 @@ export class JpmjCmd extends CmdBase {
         this._game = new Game(opts);
         this._game.initGame();
         this._autoPlay = false;
+        this._tenpaiCache = { handStr: '', info: null };
         this._updateStatusBar();
         this._phase = 'playing';
         this._handCursor = 0;
@@ -709,7 +711,7 @@ export class JpmjCmd extends CmdBase {
         if (baseHand.length !== expectedLen) return null;
 
         const handStr = baseHand.map(t => t.key()).join(',') + '|' + meldCount + '|' + p.discards.length;
-        if (!this._tenpaiCache || handStr === this._tenpaiCache.handStr) return this._tenpaiCache ? this._tenpaiCache.info : null;
+        if (this._tenpaiCache && handStr === this._tenpaiCache.handStr) return this._tenpaiCache.info;
 
         const waits = getWaitingTiles(baseHand, p.melds);
         if (waits.length === 0) {
