@@ -129,6 +129,8 @@ export class JpmjCmd extends CmdBase {
         this._meldPalHoriz = {};
         this._dimPal2x2 = {};
         this._dimPalHoriz = {};
+        this._ronPal2x2 = {};
+        this._ronPalHoriz = {};
 
         this._palNormal = {};
         this._palCursor = {};
@@ -255,6 +257,41 @@ export class JpmjCmd extends CmdBase {
             this._dimPalHoriz[key] = cells;
         }
         return this._dimPalHoriz[key];
+    }
+
+    _getRonPal2x2(key) {
+        if (!this._ronPal2x2[key]) {
+            const tile = Tile.fromString(key);
+            if (!tile) return this._palNormal['m1'];
+            const fg = tileFg(tile.suit, tile.value);
+            const topCh = tile.displayTop[0] || ' ';
+            const botCh = tile.displayBottom[0] || ' ';
+            this._ronPal2x2[key] = {
+                top: makeCell(topCh, fg, 24, true, isWide(topCh) ? 2 : 1),
+                topCont: this._cellW0,
+                bot: makeCell(botCh, fg, 24, true, isWide(botCh) ? 2 : 1),
+                botCont: this._cellW0,
+            };
+        }
+        return this._ronPal2x2[key];
+    }
+
+    _getRonPalHoriz(key) {
+        if (!this._ronPalHoriz[key]) {
+            const tile = Tile.fromString(key);
+            if (!tile) return this._palHorizNormal['m1'];
+            const fg = tileFg(tile.suit, tile.value);
+            const horiz = tile.displayHorizontal;
+            const cells = [];
+            for (let i = 0; i < horiz.length; i++) {
+                const ch = horiz[i];
+                const w = isWide(ch) ? 2 : 1;
+                cells.push(makeCell(ch, fg, 24, true, w));
+                if (w === 2) cells.push(this._cellW0);
+            }
+            this._ronPalHoriz[key] = cells;
+        }
+        return this._ronPalHoriz[key];
     }
 
     _getCoverRow(bg) {
@@ -834,7 +871,7 @@ export class JpmjCmd extends CmdBase {
         const g = this._game;
         const p = g.players[0];
         const hand = p.hand;
-        const drawTile = p.lastDraw;
+        const drawTile = p.lastDraw || (this._phase === 'result' ? p.ronTile : null);
         const melds = p.melds;
         const drawIdx = drawTile ? hand.indexOf(drawTile) : -1;
         const buf = vb._buffer;
@@ -844,7 +881,7 @@ export class JpmjCmd extends CmdBase {
             for (const t of m.tiles) meldTiles.push(t);
         }
 
-        const handCount = drawTile ? hand.length - 1 : hand.length;
+        const handCount = drawIdx >= 0 ? hand.length - 1 : hand.length;
         const handCols = handCount * 2;
         const gapBeforeDraw = 1;
         const drawCols = 2;
@@ -877,10 +914,12 @@ export class JpmjCmd extends CmdBase {
         col += gapBeforeDraw;
         if (drawTile) {
             const key = drawTile.key();
+            const isRonDraw = this._phase === 'result' && p.ronTile && drawTile.equals(p.ronTile);
             const isCursor = showCursor && (this._cursorMode === 'hand' && this._handCursor === hand.length - 1);
             const canDiscard = discardableIndices.includes(hand.length - 1);
             let pal;
-            if (isCursor && !canDiscard && isDiscardPhase) pal = this._palCursorDark[key];
+            if (isRonDraw) pal = this._getRonPal2x2(key);
+            else if (isCursor && !canDiscard && isDiscardPhase) pal = this._palCursorDark[key];
             else if (isCursor) pal = this._palCursor[key];
             else pal = this._palNormal[key];
             this._writeTile2x2(buf, 1, col, pal);
@@ -958,15 +997,15 @@ export class JpmjCmd extends CmdBase {
         const g = this._game;
         const across = g.players[2];
         const hand = across.hand;
-        const drawTile = across.lastDraw;
         const melds = across.melds;
         const buf = vb._buffer;
         const reveal = this._phase === 'result';
+        const drawTile = across.lastDraw || (reveal ? across.ronTile : null);
         const cover2x2 = this._getCover2x2('▓', 240, 236);
 
         const drawIdx = drawTile ? hand.indexOf(drawTile) : -1;
-        const hasDraw = drawIdx >= 0;
-        const handDisplay = hand.length - (hasDraw ? 1 : 0);
+        const hasDraw = !!drawTile;
+        const handDisplay = hand.length - (drawIdx >= 0 ? 1 : 0);
 
         const meldTileCount = melds.reduce((s, m) => s + m.tiles.length, 0);
         const meldCols = meldTileCount * 2;
@@ -995,7 +1034,10 @@ export class JpmjCmd extends CmdBase {
         }
         col += gapBeforeDraw;
         if (hasDraw) {
-            if (reveal) {
+            const isRonDraw = drawTile && across.ronTile && drawTile.equals(across.ronTile);
+            if (reveal && isRonDraw) {
+                this._writeTile2x2(buf, 0, col, this._getRonPal2x2(drawTile.key()));
+            } else if (reveal) {
                 this._writeTile2x2(buf, 0, col, this._palNormal[drawTile.key()]);
             } else {
                 this._writeCover2x2(buf, 0, col, cover2x2[0]);
@@ -1018,14 +1060,14 @@ export class JpmjCmd extends CmdBase {
         const g = this._game;
         const left = g.players[3];
         const hand = left.hand;
-        const drawTile = left.lastDraw;
         const melds = left.melds;
         const buf = vb._buffer;
         const reveal = this._phase === 'result';
+        const drawTile = reveal ? (left.lastDraw || left.ronTile) : left.lastDraw;
 
         const drawIdx = drawTile ? hand.findIndex(t => t.equals(drawTile)) : -1;
-        const hasDraw = drawIdx >= 0;
-        const handDisplay = hand.length - (hasDraw ? 1 : 0);
+        const hasDraw = !!drawTile;
+        const handDisplay = hand.length - (drawIdx >= 0 ? 1 : 0);
         const meldCount = melds.reduce((s, m) => s + m.tiles.length, 0);
         const base = handDisplay + 1 + meldCount;
         const spare = 18 - base;
@@ -1046,7 +1088,10 @@ export class JpmjCmd extends CmdBase {
         }
         row += gapAfterHand;
         if (hasDraw) {
-            if (reveal) {
+            const isRonDraw = drawTile && left.ronTile && drawTile.equals(left.ronTile);
+            if (reveal && isRonDraw) {
+                this._writeTileH(buf, row, 0, this._getRonPalHoriz(drawTile.key()));
+            } else if (reveal) {
                 this._writeTileH(buf, row, 0, this._palHorizNormal[drawTile.key()]);
             } else {
                 this._writeCoverRow(buf, row, 0, 236);
@@ -1074,14 +1119,14 @@ export class JpmjCmd extends CmdBase {
         const g = this._game;
         const right = g.players[1];
         const hand = right.hand;
-        const drawTile = right.lastDraw;
         const melds = right.melds;
         const buf = vb._buffer;
         const reveal = this._phase === 'result';
+        const drawTile = reveal ? (right.lastDraw || right.ronTile) : right.lastDraw;
 
         const drawIdx = drawTile ? hand.findIndex(t => t.equals(drawTile)) : -1;
-        const hasDraw = drawIdx >= 0;
-        const handDisplay = hand.length - (hasDraw ? 1 : 0);
+        const hasDraw = !!drawTile;
+        const handDisplay = hand.length - (drawIdx >= 0 ? 1 : 0);
         const meldCount = melds.reduce((s, m) => s + m.tiles.length, 0);
         const base = handDisplay + 1 + meldCount;
         const spare = 18 - base;
@@ -1107,7 +1152,10 @@ export class JpmjCmd extends CmdBase {
         }
         row += gapAfterMelds;
         if (hasDraw) {
-            if (reveal) {
+            const isRonDraw = drawTile && right.ronTile && drawTile.equals(right.ronTile);
+            if (reveal && isRonDraw) {
+                this._writeTileH(buf, row, 0, this._getRonPalHoriz(drawTile.key()));
+            } else if (reveal) {
                 this._writeTileH(buf, row, 0, this._palHorizNormal[drawTile.key()]);
             } else {
                 this._writeCoverRow(buf, row, 0, 236);

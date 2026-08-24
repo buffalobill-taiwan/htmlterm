@@ -113,6 +113,7 @@ export class Game {
         ippatsuRound: -1,
         lastDraw: null,
         isTempFuriten: false,
+        ronTile: null,
         stats: { tsumo: 0, ron: 0, dealtIn: 0 },
       });
     }
@@ -157,6 +158,7 @@ export class Game {
       p.ippatsuRound = -1;
       p.lastDraw = null;
       p.isTempFuriten = false;
+      p.ronTile = null;
     }
     for (let i = 0; i < 4; i++) {
       this.players[i].seatWind = ((i - this.dealerIndex + 4) % 4) + 1;
@@ -1045,6 +1047,7 @@ export class Game {
     if (!result) return;
 
     this.winner = playerIdx;
+    if (winType === 'ron') p.ronTile = tile;
     const isRenchan = playerIdx === this.dealerIndex;
     const nextRoundNum = isRenchan ? this.roundNumber : this.roundNumber + 1;
     const nextWind = ['東', '南', '西', '北'][Math.floor(nextRoundNum / 4) % 4];
