@@ -805,6 +805,7 @@ export class JpmjCmd extends CmdBase {
     }
 
     _writeTile2x2(buf, row, col, pal) {
+        if (!buf[row] || !buf[row + 1]) return;
         buf[row][col]     = pal.top;
         buf[row][col + 1] = pal.topCont;
         buf[row + 1][col] = pal.bot;
@@ -812,15 +813,18 @@ export class JpmjCmd extends CmdBase {
     }
 
     _writeTileH(buf, row, col, cells) {
+        if (!buf[row]) return;
         for (let i = 0; i < cells.length; i++) buf[row][col + i] = cells[i];
     }
 
     _writeCover2x2(buf, row, col, cell) {
+        if (!buf[row] || !buf[row + 1]) return;
         buf[row][col] = cell; buf[row][col + 1] = cell;
         buf[row + 1][col] = cell; buf[row + 1][col + 1] = cell;
     }
 
     _writeCoverRow(buf, row, col, bg) {
+        if (!buf[row]) return;
         const cells = this._getCoverRow(bg);
         buf[row][col] = cells[0]; buf[row][col + 1] = cells[1];
         buf[row][col + 2] = cells[2]; buf[row][col + 3] = cells[3];
@@ -961,7 +965,8 @@ export class JpmjCmd extends CmdBase {
         const cover2x2 = this._getCover2x2('▓', 240, 236);
 
         const drawIdx = drawTile ? hand.indexOf(drawTile) : -1;
-        const handDisplay = hand.length - (drawTile ? 1 : 0);
+        const hasDraw = drawIdx >= 0;
+        const handDisplay = hand.length - (hasDraw ? 1 : 0);
 
         const meldTileCount = melds.reduce((s, m) => s + m.tiles.length, 0);
         const meldCols = meldTileCount * 2;
@@ -989,7 +994,7 @@ export class JpmjCmd extends CmdBase {
             }
         }
         col += gapBeforeDraw;
-        if (drawTile) {
+        if (hasDraw) {
             if (reveal) {
                 this._writeTile2x2(buf, 0, col, this._palNormal[drawTile.key()]);
             } else {
@@ -1017,14 +1022,14 @@ export class JpmjCmd extends CmdBase {
         const melds = left.melds;
         const buf = vb._buffer;
         const reveal = this._phase === 'result';
-        const cover = this._getCoverRow(236);
 
         const drawIdx = drawTile ? hand.findIndex(t => t.equals(drawTile)) : -1;
-        const handDisplay = hand.length - (drawTile ? 1 : 0);
+        const hasDraw = drawIdx >= 0;
+        const handDisplay = hand.length - (hasDraw ? 1 : 0);
         const meldCount = melds.reduce((s, m) => s + m.tiles.length, 0);
         const base = handDisplay + 1 + meldCount;
         const spare = 18 - base;
-        const gapAfterHand = spare >= 2 ? 1 : 0;
+        const gapAfterHand = spare >= 3 ? 1 : 0;
         const gapAfterDraw = spare >= 1 ? 1 : 0;
         const startRow = Math.floor((18 - base) / 2);
 
@@ -1035,16 +1040,16 @@ export class JpmjCmd extends CmdBase {
             if (reveal) {
                 this._writeTileH(buf, row, 0, this._palHorizNormal[hand[i].key()]);
             } else {
-                buf[row][0] = cover[0]; buf[row][1] = cover[1]; buf[row][2] = cover[2]; buf[row][3] = cover[3];
+                this._writeCoverRow(buf, row, 0, 236);
             }
             row++;
         }
         row += gapAfterHand;
-        if (drawTile) {
+        if (hasDraw) {
             if (reveal) {
                 this._writeTileH(buf, row, 0, this._palHorizNormal[drawTile.key()]);
             } else {
-                buf[row][0] = cover[0]; buf[row][1] = cover[1]; buf[row][2] = cover[2]; buf[row][3] = cover[3];
+                this._writeCoverRow(buf, row, 0, 236);
             }
         }
         row++;
@@ -1073,14 +1078,14 @@ export class JpmjCmd extends CmdBase {
         const melds = right.melds;
         const buf = vb._buffer;
         const reveal = this._phase === 'result';
-        const cover = this._getCoverRow(236);
 
         const drawIdx = drawTile ? hand.findIndex(t => t.equals(drawTile)) : -1;
-        const handDisplay = hand.length - (drawTile ? 1 : 0);
+        const hasDraw = drawIdx >= 0;
+        const handDisplay = hand.length - (hasDraw ? 1 : 0);
         const meldCount = melds.reduce((s, m) => s + m.tiles.length, 0);
         const base = handDisplay + 1 + meldCount;
         const spare = 18 - base;
-        const gapAfterMelds = spare >= 2 ? 1 : 0;
+        const gapAfterMelds = spare >= 3 ? 1 : 0;
         const gapAfterDraw = spare >= 1 ? 1 : 0;
         const startRow = Math.floor((18 - base) / 2);
 
@@ -1101,11 +1106,11 @@ export class JpmjCmd extends CmdBase {
             }
         }
         row += gapAfterMelds;
-        if (drawTile) {
+        if (hasDraw) {
             if (reveal) {
                 this._writeTileH(buf, row, 0, this._palHorizNormal[drawTile.key()]);
             } else {
-                buf[row][0] = cover[0]; buf[row][1] = cover[1]; buf[row][2] = cover[2]; buf[row][3] = cover[3];
+                this._writeCoverRow(buf, row, 0, 236);
             }
         }
         row++;
@@ -1115,7 +1120,7 @@ export class JpmjCmd extends CmdBase {
             if (reveal) {
                 this._writeTileH(buf, row, 0, this._palHorizNormal[hand[i].key()]);
             } else {
-                buf[row][0] = cover[0]; buf[row][1] = cover[1]; buf[row][2] = cover[2]; buf[row][3] = cover[3];
+                this._writeCoverRow(buf, row, 0, 236);
             }
             row++;
         }

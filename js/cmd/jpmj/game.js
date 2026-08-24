@@ -761,6 +761,7 @@ export class Game {
         else { newHand.push(t); }
       }
       p.hand = newHand;
+      if (p.lastDraw && !p.hand.includes(p.lastDraw)) p.lastDraw = null;
       p.melds.push({ type:'kan', tiles:[tile, tile, tile, tile], open:false });
       this.addLog(this.currentPlayer, '暗槓', tile.name);
 
@@ -794,6 +795,7 @@ export class Game {
         else { newHand.push(t); }
       }
       p.hand = newHand;
+      if (p.lastDraw && !p.hand.includes(p.lastDraw)) p.lastDraw = null;
       m.type = 'kan';
       m.tiles.push(tile);
       m.isKan = true;
@@ -854,6 +856,7 @@ export class Game {
           else { newHand.push(t); }
         }
         p.hand = newHand;
+        if (p.lastDraw && !p.hand.includes(p.lastDraw)) p.lastDraw = null;
         p.melds.push({ type:'kan', tiles:[tile, tile, tile, tile], open:false });
         this.addLog(playerIdx, '暗槓', tile.name);
 
@@ -910,6 +913,7 @@ export class Game {
                 else { newHand.push(t); }
               }
               p.hand = newHand;
+              if (p.lastDraw && !p.hand.includes(p.lastDraw)) p.lastDraw = null;
               m.type = 'kan';
               m.tiles.push(tile);
               m.isKan = true;
