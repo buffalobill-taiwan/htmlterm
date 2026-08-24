@@ -399,14 +399,12 @@ export class JpmjCmd extends CmdBase {
         if (this._game.roundOver) {
             this._autoPlay = false;
             this._updateStatusBar();
-            this._game.endRound();
             this._phase = 'result';
             this._render();
             return;
         }
         const needHuman = this._game.advance();
         if (this._game.roundOver) {
-            this._game.endRound();
             this._phase = 'result';
             this._render();
             return;
@@ -1207,6 +1205,7 @@ export class JpmjCmd extends CmdBase {
             if (pb.score !== pa.score) return pb.score - pa.score;
             return a - b;
         });
+        const preScores = (this._phase === 'result' && g._preRoundScores) ? g._preRoundScores : null;
         for (let row = 0; row < 4; row++) {
             const pi = sorted[row];
             const p = g.players[pi];
@@ -1215,7 +1214,16 @@ export class JpmjCmd extends CmdBase {
             const namePad = ' '.repeat(6 - displayWidth(p.name));
             const dealer = pi === g.dealerIndex ? '親' : '  ';
             const scoreStr = String(p.score).replace(/\B(?=(\d{3})+(?!\d))/g, ',').padStart(6);
-            const line = windChar + ' ' + riichi + p.name + namePad + ' ' + dealer + ' ' + scoreStr;
+            let line = windChar + ' ' + riichi + p.name + namePad + ' ' + dealer + ' ' + scoreStr;
+            if (preScores) {
+                const delta = p.score - preScores[pi];
+                if (delta !== 0) {
+                    const sign = delta > 0 ? '+' : '';
+                    const deltaStr = sign + String(delta).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+                    const color = delta > 0 ? '\x1B[32m' : '\x1B[31m';
+                    line += '  ' + color + deltaStr + '\x1B[0m';
+                }
+            }
             const y = 7 + row;
             vb.writeStr(y, 1, line);
         }
@@ -1441,6 +1449,7 @@ export class JpmjCmd extends CmdBase {
 
         if (this._phase === 'result') {
             if (code === 0x0D || code === 0x0A) {
+                this._game.commitRoundEnd();
                 if (this._game.gameOver) {
                     this._phase = 'gameOver';
                     this._render();

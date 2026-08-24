@@ -35,6 +35,7 @@ export class Game {
     this.roundOver = false;
     this.riichiDeclaredThisTurn = false;
     this.lastActionWasRiichi = false;
+    this._preRoundScores = null;
     this.lastActionWasKan = false;
     this.discardAfterRiichi = null;
     this.firstRoundActive = false;
@@ -132,6 +133,7 @@ export class Game {
   startNewRound() {
     this.logGroup = 0;
     this.lastLogPlayer = -1;
+    this._preRoundScores = null;
     this.firstRoundActive = true;
     this.firstRoundCallsMade = false;
     this.firstDiscards = [];
@@ -1066,6 +1068,7 @@ export class Game {
       const uraTiles = this.wall.getUraDoraIndicators();
       this.addSystemLog('裏ドラ', uraTiles.map(t => t.name).join(' '));
     }
+    this._preRoundScores = this.players.map(pl => pl.score);
     this.applyScore(playerIdx, result.payments);
     if (winType === 'tsumo') {
       this.players[playerIdx].stats.tsumo++;
@@ -1132,6 +1135,7 @@ export class Game {
 
   handleSuuchaRiichi() {
     this.addSystemLog('流局', '四家立直');
+    this._preRoundScores = this.players.map(p => p.score);
     for (const p of this.players) {
       p.isRiichi = false;
       p.riichiTurn = -1;
@@ -1254,6 +1258,7 @@ export class Game {
 
     let notenPayment = 0;
     if (notenPlayers.length > 0 && tenpaiPlayers.length > 0) {
+      this._preRoundScores = this.players.map(p => p.score);
       const paymentPerNoten = 3000 / notenPlayers.length;
       const total = 3000;
       notenPayment = total / tenpaiPlayers.length;
@@ -1360,6 +1365,11 @@ export class Game {
       this.gameOver = true;
       this.addSystemLog('終局', '遊戲結束');
     }
+  }
+
+  commitRoundEnd() {
+    this.endRound();
+    this._preRoundScores = null;
   }
 
   getFinalScores() {
