@@ -1213,7 +1213,7 @@ export class JpmjCmd extends CmdBase {
             const riichi = p.isRiichi ? '\x1B[91;107m⬤\x1B[0m' : '  ';
             const namePad = ' '.repeat(6 - displayWidth(p.name));
             const dealer = pi === g.dealerIndex ? '親' : '  ';
-            const scoreStr = String(p.score).replace(/\B(?=(\d{3})+(?!\d))/g, ',').padStart(6);
+            const scoreStr = String(preScores ? preScores[pi] : p.score).replace(/\B(?=(\d{3})+(?!\d))/g, ',').padStart(6);
             let line = windChar + ' ' + riichi + p.name + namePad + ' ' + dealer + ' ' + scoreStr;
             if (preScores) {
                 const delta = p.score - preScores[pi];
