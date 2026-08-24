@@ -673,7 +673,6 @@ export class Game {
     }
     this.firstRoundActive = false;
     this.firstDiscards = [];
-    this.addLog(this.currentPlayer, '→', this.players[(this.currentPlayer + 1) % 4].name);
     this.lastDiscard = null;
     this.lastDiscardPlayer = -1;
     this.lastActionWasKan = false;

@@ -701,11 +701,21 @@ export class JpmjCmd extends CmdBase {
         const meldCount = p.melds.length;
         const expectedLen = 13 - 3 * meldCount;
         if (expectedLen < 0) return null;
-        const drawnTile = p.lastDraw;
-        const drawnInHand = drawnTile ? hand.indexOf(drawnTile) : -1;
-        const baseHand = drawnInHand >= 0
-            ? hand.filter((_, i) => i !== drawnInHand)
-            : hand;
+
+        const isDiscardPhase = (g.phase === 'discard' || g.phase === 'dealer_first_discard') && g.waitingHuman;
+        let removeIdx;
+        if (isDiscardPhase && this._cursorMode === 'hand') {
+            removeIdx = this._visualToHandIdx(this._handCursor);
+        } else {
+            const drawnTile = p.lastDraw;
+            removeIdx = drawnTile ? hand.indexOf(drawnTile) : -1;
+        }
+        let baseHand;
+        if (removeIdx >= 0 && removeIdx < hand.length) {
+            baseHand = hand.filter((_, i) => i !== removeIdx);
+        } else {
+            baseHand = hand;
+        }
         if (baseHand.length !== expectedLen) return null;
 
         const handStr = baseHand.map(t => t.key()).join(',') + '|' + meldCount + '|' + p.discards.length;
@@ -1787,10 +1797,14 @@ export class JpmjCmd extends CmdBase {
             const p = g.players[0];
             const hand = p.hand;
             const options = [];
+            const seenKeys = new Set();
             for (let i = 0; i < hand.length; i++) {
+                const key = hand[i].key();
+                if (seenKeys.has(key)) continue;
                 const testHand = hand.filter((_, j) => j !== i);
                 const waits = getWaitingTiles(testHand, p.melds);
                 if (waits.length > 0) {
+                    seenKeys.add(key);
                     options.push({ handIdx: i, tile: hand[i], waits });
                 }
             }
