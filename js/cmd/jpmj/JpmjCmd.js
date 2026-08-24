@@ -1130,17 +1130,17 @@ export class JpmjCmd extends CmdBase {
 
         const quadrants = [
             { playerIdx: 2, startCol: 0, startRow: 0 },
-            { playerIdx: 1, startCol: 17, startRow: 0 },
+            { playerIdx: 1, startCol: 18, startRow: 0 },
             { playerIdx: 3, startCol: 0, startRow: 7 },
-            { playerIdx: 0, startCol: 17, startRow: 7 },
+            { playerIdx: 0, startCol: 18, startRow: 7 },
         ];
 
         for (const q of quadrants) {
             const discards = g.players[q.playerIdx].discards;
             const isLatest = g.lastDiscardPlayer === q.playerIdx;
             for (let i = 0; i < discards.length; i++) {
-                const col = q.startCol + (i % 6) * 2;
-                const row = q.startRow + Math.floor(i / 6) * 2;
+                const col = q.startCol + (i % 8) * 2;
+                const row = q.startRow + Math.floor(i / 8) * 2;
                 const tile = discards[i];
                 const latest = isLatest && i === discards.length - 1;
                 const called = tile.called || false;
