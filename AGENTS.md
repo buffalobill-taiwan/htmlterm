@@ -761,6 +761,7 @@ input arrives only through the callback parameter.
   character's display width with `isWide(ch)`** from `unicode-width.js` before
   committing column arithmetic. Box-drawing chars (U+2500–U+257F) are single-width;
   CJK/fullwidth chars are double-width. Mismatched widths cause misaligned borders.
+- **不要自動 commit/push**：改完檔驗證語法後，等用戶明確說「commit」才執行 git commit/push。
 
 ## Design Decisions
 
