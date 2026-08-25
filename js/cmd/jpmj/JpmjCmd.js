@@ -9,7 +9,7 @@ import { VirtualBuffer } from '../../util/VirtualBuffer.js';
 import { isWide, displayWidth } from '../../util/display-width.js';
 import { Tile, tileFg } from './tiles.js';
 import { Game } from './game.js';
-import { getWaitingTiles, checkTenpai, evaluateHand } from './yaku.js';
+import { getWaitingTiles, checkTenpai, evaluateHand, getRankLabel } from './yaku.js';
 
 
 
@@ -1323,9 +1323,11 @@ export class JpmjCmd extends CmdBase {
         if (r.winner >= 0) {
             const winner = g.players[r.winner];
             const isTsumo = r.winType === 'tsumo';
-            const winLabel = isTsumo ? 'ツモ和了' : 'ロンドラ';
-
-            vb.writeStr(1, 2, '\x1B[1;33m和了！ ' + winner.name + ' ' + winLabel + '\x1B[0m');
+            let title = winner.name + (isTsumo ? ' ツモ' : ' ロン');
+            if (!isTsumo && r.discarder >= 0) {
+                title += ' | 放銃：' + g.players[r.discarder].name;
+            }
+            vb.writeStr(1, 2, '\x1B[1;33m' + title + '\x1B[0m');
 
             let y = 3;
             if (r.yaku) {
@@ -1345,16 +1347,21 @@ export class JpmjCmd extends CmdBase {
             }
 
             y = oh - 5;
-            const hanFu = r.isYakuman ? '役滿' : (r.totalHan + '飜' + r.fu + '符');
+            const rankLabel = getRankLabel(r.totalHan, r.fu, r.isYakuman, r.yaku);
+            const hanFu = rankLabel || (r.totalHan + '飜' + r.fu + '符');
             const points = r.payments ? r.payments.total : 0;
             vb.writeStr(y, 2, '\x1B[1m' + hanFu + '  ' + String(points) + '点\x1B[0m');
 
             if (r.payments) {
                 y++;
                 if (r.payments.type === 'tsumo') {
-                    vb.writeStr(y, 2, '子' + r.payments.childPayment + ' 親' + r.payments.dealerPayment);
+                    if (r.winner === g.dealerIndex) {
+                        vb.writeStr(y, 2, '各 ' + r.payments.dealerPayment + ' 点');
+                    } else {
+                        vb.writeStr(y, 2, '子' + r.payments.childPayment + ' 親' + r.payments.dealerPayment);
+                    }
                 } else {
-                    const disc = g.players[g.lastDiscardPlayer];
+                    const disc = g.players[r.discarder];
                     vb.writeStr(y, 2, disc.name + ' 支払 ' + r.payments.discarderPayment);
                 }
             }

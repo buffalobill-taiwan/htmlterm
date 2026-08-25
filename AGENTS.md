@@ -167,6 +167,9 @@ overlay; autoplay 託管), `game.js` (turn state machine, riichi/dora/honba/tsum
 exhaustive draw with noten payment, abortive draws 三家和/四槓散了/四風連打/九種九牌/
 四家立直), `yaku.js` (yaku evaluation + payments), `wall.js`/`tiles.js`, and 6 AI
 personalities via `ai_factory.js` (初學者/一般人/高手/国士命/断么廚/門清俠).
+jpmj rule reference: the upstream implementation lives at `/home/buffalobill/playground/jpmj`
+(`js/yaku.js` scoring, `js/main.js` UI incl. `getRankLabel` 満貫/跳満/倍満/三倍満/
+数え役満/N倍役満 labels) — consult it before re-deriving any mahjong rule.
 jpmj tenpai status bar (Aug 2026): `_getTenpaiInfo()` computes waits via
 `evaluateHand` + `getWaitingTiles`, then per-wait yaku check (`STANDALONE_YAKU`) —
 yaku-less waits (聽牌無役) are grayed out in the status row; result cached by hand string.

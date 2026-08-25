@@ -1053,6 +1053,7 @@ export class Game {
     this.roundResult = {
       winner: playerIdx,
       winType,
+      discarder: winType === 'ron' ? this.lastDiscardPlayer : -1,
       yaku: result.yaku,
       totalHan: result.totalHan,
       fu: result.fu,
@@ -1376,7 +1377,7 @@ export class Game {
           wp.stats.tsumo++;
         } else {
           wp.stats.ron++;
-          this.players[this.lastDiscardPlayer].stats.dealtIn++;
+          if (r.discarder >= 0) this.players[r.discarder].stats.dealtIn++;
         }
       }
     }

@@ -873,6 +873,20 @@ function ceil100(n) {
     return Math.ceil(n / 100) * 100;
 }
 
+export function getRankLabel(totalHan, fu, isYakuman, yaku) {
+    if (isYakuman) {
+        const count = yaku.filter(y => y.isYakuman).length;
+        if (count >= 2) return count + '倍役満';
+        return '役満';
+    }
+    if (totalHan >= 13) return '数え役満';
+    if (totalHan >= 11) return '三倍満';
+    if (totalHan >= 8) return '倍満';
+    if (totalHan >= 6) return '跳満';
+    if (totalHan >= 5 || (totalHan === 4 && fu >= 40) || (totalHan === 3 && fu >= 70)) return '満貫';
+    return null;
+}
+
 export function calculatePayments(handInfo, gameState) {
     const han = handInfo.totalHan;
     const fu = handInfo.fu;
