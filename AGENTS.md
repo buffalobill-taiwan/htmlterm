@@ -181,6 +181,14 @@ riichi sticks (on a win or 四家立直), updates stats, then calls `endRound()`
 Result-phase UI reads live scores + `roundResult.deltas`. `applyScore` was split into
 the pure `computeWinDeltas`; the `_preRoundScores` snapshot/freeze patches were removed.
 
+jpmj game-over overhaul (Aug 2026): `_renderGameOver` rewritten — 80×22
+centered frame (rows 1–22), `displayWidth()` padding for correct CJK alignment,
+"N位" rank labels, plain white player rows, centered summary
+(連莊／總局數／流局); leftover riichi sticks now awarded to top player at
+game end (matching upstream `showFinalResult`); Enter/n on game-over clears
+screen then reopens settings dialog; `_render` empty branch keeps all slots
+deactivated when no game exists.
+
 ## Architecture
 
 ### Overlay compositing
