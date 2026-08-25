@@ -28,7 +28,7 @@ dialogs, and TSR-style widgets.
 ### Demo shell
 
 - Frame-stack command runner with rAF-based Typewriter output
-- 29 built-in commands (games, widgets, interactive tests — see below)
+- 30 built-in commands (games, widgets, interactive tests — see below)
 - Dialog framework (`MenuDialog`, `InputDialog`, `ShowDialog`) with overlay compositing
 - VirtualBuffer compositing abstraction for nested UI layout
 - TSR widgets (clock, DVD logo) — draggable, position remembered
@@ -93,6 +93,7 @@ Open `index.html` in a modern browser, or visit the live demo:
 | `gweled` | Play Gweled (Bejeweled match-3, space-select then arrow-swap, chain cascade, 5-7 colors) |
 | `help` | Show command list; `help <cmd>` for details and usage |
 | `klotski` | Play Klotski 華容道 sliding-block puzzle (11 fayaa layouts) |
+| `jpmj` | Play Japanese Mahjong (14-tile riichi style, 6 AI personalities, riichi/dora/honba) |
 | `menu` | Open command menu dialog |
 | `mbti` | MBTI personality test (interactive) |
 | `minesw` | Play Minesweeper (three difficulty levels) |
@@ -132,7 +133,7 @@ js/
 ├── system/      sys.js system.js CmdFrame.js LineEditor.js typewriter.js TextInputModel.js BusyAsyncHelper.js InteractiveCommandHelper.js QuestionnaireHelper.js RAFAnimationHelper.js
 ├── util/        constants.js sgr.js unicode-width.js display-width.js VirtualBuffer.js drag.js tokenize.js calc-expr.js select-grid.js pixel-codec.js flash-helper.js random.js nurikabe-engine.js
 ├── dialog/      Dialog.js MenuDialog.js InputDialog.js ShowDialog.js ConfirmDialog.js SelectDialog.js write.js position.js  # Dialog framework
-└── cmd/         CmdBase.js ShellCmd.js ... + widgets/        # Demo commands + widgets
+└── cmd/         CmdBase.js ShellCmd.js ... + widgets/ + jpmj/    # Demo commands + widgets
 css/style.css
 index.html
 tools/
