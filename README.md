@@ -54,7 +54,9 @@ dialogs, and TSR-style widgets.
 | **Render loop** | `requestAnimationFrame` with dirty-row tracking |
 | **Scaling** | `fitToViewport()` on init and debounced resize |
 
-See [AGENTS.md](AGENTS.md) for detailed architecture, command authoring rules, and overlay lifecycle.
+For implementation guidance, start with [AGENTS.md](AGENTS.md). Detailed references are split by topic:
+[architecture](docs/architecture.md), [command authoring](docs/command-authoring.md),
+[rendering performance](docs/rendering-performance.md), and [project history](docs/project-history.md).
 
 ## Fonts
 
