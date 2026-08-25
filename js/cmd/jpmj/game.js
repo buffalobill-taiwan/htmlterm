@@ -35,7 +35,6 @@ export class Game {
     this.roundOver = false;
     this.riichiDeclaredThisTurn = false;
     this.lastActionWasRiichi = false;
-    this._preRoundScores = null;
     this.lastActionWasKan = false;
     this.discardAfterRiichi = null;
     this.firstRoundActive = false;
@@ -134,7 +133,6 @@ export class Game {
   startNewRound() {
     this.logGroup = 0;
     this.lastLogPlayer = -1;
-    this._preRoundScores = null;
     this.firstRoundActive = true;
     this.firstRoundCallsMade = false;
     this.firstDiscards = [];
@@ -1059,6 +1057,7 @@ export class Game {
       totalHan: result.totalHan,
       fu: result.fu,
       payments: result.payments,
+      deltas: this.computeWinDeltas(playerIdx, result.payments),
       isYakuman: result.isYakuman,
       winTile: tile,
       honba: this.honba,
@@ -1074,51 +1073,39 @@ export class Game {
       const uraTiles = this.wall.getUraDoraIndicators();
       this.addSystemLog('裏ドラ', uraTiles.map(t => t.name).join(' '));
     }
-    this._preRoundScores = this.players.map(pl => pl.score);
-    this.applyScore(playerIdx, result.payments);
-    if (winType === 'tsumo') {
-      this.players[playerIdx].stats.tsumo++;
-    } else {
-      this.players[playerIdx].stats.ron++;
-      this.players[this.lastDiscardPlayer].stats.dealtIn++;
-    }
     this.addSystemLog('和牌', p.name);
     this.roundOver = true;
     this.phase = 'round_end';
   }
 
-  applyScore(winnerIdx, payments) {
-    const p = this.players[winnerIdx];
-    p.score += payments.total;
-
+  computeWinDeltas(winnerIdx, payments) {
+    const deltas = [0, 0, 0, 0];
     if (payments.type === 'tsumo') {
       for (let i = 0; i < 4; i++) {
         if (i === winnerIdx) continue;
-        const isDealer = i === this.dealerIndex;
-        this.players[i].score -= isDealer ? payments.dealerPayment : payments.childPayment;
+        deltas[i] -= i === this.dealerIndex ? payments.dealerPayment : payments.childPayment;
       }
     } else {
-      const discardingPlayer = this.lastDiscardPlayer;
-      this.players[discardingPlayer].score -= payments.discarderPayment;
+      deltas[this.lastDiscardPlayer] -= payments.discarderPayment;
     }
+    deltas[winnerIdx] += payments.total;
 
     if (this.honba > 0) {
-      const totalHonba = this.honba * 300;
       if (payments.type === 'tsumo') {
         for (let i = 0; i < 4; i++) {
           if (i === winnerIdx) continue;
-          this.players[i].score -= this.honba * 100;
+          deltas[i] -= this.honba * 100;
         }
       } else {
-        this.players[this.lastDiscardPlayer].score -= totalHonba;
+        deltas[this.lastDiscardPlayer] -= this.honba * 300;
       }
-      p.score += totalHonba;
+      deltas[winnerIdx] += this.honba * 300;
     }
 
     if (this.riichiSticks > 0) {
-      p.score += this.riichiSticks * 1000;
-      this.riichiSticks = 0;
+      deltas[winnerIdx] += this.riichiSticks * 1000;
     }
+    return deltas;
   }
 
   wouldTriggerSuufonRendai(tile) {
@@ -1141,20 +1128,18 @@ export class Game {
 
   handleSuuchaRiichi() {
     this.addSystemLog('流局', '四家立直');
-    this._preRoundScores = this.players.map(p => p.score);
     for (const p of this.players) {
       p.isRiichi = false;
       p.riichiTurn = -1;
-      p.score += 1000;
     }
-    this.riichiSticks = 0;
     const nextWind = ['東', '南', '西', '北'][Math.floor(this.roundNumber / 4) % 4];
     const nextRoundLabel = `${nextWind}${(this.roundNumber % 4) + 1}局`;
     this.roundResult = {
       winner: -1,
       winType: 'suucha_riichi',
       honba: this.honba,
-      riichiSticks: 0,
+      riichiSticks: this.riichiSticks,
+      deltas: [1000, 1000, 1000, 1000],
       isRenchan: true,
       nextRoundLabel,
     };
@@ -1181,6 +1166,7 @@ export class Game {
       winType: 'sancha_ron',
       honba: this.honba,
       riichiSticks: this.riichiSticks,
+      deltas: [0, 0, 0, 0],
       isRenchan: true,
       nextRoundLabel,
     };
@@ -1201,6 +1187,7 @@ export class Game {
       winType: 'suukantsu_abort',
       honba: this.honba,
       riichiSticks: this.riichiSticks,
+      deltas: [0, 0, 0, 0],
       isRenchan: true,
       nextRoundLabel,
     };
@@ -1221,6 +1208,7 @@ export class Game {
       winType: 'suufon_rendai',
       honba: this.honba,
       riichiSticks: this.riichiSticks,
+      deltas: [0, 0, 0, 0],
       isRenchan: true,
       nextRoundLabel,
     };
@@ -1242,6 +1230,7 @@ export class Game {
       declarer: playerIdx,
       honba: this.honba,
       riichiSticks: this.riichiSticks,
+      deltas: [0, 0, 0, 0],
       isRenchan: true,
       nextRoundLabel,
     };
@@ -1263,16 +1252,16 @@ export class Game {
     }
 
     let notenPayment = 0;
+    const deltas = [0, 0, 0, 0];
     if (notenPlayers.length > 0 && tenpaiPlayers.length > 0) {
-      this._preRoundScores = this.players.map(p => p.score);
       const paymentPerNoten = 3000 / notenPlayers.length;
       const total = 3000;
       notenPayment = total / tenpaiPlayers.length;
       for (const ti of tenpaiPlayers) {
-        this.players[ti].score += notenPayment;
+        deltas[ti] += notenPayment;
       }
       for (const ni of notenPlayers) {
-        this.players[ni].score -= paymentPerNoten;
+        deltas[ni] -= paymentPerNoten;
       }
     }
 
@@ -1295,6 +1284,7 @@ export class Game {
       honba: this.honba,
       riichiSticks: this.riichiSticks,
       notenPayment,
+      deltas,
       isRenchan,
       nextRoundLabel,
     };
@@ -1374,8 +1364,23 @@ export class Game {
   }
 
   commitRoundEnd() {
+    const r = this.roundResult;
+    if (r && r.deltas) {
+      for (let i = 0; i < 4; i++) this.players[i].score += r.deltas[i];
+      if (this.riichiSticks > 0 && (r.winner >= 0 || r.winType === 'suucha_riichi')) {
+        this.riichiSticks = 0;
+      }
+      if (r.winner >= 0) {
+        const wp = this.players[r.winner];
+        if (r.winType === 'tsumo') {
+          wp.stats.tsumo++;
+        } else {
+          wp.stats.ron++;
+          this.players[this.lastDiscardPlayer].stats.dealtIn++;
+        }
+      }
+    }
     this.endRound();
-    this._preRoundScores = null;
   }
 
   getFinalScores() {

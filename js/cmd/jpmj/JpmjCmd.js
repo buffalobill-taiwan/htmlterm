@@ -732,7 +732,7 @@ export class JpmjCmd extends CmdBase {
 
     _getTenpaiInfo() {
         const g = this._game;
-        if (!g || g.gameOver || g.roundOver) return null;
+        if (!g || g.gameOver) return null;
         const p = g.players[0];
         const hand = p.hand;
         const meldCount = p.melds.length;
@@ -1270,7 +1270,7 @@ export class JpmjCmd extends CmdBase {
             if (pb.score !== pa.score) return pb.score - pa.score;
             return a - b;
         });
-        const preScores = (this._phase === 'result' && g._preRoundScores) ? g._preRoundScores : null;
+        const deltas = (this._phase === 'result' && g.roundResult && g.roundResult.deltas) ? g.roundResult.deltas : null;
         for (let row = 0; row < 4; row++) {
             const pi = sorted[row];
             const p = g.players[pi];
@@ -1278,10 +1278,10 @@ export class JpmjCmd extends CmdBase {
             const riichi = p.isRiichi ? '\x1B[91;107m⬤\x1B[0m' : '  ';
             const namePad = ' '.repeat(6 - displayWidth(p.name));
             const dealer = pi === g.dealerIndex ? '親' : '  ';
-            const scoreStr = String(preScores ? preScores[pi] : p.score).replace(/\B(?=(\d{3})+(?!\d))/g, ',').padStart(6);
+            const scoreStr = String(p.score).replace(/\B(?=(\d{3})+(?!\d))/g, ',').padStart(6);
             let line = windChar + ' ' + riichi + p.name + namePad + ' ' + dealer + ' ' + scoreStr;
-            if (preScores) {
-                const delta = p.score - preScores[pi];
+            if (deltas) {
+                const delta = deltas[pi];
                 if (delta !== 0) {
                     const sign = delta > 0 ? '+' : '';
                     const deltaStr = sign + String(delta).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
