@@ -1360,6 +1360,11 @@ export class Game {
     if (this.checkGameOver()) {
       this.phase = 'game_end';
       this.gameOver = true;
+      if (this.riichiSticks > 0) {
+        const sorted = [...this.players].sort((a, b) => b.score - a.score);
+        sorted[0].score += this.riichiSticks * 1000;
+        this.riichiSticks = 0;
+      }
       this.addSystemLog('終局', '遊戲結束');
     }
   }

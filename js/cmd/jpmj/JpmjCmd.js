@@ -709,11 +709,11 @@ export class JpmjCmd extends CmdBase {
                 this._renderPlayerHand(this._playerVB);
                 this._renderActionBar(this._playerVB);
                 this._renderInfoPanel(this._infoVB);
+                this._updateSlots();
             } else {
                 this._deactivateSlots();
                 this._clearVB(this._rootVB);
             }
-            this._updateSlots();
         }
 
         term.writeVB(this._rootVB);
@@ -1395,40 +1395,50 @@ export class JpmjCmd extends CmdBase {
         if (!g) return;
         const buf = vb._buffer;
         const bw = this._cellBorderW;
+        const TOP = 1, FH = 22;
+        const BOT = TOP + FH - 1;
 
-        vb.writeStr(0, 0, '┌' + '─'.repeat(78) + '┐');
-        for (let r = 1; r < 24; r++) { buf[r][0] = bw; buf[r][79] = bw; }
-        vb.writeStr(24, 0, '└' + '─'.repeat(78) + '┘');
+        vb.writeStr(TOP, 0, '┌' + '─'.repeat(78) + '┐');
+        for (let r = TOP + 1; r < BOT; r++) { buf[r][0] = bw; buf[r][79] = bw; }
+        vb.writeStr(BOT, 0, '└' + '─'.repeat(78) + '┘');
 
-        vb.writeStr(1, 0, '\x1B[1;33m' + ' '.repeat(30) + '最終結果' + ' '.repeat(31) + '\x1B[0m');
-        vb.writeStr(2, 0, '  ' + '─'.repeat(76));
-
-        vb.writeStr(3, 0, '  順位     名前         點數      ツモ    ロン    放銃');
-        vb.writeStr(4, 0, '  ' + '─'.repeat(76));
+        const padEndW = (s, w) => s + ' '.repeat(Math.max(0, w - displayWidth(s)));
+        const padStartW = (s, w) => ' '.repeat(Math.max(0, w - displayWidth(s))) + s;
+        const centerX = (s) => 1 + Math.floor((78 - displayWidth(s)) / 2);
+        const putCentered = (row, s) => vb.writeStr(row, centerX(s), s);
 
         const scores = g.getFinalScores();
-        for (let i = 0; i < scores.length; i++) {
-            const s = scores[i];
-            const rank = s.rank;
-            const rankStr = (rank === 1 ? '1st' : rank === 2 ? '2nd' : rank === 3 ? '3rd' : '4th');
-            const rankColor = rank === 1 ? '\x1B[1;33m' : (rank <= 2 ? '\x1B[1;37m' : (rank === 3 ? '\x1B[36m' : '\x1B[31m'));
-            const line = rankStr.padEnd(6) + s.name.padEnd(12) + formatScore(s.score).padStart(8) +
-                         String(s.tsumo).padStart(8) + String(s.ron).padStart(8) + String(s.dealtIn).padStart(8);
-            vb.writeStr(5 + i, 0, '  ' + rankColor + line + '\x1B[0m');
-        }
+        const GAP = ' '.repeat(2);
+        const rankW = Math.max(displayWidth('順位'), ...scores.map(s => displayWidth(s.rank + '位')));
+        const nameW = Math.max(displayWidth('名前'), ...scores.map(s => displayWidth(s.name)));
+        const scoreW = Math.max(displayWidth('点数'), ...scores.map(s => formatScore(s.score).length));
+        const cntW = 4;
 
-        const sepRow = 5 + scores.length;
-        vb.writeStr(sepRow, 0, '  ' + '─'.repeat(76));
+        const header =
+            padEndW('順位', rankW) + GAP +
+            padEndW('名前', nameW) + GAP +
+            padStartW('点数', scoreW) + GAP +
+            padStartW('ツモ', cntW) + GAP +
+            padStartW('ロン', cntW) + GAP +
+            padStartW('放銃', cntW);
+        const rows = scores.map(s =>
+            padEndW(s.rank + '位', rankW) + GAP +
+            padEndW(s.name, nameW) + GAP +
+            padStartW(formatScore(s.score), scoreW) + GAP +
+            padStartW(String(s.tsumo), cntW) + GAP +
+            padStartW(String(s.ron), cntW) + GAP +
+            padStartW(String(s.dealtIn), cntW));
+        const tableW = displayWidth(header);
 
-        const statsRow = sepRow + 1;
-        const totalRounds = g.roundCount;
-        const ryuukyoku = g.ryuukyokuCount;
-        const riichiRemain = g.riichiSticks;
-        const statsLine = '  連莊 ' + g.renchanCount + ' ｜ 總局數 ' + totalRounds + ' ｜ 流局 ' + ryuukyoku + ' ｜ 立直棒殘留 ' + riichiRemain;
-        vb.writeStr(statsRow, 0, statsLine);
+        vb.writeStr(3, centerX('最終結果'), '\x1B[1;33m最終結果\x1B[0m');
+        putCentered(5, header);
+        putCentered(6, '─'.repeat(tableW));
+        for (let i = 0; i < rows.length; i++) putCentered(7 + i, rows[i]);
 
-        vb.writeStr(statsRow + 1, 0, '  ' + '─'.repeat(76));
-        vb.writeStr(23, 0, '\x1B[36m' + ' '.repeat(30) + '按 ENTER 返回' + ' '.repeat(30) + '\x1B[0m');
+        const summary = '連莊 ' + g.renchanCount + ' ／ 總局數 ' + g.roundCount + ' ／ 流局 ' + g.ryuukyokuCount;
+        putCentered(13, summary);
+
+        vb.writeStr(20, centerX('按 ENTER 返回'), '\x1B[36m按 ENTER 返回\x1B[0m');
     }
 
     _getCursorPos() {
@@ -1510,7 +1520,10 @@ export class JpmjCmd extends CmdBase {
 
         if (this._phase === 'gameOver') {
             if (code === 0x6E || code === 0x4E || code === 0x0D || code === 0x0A) {
+                term.write('\x1B[2J\x1B[1;1H');
                 this._phase = 'settings';
+                this._game = null;
+                this._render();
                 this._showSettings();
                 return;
             }
