@@ -764,10 +764,11 @@ export class JpmjCmd extends CmdBase {
             return null;
         }
         const gs = g.getGameState(0, waits[0], 'tsumo');
-        const hasYaku = waits.some(w => evaluateHand(baseHand, p.melds, w, 'tsumo', gs) !== null);
+        const deadWaits = waits.filter(w => evaluateHand(baseHand, p.melds, w, 'tsumo', gs) === null);
+        const hasYaku = deadWaits.length < waits.length;
         const discardKeys = new Set(p.discards.map(d => d.key()));
         const furitenWaits = waits.filter(w => discardKeys.has(w.key()));
-        const info = { waits, hasYaku, furitenWaits };
+        const info = { waits, hasYaku, deadWaits, furitenWaits };
         this._tenpaiCache = { handStr, info };
         return info;
     }
@@ -810,6 +811,7 @@ export class JpmjCmd extends CmdBase {
 
         const isFuriten = tenpai.furitenWaits.length > 0;
         const furitenSet = new Set(tenpai.furitenWaits.map(w => w.key()));
+        const deadSet = new Set(tenpai.deadWaits.map(w => w.key()));
         const label = isFuriten ? '聽(振聽): ' : tenpai.hasYaku ? '聽: ' : '聽(無役): ';
         const labelFg = isFuriten ? 1 : tenpai.hasYaku ? 15 : 1;
         const labelBold = !isFuriten && tenpai.hasYaku;
@@ -820,7 +822,7 @@ export class JpmjCmd extends CmdBase {
         }
         for (let wi = 0; wi < tenpai.waits.length && col < 80; wi++) {
             const w = tenpai.waits[wi];
-            const wfg = furitenSet.has(w.key()) ? 8 : tileFg(w.suit, w.value);
+            const wfg = (furitenSet.has(w.key()) || deadSet.has(w.key())) ? 8 : tileFg(w.suit, w.value);
             const name = w.name;
             for (let i = 0; i < name.length && col < 80; i++) {
                 row[col] = makeCell(name[i], wfg, 17, false);
