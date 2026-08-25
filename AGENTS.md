@@ -12,7 +12,7 @@ Live demo: <https://buffalobill-taiwan.github.io/htmlterm/>
 | Terminal core (Screen/Parser/Renderer) | Complete |
 | Overlay compositing (widgets + dialogs) | Complete |
 | Frame-stack shell + Typewriter | Complete |
-| Demo commands | 29 registered (see Command Architecture) |
+| Demo commands | 30 registered (see Command Architecture) |
 | Automated tests | Excluded — manual testing only |
 | CI | Excluded — not planned |
 
@@ -159,6 +159,24 @@ in `cmdList` entries. Puyo/Gweled pop flash upgraded to a tetris-style white/col
 blink (`_flashPop`, 6 steps × 80ms) before matched cells are cleared.
 Klotski win polish: the 曹 tile falls deeper (6 rows) and the cursor skips over
 already-passed empty cells.
+jpmj (Aug 2026): `js/cmd/jpmj/` added — Japanese Mahjong 日本麻將 vs 3 AI opponents,
+layered design: `JpmjCmd.js` (CmdBase UI layer — settings SelectDialog for per-seat
+opponent AI + 託管 AI personality + starting seat + match length 東風戰/半莊戰/一莊戰;
+tile hand rendering with per-call meld color coding; status bar; info panel; result
+overlay; autoplay 託管), `game.js` (turn state machine, riichi/dora/honba/tsumo/ron,
+exhaustive draw with noten payment, abortive draws 三家和/四槓散了/四風連打/九種九牌/
+四家立直), `yaku.js` (yaku evaluation + payments), `wall.js`/`tiles.js`, and 6 AI
+personalities via `ai_factory.js` (初學者/一般人/高手/国士命/断么廚/門清俠).
+jpmj tenpai status bar (Aug 2026): `_getTenpaiInfo()` computes waits via
+`evaluateHand` + `getWaitingTiles`, then per-wait yaku check (`STANDALONE_YAKU`) —
+yaku-less waits (聽牌無役) are grayed out in the status row; result cached by hand string.
+jpmj deferred settlement (Aug 2026): round-end paths (`executeWin`,
+`handleExhaustiveDraw`, `handleSuuchaRiichi`, abortives) only record
+`roundResult.deltas` — no score/stick/stats mutation until the player presses Enter on
+the result screen. Single settlement point `commitRoundEnd()` applies deltas, zeroes
+riichi sticks (on a win or 四家立直), updates stats, then calls `endRound()`.
+Result-phase UI reads live scores + `roundResult.deltas`. `applyScore` was split into
+the pure `computeWinDeltas`; the `_preRoundScores` snapshot/freeze patches were removed.
 
 ## Architecture
 
@@ -620,14 +638,15 @@ js/cmd/
 ├── puyo.js            PuyoCmd     — play Puyo Puyo (wide ⬤ cells, no-overhang column gravity, chain elimination, 3-5 colors)
 ├── gweled.js          GweledCmd   — play Gweled (Bejeweled match-3, space-select then arrow-swap, chain cascade, 5-7 colors)
 ├── klotski.js         KlotskiCmd  — play Klotski 華容道 (11 fayaa layouts, space-select then arrow-slide, undo, 1 cell = 1 move)
+├── jpmj/              Japanese Mahjong 日本麻將 — JpmjCmd.js (UI) + game.js (engine) + yaku.js + ai_factory/ai_*.js ×6
 ├── art/               Static pixel data modules (adam, blacklotus, glaneuses, anime, …)
 └── widgets/
     ├── ClockWidget.js
     └── DVDWidget.js
 ```
 
-**29 registered commands:** `5willow`, `anime`, `art`, `ascii`, `astrology`, `calc`, `clear`, `clock`,
-`cowsay`, `date`, `dvd`, `echo`, `flash`, `game2048`, `gweled`, `help`, `klotski`, `menu`,
+**30 registered commands:** `5willow`, `anime`, `art`, `ascii`, `astrology`, `calc`, `clear`, `clock`,
+`cowsay`, `date`, `dvd`, `echo`, `flash`, `game2048`, `gweled`, `help`, `jpmj`, `klotski`, `menu`,
 `mbti`, `minesw`, `nurikabe`, `puyo`, `quiz`, `sleep`, `snake`, `sudoku`, `tetris`, `time`, `wordle`
 
 **CmdBase contract:**
@@ -1197,6 +1216,7 @@ draw() {
 - `puyo.js`: PuyoCmd — play Puyo Puyo (wide ⬤ cells, no-overhang column gravity, chain elimination, classic chain-power scoring, 3-5 colors by difficulty)
 - `gweled.js`: GweledCmd — play Gweled (Bejeweled match-3, space-select then arrow-swap, run-based chain cascade, classic chain-power scoring, 5-7 colors by difficulty)
 - `klotski.js`: KlotskiCmd — play Klotski 華容道 (11 fayaa layouts, decode-by-bounding-box, space-select then arrow-slide, undo, win overlay, pause, 1s timer)
+- `jpmj/`: Japanese Mahjong directory — `JpmjCmd.js` (UI layer: settings dialog, hand/meld rendering with per-call meld colors, status bar tenpai display with yaku-less wait graying, info panel, result overlay, autoplay 託管) · `game.js` (turn state machine, riichi/dora/honba/tsumo/ron, exhaustive + abortive round ends, deferred settlement: round-end paths record `roundResult.deltas`, single settlement point `commitRoundEnd()`) · `yaku.js` (yaku evaluation + `calculatePayments`) · `wall.js`/`tiles.js` (deal + Tile) · `ai_factory.js` + `ai_*.js` (6 AI personalities)
 - `valid-words.js`: Auto-generated 15926-word guess dictionary
 
 ## Command Development Templates
