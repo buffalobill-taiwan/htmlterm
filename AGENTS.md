@@ -27,7 +27,7 @@ Read the document that matches the work being done before changing that area.
 - Do not generate `.q0`–`.q255` or `.b0`–`.b255` CSS classes at runtime.
 - Use native UTF-8 JavaScript literals; do not replace visible text with
   `\uXXXX` escapes.
-- Do not commit or push unless the user explicitly asks.
+- Do not commit or push unless the user's message literally contains the word "commit".
 - There is no automated-test or CI requirement. Validate browser-facing changes
   manually and run appropriate syntax/static checks.
 
