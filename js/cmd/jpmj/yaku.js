@@ -318,7 +318,7 @@ function checkTanyao(handInfo, gameState) {
     }
     if (handInfo.pair && handInfo.pair.isTerminal) return [];
     if (handInfo.pair === null && handInfo.isChiitoitsu) return [];
-    return [{ name: '断幺九', han: 1 }];
+    return [{ name: '断么九', han: 1 }];
 }
 
 function checkIipeikou(handInfo, gameState) {
