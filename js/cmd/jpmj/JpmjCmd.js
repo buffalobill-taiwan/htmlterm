@@ -461,7 +461,7 @@ export class JpmjCmd extends CmdBase {
     _getCallEffectPos(playerIdx) {
         switch (playerIdx) {
             case 0: return { x: 19, y: 16 };
-            case 1: return { x: 35, y: 7 };
+            case 1: return { x: 31, y: 7 };
             case 2: return { x: 15, y: 1 };
             case 3: return { x: 2, y: 9 };
         }
