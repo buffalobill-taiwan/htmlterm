@@ -529,6 +529,7 @@ export class JpmjCmd extends CmdBase {
         if (this._game.roundOver) {
             this._autoPlay = false;
             this._updateStatusBar();
+            this._game._pendingCallEffect = null;
             this._phase = 'result';
             this._render();
             return;
