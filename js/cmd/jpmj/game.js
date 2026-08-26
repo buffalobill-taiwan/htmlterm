@@ -53,6 +53,7 @@ export class Game {
     this.lastLogPlayer = -1;
     this.logEntryId = 0;
     this._pendingCallEffect = null;
+    this._riichiAutoDiscard = null;
   }
 
   get maxRounds() {
@@ -252,7 +253,11 @@ export class Game {
 
       if (p.isRiichi) {
         const drawnIdx = p.hand.findIndex(t => t.equals(tile));
-        this.executeDiscard(this.currentPlayer, drawnIdx);
+        if (p.isHuman) {
+          this._riichiAutoDiscard = { playerIdx: this.currentPlayer, tileIdx: drawnIdx };
+        } else {
+          this.executeDiscard(this.currentPlayer, drawnIdx);
+        }
         return false;
       }
 
@@ -279,7 +284,7 @@ export class Game {
         return false;
       }
       const p = this.players[this.currentPlayer];
-      if (!p.isRiichi && p.score >= 1000 && this.wall.getRemainingCount() >= 4 && p.ai.decideRiichi(this, this.currentPlayer)) {
+      if (!p.isRiichi && p.score >= 1000 && !p.melds.some(m => m.open) && this.wall.getRemainingCount() >= 4 && p.ai.decideRiichi(this, this.currentPlayer)) {
         for (let i = 0; i < p.hand.length; i++) {
           const testHand = p.hand.filter((_, j) => j !== i);
           if (checkTenpai(testHand, p.melds)) {

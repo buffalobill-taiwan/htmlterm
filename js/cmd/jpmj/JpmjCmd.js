@@ -530,11 +530,22 @@ export class JpmjCmd extends CmdBase {
             this._autoPlay = false;
             this._updateStatusBar();
             this._game._pendingCallEffect = null;
+            this._actionItems = [];
             this._phase = 'result';
             this._render();
             return;
         }
         const needHuman = this._game.advance();
+        if (this._game._riichiAutoDiscard) {
+            const ad = this._game._riichiAutoDiscard;
+            this._game._riichiAutoDiscard = null;
+            this._render();
+            this._gameTimer = setTimeout(() => {
+                this._game.executeDiscard(ad.playerIdx, ad.tileIdx);
+                this._continueGame();
+            }, 100);
+            return;
+        }
         if (this._game._pendingCallEffect) {
             const eff = this._game._pendingCallEffect;
             this._game._pendingCallEffect = null;
@@ -603,7 +614,7 @@ export class JpmjCmd extends CmdBase {
                 this._gameTimer = setTimeout(() => this._continueGame(), 100);
                 return;
             }
-            if (!p.isRiichi && p.score >= 1000 && g.wall.getRemainingCount() >= 4 && p.ai.decideRiichi(g, 0)) {
+            if (!p.isRiichi && p.score >= 1000 && !p.melds.some(m => m.open) && g.wall.getRemainingCount() >= 4 && p.ai.decideRiichi(g, 0)) {
                 for (let i = 0; i < p.hand.length; i++) {
                     const testHand = p.hand.filter((_, j) => j !== i);
                     if (checkTenpai(testHand, p.melds)) {
@@ -660,6 +671,7 @@ export class JpmjCmd extends CmdBase {
             clearTimeout(this._gameTimer);
             this._gameTimer = null;
         }
+        if (this._game) this._game._riichiAutoDiscard = null;
         this._removeCallEffect();
     }
 
@@ -735,7 +747,7 @@ export class JpmjCmd extends CmdBase {
         if (g.phase !== 'discard' && g.phase !== 'dealer_first_discard') return false;
         const p = g.players[0];
         if (p.isRiichi) return false;
-        if (p.melds.length > 0) return false;
+        if (p.melds.some(m => m.open)) return false;
         if (p.score < 1000) return false;
         if (g.wall.getRemainingCount() < 4) return false;
         return p.hand.some((_, i) => {
