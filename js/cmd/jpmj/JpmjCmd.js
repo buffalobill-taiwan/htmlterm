@@ -92,6 +92,8 @@ export class JpmjCmd extends CmdBase {
         this._statusVB = new VirtualBuffer(80, 1);
         this._pauseOverlay = null;
         this._pauseVBBuffer = null;
+        this._callEffectOverlay = null;
+        this._callEffectTimer = null;
     }
 
     _loadSettings() {
@@ -425,6 +427,97 @@ export class JpmjCmd extends CmdBase {
         this._continueGame();
     }
 
+    _buildCallEffectBuffer(text) {
+        const W = 10, H = 4;
+        const buf = Array.from({ length: H }, () => Array(W).fill(null));
+        const fg = 7, bg = 0;
+        buf[0][0] = makeCell('╔', fg, bg, false);
+        buf[0][W - 1] = makeCell('╗', fg, bg, false);
+        buf[H - 1][0] = makeCell('╚', fg, bg, false);
+        buf[H - 1][W - 1] = makeCell('╝', fg, bg, false);
+        for (let c = 1; c < W - 1; c++) {
+            buf[0][c] = makeCell('═', fg, bg, false);
+            buf[H - 1][c] = makeCell('═', fg, bg, false);
+        }
+        for (let r = 1; r < H - 1; r++) {
+            buf[r][0] = makeCell('║', fg, bg, false);
+            buf[r][W - 1] = makeCell('║', fg, bg, false);
+        }
+        for (let ci = 0; ci < text.length; ci++) {
+            const ch = text[ci];
+            for (let r = 0; r < 2; r++) {
+                for (let c = 0; c < 4; c++) {
+                    const cell = makeCell(ch, fg, bg, true, 1);
+                    cell.clip = true;
+                    cell.clipOffX = -c;
+                    cell.clipOffY = -r;
+                    buf[1 + r][1 + ci * 4 + c] = cell;
+                }
+            }
+        }
+        return buf;
+    }
+
+    _getCallEffectPos(playerIdx) {
+        switch (playerIdx) {
+            case 0: return { x: 19, y: 16 };
+            case 1: return { x: 35, y: 7 };
+            case 2: return { x: 15, y: 1 };
+            case 3: return { x: 2, y: 9 };
+        }
+    }
+
+    _showCallEffect(type, playerIdx) {
+        const typeMap = {
+            chi: 'チー', pon: 'ポン', kan: 'カン',
+            ron: 'ロン', tsumo: 'ツモ', riichi: '立直',
+        };
+        const text = typeMap[type];
+        if (!text) { this._gameTimer = setTimeout(() => this._continueGame(), 100); return; }
+        const pos = this._getCallEffectPos(playerIdx);
+        if (!pos) { this._gameTimer = setTimeout(() => this._continueGame(), 100); return; }
+        const buf = this._buildCallEffectBuffer(text);
+        this._callEffectOverlay = {
+            x: pos.x, y: pos.y, w: 10, h: 4, z: OverlayZ.CALL_EFFECT || 5,
+            owner: this,
+            getCell: makeOverlayGetCell(buf, 10, 4),
+        };
+        term.addOverlay(this._callEffectOverlay);
+        for (let r = pos.y; r < pos.y + 4; r++) term.markRowDirty(r);
+        this._render();
+        this._callEffectTimer = setTimeout(() => {
+            this._removeCallEffect();
+            if (this._pendingResultPhase) {
+                this._phase = 'result';
+                this._pendingResultPhase = false;
+            }
+            this._continueGame();
+        }, 500);
+    }
+
+    _removeCallEffect() {
+        if (this._callEffectOverlay) {
+            term.removeOverlay(this._callEffectOverlay);
+            for (let r = this._callEffectOverlay.y; r < this._callEffectOverlay.y + 4; r++) term.markRowDirty(r);
+            this._callEffectOverlay = null;
+        }
+        if (this._callEffectTimer) {
+            clearTimeout(this._callEffectTimer);
+        this._callEffectTimer = null;
+        this._pendingResultPhase = false;
+        }
+    }
+
+    _showEffectAndContinue() {
+        const eff = this._game._pendingCallEffect;
+        this._game._pendingCallEffect = null;
+        if (eff) {
+            this._showCallEffect(eff.type, eff.playerIdx);
+        } else {
+            this._gameTimer = setTimeout(() => this._continueGame(), 100);
+        }
+    }
+
     _continueGame() {
         if (!this._game || this._game.gameOver) {
             this._autoPlay = false;
@@ -441,6 +534,14 @@ export class JpmjCmd extends CmdBase {
             return;
         }
         const needHuman = this._game.advance();
+        if (this._game._pendingCallEffect) {
+            const eff = this._game._pendingCallEffect;
+            this._game._pendingCallEffect = null;
+            if (this._game.roundOver) this._pendingResultPhase = true;
+            this._render();
+            this._showCallEffect(eff.type, eff.playerIdx);
+            return;
+        }
         if (this._game.roundOver) {
             this._phase = 'result';
             this._render();
@@ -558,6 +659,7 @@ export class JpmjCmd extends CmdBase {
             clearTimeout(this._gameTimer);
             this._gameTimer = null;
         }
+        this._removeCallEffect();
     }
 
     _showQuitConfirm() {
@@ -1843,7 +1945,7 @@ export class JpmjCmd extends CmdBase {
         if (action === 'tsumo') {
             const p = g.players[0];
             g.executeWin(0, 'tsumo', p.lastDraw);
-            this._continueGame();
+            this._showEffectAndContinue();
             return;
         }
 
@@ -1856,7 +1958,7 @@ export class JpmjCmd extends CmdBase {
             }
             this._cursorMode = 'hand';
             this._handCursor = 0;
-            this._gameTimer = setTimeout(() => this._continueGame(), 100);
+            this._showEffectAndContinue();
             return;
         }
 
@@ -1888,7 +1990,7 @@ export class JpmjCmd extends CmdBase {
                 this._game.humanRiichi(options[0].handIdx);
                 this._cursorMode = 'hand';
                 this._handCursor = 0;
-                this._gameTimer = setTimeout(() => this._continueGame(), 100);
+                this._showEffectAndContinue();
                 return;
             }
             const labels = options.map(o =>
@@ -1899,7 +2001,7 @@ export class JpmjCmd extends CmdBase {
             const removeHook = system.addFramePopHook(() => {
                 if (system.cmdStack.length === stackDepth) {
                     removeHook();
-                    this._gameTimer = setTimeout(() => this._continueGame(), 100);
+                    this._showEffectAndContinue();
                 }
             });
             system.createDialog(VerticalSelectDialog, 'jpmj-riichi', {
@@ -1927,7 +2029,7 @@ export class JpmjCmd extends CmdBase {
                 const removeHook = system.addFramePopHook(() => {
                     if (system.cmdStack.length === stackDepth) {
                         removeHook();
-                        this._gameTimer = setTimeout(() => this._continueGame(), 100);
+                        this._showEffectAndContinue();
                     }
                 });
                 system.createDialog(SelectDialog, 'jpmj-chi', {
@@ -1958,7 +2060,7 @@ export class JpmjCmd extends CmdBase {
                 g.humanCall(action);
                 this._cursorMode = 'hand';
                 this._handCursor = 0;
-                this._gameTimer = setTimeout(() => this._continueGame(), 100);
+                this._showEffectAndContinue();
                 return;
             }
             if (action.type === 'ankans' || action.type === 'kakans') {
@@ -1967,7 +2069,7 @@ export class JpmjCmd extends CmdBase {
                     g.executeKan(opts[0]);
                     this._cursorMode = 'hand';
                     this._handCursor = 0;
-                    this._gameTimer = setTimeout(() => this._continueGame(), 100);
+                    this._showEffectAndContinue();
                     return;
                 }
                 const labels = opts.map(o => o.desc);
@@ -1977,7 +2079,7 @@ export class JpmjCmd extends CmdBase {
                 const removeHook = system.addFramePopHook(() => {
                     if (system.cmdStack.length === stackDepth) {
                         removeHook();
-                        this._gameTimer = setTimeout(() => this._continueGame(), 100);
+                        this._showEffectAndContinue();
                     }
                 });
                 system.createDialog(VerticalSelectDialog, key, {
@@ -2001,13 +2103,13 @@ export class JpmjCmd extends CmdBase {
                 g.executeKan(action);
                 this._cursorMode = 'hand';
                 this._handCursor = 0;
-                this._gameTimer = setTimeout(() => this._continueGame(), 100);
+                this._showEffectAndContinue();
                 return;
             }
             g.humanCall(action);
             this._cursorMode = 'hand';
             this._handCursor = 0;
-            this._gameTimer = setTimeout(() => this._continueGame(), 100);
+            this._showEffectAndContinue();
             return;
         }
     }

@@ -52,6 +52,7 @@ export class Game {
     this.logGroup = 0;
     this.lastLogPlayer = -1;
     this.logEntryId = 0;
+    this._pendingCallEffect = null;
   }
 
   get maxRounds() {
@@ -554,6 +555,7 @@ export class Game {
         }
       }
 
+      this._pendingCallEffect = { type: 'pon', playerIdx };
       if (this.players[playerIdx].isHuman) {
         this.availableActions = ['discard'];
         return;
@@ -597,6 +599,7 @@ export class Game {
         if (this.players[i].ippatsuRound >= 0) this.players[i].ippatsuRound = -1;
       }
 
+      this._pendingCallEffect = { type: 'chi', playerIdx };
       if (this.players[playerIdx].isHuman) {
         this.availableActions = ['discard'];
         return;
@@ -634,6 +637,7 @@ export class Game {
       for (let i = 0; i < 4; i++) {
         if (this.players[i].ippatsuRound >= 0) this.players[i].ippatsuRound = -1;
       }
+      this._pendingCallEffect = { type: 'kan', playerIdx };
       this.phase = 'rinshan';
       return;
     }
@@ -703,6 +707,7 @@ export class Game {
     p.isRiichi = true;
     p.riichiTurn = this.turnCount;
     this.addLog(this.currentPlayer, '立直', tile.name);
+    this._pendingCallEffect = { type: 'riichi', playerIdx: this.currentPlayer };
     this.riichiDeclarers.push(this.currentPlayer);
     if (this.riichiDeclarers.length === 4) {
       this.suuchaRiichiPending = true;
@@ -1075,6 +1080,7 @@ export class Game {
       this.addSystemLog('裏ドラ', uraTiles.map(t => t.name).join(' '));
     }
     this.addSystemLog('和牌', p.name);
+    this._pendingCallEffect = { type: winType, playerIdx };
     this.roundOver = true;
     this.phase = 'round_end';
   }
