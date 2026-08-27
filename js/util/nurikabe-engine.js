@@ -1171,6 +1171,59 @@ function _placeClues(board, R, C, rng) {
     }
     if (progressed) continue;
 
+    // New logic: scan 2x2 squares to find opportunities for placing clues
+    for (let r = 0; r < R - 1; r++) {
+      for (let c = 0; c < C - 1; c++) {
+        const cell1 = _idx(r, c, C);
+        const cell2 = _idx(r, c + 1, C);
+        const cell3 = _idx(r + 1, c, C);
+        const cell4 = _idx(r + 1, c + 1, C);
+        
+        // 检查这四个格子是否都未放置clue，并且属于不同岛屿
+        if (clues[cell1] !== 0 || clues[cell2] !== 0 || 
+            clues[cell3] !== 0 || clues[cell4] !== 0) continue;
+            
+        const island1 = owner[cell1];
+        const island2 = owner[cell2];
+        const island3 = owner[cell3];  
+        const island4 = owner[cell4];
+        
+        // 寻找两个不同的未放置clue的岛屿
+        if (island1 !== -1 && island2 !== -1 && island1 !== island2) {
+          // 放置它们对应的数字
+          clues[cell1] = islands[island1].size;
+          clues[cell2] = islands[island2].size;
+          clued[island1] = true;
+          clued[island2] = true;
+          progressed = true;
+          break;
+        } else if (island1 !== -1 && island3 !== -1 && island1 !== island3) {
+          clues[cell1] = islands[island1].size;
+          clues[cell3] = islands[island3].size;
+          clued[island1] = true;
+          clued[island3] = true;
+          progressed = true;
+          break;
+        } else if (island2 !== -1 && island4 !== -1 && island2 !== island4) {
+          clues[cell2] = islands[island2].size;
+          clues[cell4] = islands[island4].size;
+          clued[island2] = true;
+          clued[island4] = true;
+          progressed = true;
+          break;
+        } else if (island3 !== -1 && island4 !== -1 && island3 !== island4) {
+          clues[cell3] = islands[island3].size;
+          clues[cell4] = islands[island4].size;
+          clued[island3] = true;
+          clued[island4] = true;
+          progressed = true;
+          break;
+        }
+      }
+      if (progressed) break;
+    }
+    if (progressed) continue;
+
     let pickId = -1, pickCell = -1, pickScore = -1;
     for (let id = 0; id < islands.length; id++) {
       if (clued[id]) continue;
