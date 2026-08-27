@@ -8,13 +8,8 @@ import { isWide } from '../util/unicode-width.js';
 import { bold, red, green, yellow, cyan, gray, white, CURSOR_HIDE } from '../util/sgr.js';
 
 const DIFFICULTY = {
-    easy:   { size: 7,  label: 'Easy' },
+    easy:   { size: 8,  label: 'Easy' },
     medium: { size: 12, label: 'Medium' },
-    // 16 is currently the largest board we can generate reliably. 18x18 is not
-    // limited by the island-count band (buildSolution succeeds ~66% of the time
-    // there, at 18-47 islands, well inside [17, 54]) — the blocker is
-    // deriveByRepair failing to converge on a logically-solvable puzzle within
-    // the time budget. Revisit 18 once repair convergence is improved.
     hard:   { size: 16, label: 'Hard' },
 };
 
@@ -271,7 +266,7 @@ export class NurikabeCmd extends CmdBase {
     }
 
     async _generateAsync(size, epoch) {
-        const maxAttempts = size <= 7 ? 300 : size <= 12 ? 600 : 1200;
+        const maxAttempts = size <= 8 ? 300 : size <= 12 ? 600 : 1200;
         const seed = Date.now() & 0x7fffffff;
         for (let attempt = 0; attempt < maxAttempts; attempt++) {
             if (epoch !== this.abortEpoch) return null;

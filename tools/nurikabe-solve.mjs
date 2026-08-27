@@ -9,7 +9,7 @@
  *   node tools/nurikabe-solve.mjs 123456
  *   node tools/nurikabe-solve.mjs 123456 16
  *
- * size defaults to 12 (medium). Use 7 for easy, 16 for hard.
+ * size defaults to 12 (medium). Use 8 for easy, 16 for hard.
  *
  * Output uses ██ for sea, fullwidth space (　) for island, and fullwidth
  * digits for clue ≤ 9.  Cell width = 2 halfwidth chars throughout.

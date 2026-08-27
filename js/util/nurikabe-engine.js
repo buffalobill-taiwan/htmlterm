@@ -906,7 +906,7 @@ function genOpts(R, C) {
     return { white: 0.42, maxSize: Infinity, ...band };
 }
 
-// === New generator: carve → trimSea → placeClues (medium/hard boards) ===
+// === Generator: carve → trimSea → placeClues (all board sizes) ===
 // Internal cell model: BLACK = sea, WHITE = island. Converted to engine
 // WHITE/BLACK constants on output. No solver dependency.
 
@@ -1191,14 +1191,12 @@ function _placeClues(board, R, C, rng) {
 /**
  * Generate a Nurikabe puzzle.
  *
- * Two generators share the same output shape `{ R, C, clues, solution }`:
- *   - Small boards (max(R,C) <= 8): the original island-growth + logic-repair
- *     generator (`buildSolution` + `deriveByRepair`), which is reliable there.
- *   - Medium/hard boards (>= 12): the carve → trimSea → placeClues generator
- *     (`_generateBoard` → `_trimSea` → `_placeClues`). It starts from a
- *     checkerboard, carves down to the target island count, trims the sea to a
- *     minimal connected skeleton, and places one size clue per island. No solver
- *     dependency; runs in O(board) time.
+ * Output shape is `{ R, C, clues, solution }`, produced by the carve → trimSea →
+ * placeClues generator (`_generateBoard` → `_trimSea` → `_placeClues`): start
+ * from a checkerboard, carve down to the target island count (island size capped
+ * at the side length during carving), trim the sea to a minimal connected
+ * skeleton, and place one size clue per island. No solver dependency; runs in
+ * O(board) time.
  *
  * Output cells are two-state: a clue grid (`clues[r][c]` = island size, 0 = none)
  * plus a solution grid (`solution[r][c]` = WHITE or BLACK). The solver's three
@@ -1215,32 +1213,6 @@ export function generatePuzzle(R, C, opts = {}) {
     const timeBudgetMs = opts.timeBudgetMs ?? 3000;
     const deadline = Date.now() + timeBudgetMs;
 
-    // Small boards: keep the original generator.
-    if (Math.max(R, C) <= 8) {
-        const tuning = opts.tuning ?? genOpts(R, C);
-        for (let attempt = 0; attempt < maxAttempts; attempt++) {
-            if (Date.now() > deadline) break;
-            const rng = mulberry32(seed + attempt * 2654435761);
-            const solution = buildSolution(R, C, rng, tuning);
-            if (!solution) continue;
-            const derived = deriveByRepair(R, C, solution, rng, 80,
-                tuning.minIslands, tuning.maxIslands, tuning.acceptLegalCandidate);
-            if (!derived) continue;
-            const clues2d = Array.from({ length: R }, () => Array(C).fill(0));
-            const solution2d = Array.from({ length: R }, () => Array(C).fill(WHITE));
-            for (let r = 0; r < R; r++) {
-                for (let c = 0; c < C; c++) {
-                    const i = r * C + c;
-                    clues2d[r][c] = derived.clues[i];
-                    solution2d[r][c] = derived.solution[i];
-                }
-            }
-            return { R, C, clues: clues2d, solution: solution2d };
-        }
-        return null;
-    }
-
-    // Medium/hard: carve → trim → clue.
     const band = islandCountBand(R, C);
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
         if (Date.now() > deadline) break;
