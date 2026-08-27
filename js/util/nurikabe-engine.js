@@ -968,6 +968,27 @@ function _generateBoard(R, C, target, rng, { maxRestarts = 50, maxStuck = 5000 }
       for (let c = 0; c < C; c++)
         board[_idx(r, c, C)] = (r % 2 === 0 || c % 2 === 0) ? _B : _W;
 
+    // Randomize the initial board to avoid predictable patterns
+    if (rng() < 0.5) {
+      // Row modification: for each odd row, with 50% chance flip the entire row
+      for (let r = 1; r < R; r += 2) {
+        if (rng() < 0.5) {
+          for (let c = 0; c < C; c++) {
+            board[_idx(r, c, C)] = board[_idx(r, c, C)] === _B ? _W : _B;
+          }
+        }
+      }
+    } else {
+      // Column modification: for each odd column, with 50% chance flip the entire column
+      for (let c = 1; c < C; c += 2) {
+        if (rng() < 0.5) {
+          for (let r = 0; r < R; r++) {
+            board[_idx(r, c, C)] = board[_idx(r, c, C)] === _B ? _W : _B;
+          }
+        }
+      }
+    }
+
     const dsu = new _DSU(N);
     for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) {
       const i = _idx(r, c, C);
