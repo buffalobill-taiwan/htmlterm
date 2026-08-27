@@ -906,13 +906,303 @@ function genOpts(R, C) {
     return { white: 0.42, maxSize: Infinity, ...band };
 }
 
+// === New generator: carve → trimSea → placeClues (medium/hard boards) ===
+// Internal cell model: BLACK = sea, WHITE = island. Converted to engine
+// WHITE/BLACK constants on output. No solver dependency.
+
+const _B = 1;   // black (sea)
+const _W = 0;   // white (island)
+const _idx = (r, c, C) => r * C + c;
+const _DIRS = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+const _DIAG = [[-1, -1], [-1, 1], [1, -1], [1, 1]];
+
+class _DSU {
+  constructor(n) { this.p = new Int32Array(n).fill(-1); }
+  find(x) { while (this.p[x] >= 0) x = this.p[x]; return x; }
+  union(a, b) {
+    let ra = this.find(a), rb = this.find(b);
+    if (ra === rb) return;
+    if (this.p[ra] > this.p[rb]) [ra, rb] = [rb, ra];
+    this.p[ra] += this.p[rb];
+    this.p[rb] = ra;
+  }
+}
+
+// v is not a cut vertex of the black region ⟺ all black neighbours of v lie in a
+// single component of G\{v}. Keeps the sea connected when v is whitened.
+function _keepsSeaConnected(board, R, C, v) {
+  const r0 = Math.floor(v / C), c0 = v % C;
+  const neigh = [];
+  for (const [dr, dc] of _DIRS) {
+    const nr = r0 + dr, nc = c0 + dc;
+    if (nr < 0 || nr >= R || nc < 0 || nc >= C) continue;
+    if (board[_idx(nr, nc, C)] === _B) neigh.push(_idx(nr, nc, C));
+  }
+  if (neigh.length <= 1) return true;
+  const visited = new Uint8Array(R * C);
+  const stack = [neigh[0]];
+  visited[neigh[0]] = 1;
+  while (stack.length) {
+    const cur = stack.pop();
+    const r = Math.floor(cur / C), c = cur % C;
+    for (const [dr, dc] of _DIRS) {
+      const nr = r + dr, nc = c + dc;
+      if (nr < 0 || nr >= R || nc < 0 || nc >= C) continue;
+      const ni = _idx(nr, nc, C);
+      if (ni === v) continue;
+      if (board[ni] === _B && !visited[ni]) { visited[ni] = 1; stack.push(ni); }
+    }
+  }
+  for (let i = 1; i < neigh.length; i++) if (!visited[neigh[i]]) return false;
+  return true;
+}
+
+// Carve from a checkerboard (black if r even or c even; white only on odd×odd),
+// which starts with floor(N/2)^2 islands, then whiten black cells (keeping the sea
+// connected) until exactly `target` islands remain. Returns null if unreachable.
+function _generateBoard(R, C, target, rng, { maxRestarts = 50, maxStuck = 5000 } = {}) {
+  const N = R * C;
+  for (let restart = 0; restart < maxRestarts; restart++) {
+    const board = new Uint8Array(N);
+    for (let r = 0; r < R; r++)
+      for (let c = 0; c < C; c++)
+        board[_idx(r, c, C)] = (r % 2 === 0 || c % 2 === 0) ? _B : _W;
+
+    const dsu = new _DSU(N);
+    for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) {
+      const i = _idx(r, c, C);
+      if (board[i] !== _W) continue;
+      if (c + 1 < C && board[_idx(r, c + 1, C)] === _W) dsu.union(i, _idx(r, c + 1, C));
+      if (r + 1 < R && board[_idx(r + 1, c, C)] === _W) dsu.union(i, _idx(r + 1, c, C));
+    }
+    const roots = new Set();
+    for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) {
+      const i = _idx(r, c, C);
+      if (board[i] === _W) roots.add(dsu.find(i));
+    }
+    let islands = roots.size;
+
+    if (islands === target) return { board, islands, R, C };
+    if (islands < target) return null;
+
+    const blackCells = [];
+    for (let i = 0; i < N; i++) if (board[i] === _B) blackCells.push(i);
+
+    let stuck = 0;
+    while (islands > target) {
+      if (blackCells.length === 0) break;
+      const k = Math.floor(rng() * blackCells.length);
+      const v = blackCells[k];
+      if (!_keepsSeaConnected(board, R, C, v)) {
+        stuck++;
+        if (stuck > maxStuck) break;
+        continue;
+      }
+      {
+        const r0 = Math.floor(v / C), c0 = v % C;
+        const roots = new Set();
+        let mergedSize = 1;
+        for (const [dr, dc] of _DIRS) {
+          const nr = r0 + dr, nc = c0 + dc;
+          if (nr < 0 || nr >= R || nc < 0 || nc >= C) continue;
+          const ni = _idx(nr, nc, C);
+          if (board[ni] === _W) {
+            const root = dsu.find(ni);
+            if (!roots.has(root)) { roots.add(root); mergedSize -= dsu.p[root]; }
+          }
+        }
+        if (mergedSize > R) { stuck++; if (stuck > maxStuck) break; continue; }
+      }
+      board[v] = _W;
+      const r0 = Math.floor(v / C), c0 = v % C;
+      const seen = new Set();
+      for (const [dr, dc] of _DIRS) {
+        const nr = r0 + dr, nc = c0 + dc;
+        if (nr < 0 || nr >= R || nc < 0 || nc >= C) continue;
+        const ni = _idx(nr, nc, C);
+        if (board[ni] === _W) {
+          const root = dsu.find(ni);
+          if (!seen.has(root)) { seen.add(root); dsu.union(v, ni); }
+        }
+      }
+      islands -= (seen.size - 1);
+      blackCells[k] = blackCells[blackCells.length - 1];
+      blackCells.pop();
+      stuck = 0;
+    }
+    if (islands === target) return { board, islands, R, C };
+  }
+  return null;
+}
+
+// Concentric-square (spiral) order: outermost ring first, inward.
+function _ringOrder(R, C) {
+  const cells = [];
+  const rings = Math.floor(Math.min(R, C) / 2);
+  for (let d = 0; d < rings; d++) {
+    for (let c = d; c <= C - 1 - d; c++) cells.push(_idx(d, c, C));
+    for (let r = d + 1; r <= R - 1 - d; r++) cells.push(_idx(r, C - 1 - d, C));
+    for (let c = C - 2 - d; c >= d; c--) cells.push(_idx(R - 1 - d, c, C));
+    for (let r = R - 2 - d; r >= d + 1; r--) cells.push(_idx(r, d, C));
+  }
+  return cells;
+}
+
+// Trim to a minimal sea: in ring order, whiten any black cell whose removal keeps
+// island count unchanged (exactly one white component among neighbours) and keeps
+// the sea connected. Fixed point; only grows islands, never changes their count.
+function _trimSea(board, R, C) {
+  const N = R * C;
+  const dsu = new _DSU(N);
+  for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) {
+    const i = _idx(r, c, C);
+    if (board[i] !== _W) continue;
+    if (c + 1 < C && board[_idx(r, c + 1, C)] === _W) dsu.union(i, _idx(r, c + 1, C));
+    if (r + 1 < R && board[_idx(r + 1, c, C)] === _W) dsu.union(i, _idx(r + 1, c, C));
+  }
+  const order = _ringOrder(R, C);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const v of order) {
+      if (board[v] !== _B) continue;
+      const r0 = Math.floor(v / C), c0 = v % C;
+      const roots = new Set();
+      for (const [dr, dc] of _DIRS) {
+        const nr = r0 + dr, nc = c0 + dc;
+        if (nr < 0 || nr >= R || nc < 0 || nc >= C) continue;
+        const ni = _idx(nr, nc, C);
+        if (board[ni] === _W) roots.add(dsu.find(ni));
+      }
+      if (roots.size !== 1) continue;             // exactly one white component → count unchanged
+      if (!_keepsSeaConnected(board, R, C, v)) continue;
+      board[v] = _W;
+      for (const [dr, dc] of _DIRS) {
+        const nr = r0 + dr, nc = c0 + dc;
+        if (nr < 0 || nr >= R || nc < 0 || nc >= C) continue;
+        const ni = _idx(nr, nc, C);
+        if (board[ni] === _W) dsu.union(v, ni);
+      }
+      changed = true;
+    }
+  }
+  return board;
+}
+
+function _enumerateIslands(board, R, C) {
+  const N = R * C;
+  const seen = new Uint8Array(N);
+  const islands = [];
+  for (let s = 0; s < N; s++) {
+    if (board[s] !== _W || seen[s]) continue;
+    const cells = [];
+    const st = [s]; seen[s] = 1;
+    while (st.length) {
+      const cur = st.pop();
+      cells.push(cur);
+      const r = Math.floor(cur / C), c = cur % C;
+      for (const [dr, dc] of _DIRS) {
+        const nr = r + dr, nc = c + dc;
+        if (nr < 0 || nr >= R || nc < 0 || nc >= C) continue;
+        const ni = _idx(nr, nc, C);
+        if (board[ni] === _W && !seen[ni]) { seen[ni] = 1; st.push(ni); }
+      }
+    }
+    islands.push({ cells, size: cells.length });
+  }
+  return islands;
+}
+
+function _orthoBlack(board, R, C, cell) {
+  const r = Math.floor(cell / C), c = cell % C;
+  let n = 0;
+  for (const [dr, dc] of _DIRS) {
+    const nr = r + dr, nc = c + dc;
+    if (nr < 0 || nr >= R || nc < 0 || nc >= C) continue;
+    if (board[_idx(nr, nc, C)] === _B) n++;
+  }
+  return n;
+}
+
+// Place one clue per island (value = island size):
+//   rule 1 : size-1 island → its only cell
+//   rule 2 : a cell whose diagonal neighbour is another island's placed clue →
+//            place here (ties: most orthogonal sea neighbours, then random)
+//   rule 3 : when rule 2 finds nothing, place on the most sea-exposed unclued
+//            island's most sea-adjacent cell, then re-run rule 2.
+function _placeClues(board, R, C, rng) {
+  const islands = _enumerateIslands(board, R, C);
+  const clues = new Int32Array(R * C);
+  const clued = new Array(islands.length).fill(false);
+  const owner = new Int32Array(R * C).fill(-1);
+  islands.forEach((isl, id) => { for (const c of isl.cells) owner[c] = id; });
+
+  for (let id = 0; id < islands.length; id++) {
+    if (islands[id].size === 1) { clues[islands[id].cells[0]] = 1; clued[id] = true; }
+  }
+
+  const diagNeighbours = (cell) => {
+    const r = Math.floor(cell / C), c = cell % C;
+    const out = [];
+    for (const [dr, dc] of _DIAG) {
+      const nr = r + dr, nc = c + dc;
+      if (nr < 0 || nr >= R || nc < 0 || nc >= C) continue;
+      out.push(_idx(nr, nc, C));
+    }
+    return out;
+  };
+
+  for (;;) {
+    let progressed = false;
+    for (let id = 0; id < islands.length; id++) {
+      if (clued[id]) continue;
+      const isl = islands[id];
+      let best = -1, bestScore = -1;
+      for (const cell of isl.cells) {
+        let hits = false;
+        for (const n of diagNeighbours(cell)) {
+          if (clues[n] > 0 && owner[n] !== id) { hits = true; break; }
+        }
+        if (!hits) continue;
+        const score = _orthoBlack(board, R, C, cell) + rng() * 0.5;
+        if (score > bestScore) { bestScore = score; best = cell; }
+      }
+      if (best >= 0) { clues[best] = isl.size; clued[id] = true; progressed = true; }
+    }
+    if (progressed) continue;
+
+    let pickId = -1, pickCell = -1, pickScore = -1;
+    for (let id = 0; id < islands.length; id++) {
+      if (clued[id]) continue;
+      let bi = -1, bs = -1;
+      for (const cell of islands[id].cells) {
+        const s = _orthoBlack(board, R, C, cell) + rng() * 0.5;
+        if (s > bs) { bs = s; bi = cell; }
+      }
+      if (bs > pickScore) { pickScore = bs; pickId = id; pickCell = bi; }
+    }
+    if (pickId === -1) break;
+    clues[pickCell] = islands[pickId].size;
+    clued[pickId] = true;
+  }
+  return clues;
+}
+
 /**
- * Generate a Nurikabe puzzle solvable by pure logic (no guessing).
+ * Generate a Nurikabe puzzle.
  *
- * Strategy: build a random legal solution by incremental island growth, then
- * repeatedly place clues and shrink ambiguous islands until a logic solver can
- * deduce the board. This replaces the previous "carve a board, then verify with
- * exhaustive DFS" loop, which hung on 12x12 and larger.
+ * Two generators share the same output shape `{ R, C, clues, solution }`:
+ *   - Small boards (max(R,C) <= 8): the original island-growth + logic-repair
+ *     generator (`buildSolution` + `deriveByRepair`), which is reliable there.
+ *   - Medium/hard boards (>= 12): the carve → trimSea → placeClues generator
+ *     (`_generateBoard` → `_trimSea` → `_placeClues`). It starts from a
+ *     checkerboard, carves down to the target island count, trims the sea to a
+ *     minimal connected skeleton, and places one size clue per island. No solver
+ *     dependency; runs in O(board) time.
+ *
+ * Output cells are two-state: a clue grid (`clues[r][c]` = island size, 0 = none)
+ * plus a solution grid (`solution[r][c]` = WHITE or BLACK). The solver's three
+ * states (UNKNOWN/WHITE/BLACK) exist only during solving, never in this output.
  *
  * @param {number} R
  * @param {number} C
@@ -922,26 +1212,52 @@ function genOpts(R, C) {
 export function generatePuzzle(R, C, opts = {}) {
     const seed = opts.seed ?? (Date.now() & 0x7fffffff);
     const maxAttempts = opts.maxAttempts ?? 400;
-    const timeBudgetMs = opts.timeBudgetMs ?? 8000;
-    const tuning = opts.tuning ?? genOpts(R, C);
+    const timeBudgetMs = opts.timeBudgetMs ?? 3000;
     const deadline = Date.now() + timeBudgetMs;
 
+    // Small boards: keep the original generator.
+    if (Math.max(R, C) <= 8) {
+        const tuning = opts.tuning ?? genOpts(R, C);
+        for (let attempt = 0; attempt < maxAttempts; attempt++) {
+            if (Date.now() > deadline) break;
+            const rng = mulberry32(seed + attempt * 2654435761);
+            const solution = buildSolution(R, C, rng, tuning);
+            if (!solution) continue;
+            const derived = deriveByRepair(R, C, solution, rng, 80,
+                tuning.minIslands, tuning.maxIslands, tuning.acceptLegalCandidate);
+            if (!derived) continue;
+            const clues2d = Array.from({ length: R }, () => Array(C).fill(0));
+            const solution2d = Array.from({ length: R }, () => Array(C).fill(WHITE));
+            for (let r = 0; r < R; r++) {
+                for (let c = 0; c < C; c++) {
+                    const i = r * C + c;
+                    clues2d[r][c] = derived.clues[i];
+                    solution2d[r][c] = derived.solution[i];
+                }
+            }
+            return { R, C, clues: clues2d, solution: solution2d };
+        }
+        return null;
+    }
+
+    // Medium/hard: carve → trim → clue.
+    const band = islandCountBand(R, C);
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
         if (Date.now() > deadline) break;
         const rng = mulberry32(seed + attempt * 2654435761);
-        const solution = buildSolution(R, C, rng, tuning);
-        if (!solution) continue;
-        const derived = deriveByRepair(R, C, solution, rng, 80,
-            tuning.minIslands, tuning.maxIslands, tuning.acceptLegalCandidate);
-        if (!derived) continue;
+        const target = band.minIslands + Math.floor(rng() * (band.maxIslands - band.minIslands + 1));
+        const res = _generateBoard(R, C, target, rng);
+        if (!res) continue;
+        _trimSea(res.board, R, C);
+        const clues = _placeClues(res.board, R, C, rng);
 
         const clues2d = Array.from({ length: R }, () => Array(C).fill(0));
         const solution2d = Array.from({ length: R }, () => Array(C).fill(WHITE));
         for (let r = 0; r < R; r++) {
             for (let c = 0; c < C; c++) {
                 const i = r * C + c;
-                clues2d[r][c] = derived.clues[i];
-                solution2d[r][c] = derived.solution[i];
+                clues2d[r][c] = clues[i];
+                solution2d[r][c] = res.board[i] === _W ? WHITE : BLACK;
             }
         }
         return { R, C, clues: clues2d, solution: solution2d };

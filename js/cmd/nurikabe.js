@@ -234,27 +234,28 @@ export class NurikabeCmd extends CmdBase {
 
         this.holdBusy();
         const epoch = this.abortEpoch;
-        const puzzle = await this._generateAsync(cfg.size, epoch);
+        const gen = await this._generateAsync(cfg.size, epoch);
         this.releaseBusy();
 
         if (this.closed || epoch !== this.abortEpoch) return;
 
         this._generating = false;
-        if (!puzzle) {
+        if (!gen) {
             term.write('\x1B[2J\x1B[1;1H');
             term.write(bold(red('  Failed to generate puzzle. Press [n] to retry or [q] to quit.\n')));
             this._completed = true;
             return;
         }
 
-        this._clues = puzzle.clues;
-        this._solution = puzzle.solution;
+        this._seed = gen.seed;
+        this._clues = gen.puzzle.clues;
+        this._solution = gen.puzzle.solution;
         this._player = _create2D(cfg.size, cfg.size, WHITE);
         this._geom = geom(cfg.size, cfg.size);
         this._puzzleFlat = {
             R: cfg.size,
             C: cfg.size,
-            clues: puzzle.clues.flat(),
+            clues: gen.puzzle.clues.flat(),
         };
         this._updateClueColors();
 
@@ -278,7 +279,7 @@ export class NurikabeCmd extends CmdBase {
                 seed: seed + attempt,
                 maxAttempts: 1,
             });
-            if (puzzle) return puzzle;
+            if (puzzle) return { puzzle, seed: seed + attempt };
             // Yield to the UI thread every attempt so the browser never freezes.
             // For large boards each attempt can take 10-100ms; batching would cause jank.
             await new Promise((r) => setTimeout(r, 0));
@@ -560,10 +561,16 @@ export class NurikabeCmd extends CmdBase {
         }, 1000);
     }
 
+    _drawSeed() {
+        const row = this._size + 5;
+        term.write('\x1B[' + row + ';1H\x1B[2K' + gray('  seed: ' + this._seed));
+    }
+
     _render() {
         this._drawHeader();
         this._drawBoard();
         this._drawFooter();
+        this._drawSeed();
         term.write('\x1B[' + (this._cursorRow + 4) + ';' + (this._cursorCol * 2 + 3) + 'H');
     }
 
