@@ -28,7 +28,7 @@
  * island.
  */
 
-import { generatePuzzle, geom, isSolved, WHITE, BLACK, formatClue } from '../js/util/nurikabe-engine.js';
+import { generatePuzzle, geom, WHITE, BLACK, formatClue, enumeratePuzzleIslands, islandSwapInfo } from '../js/util/nurikabe-engine.js';
 
 const SP = '\u3000'; // fullwidth space  (width 2)
 const SEA = '██';     // two halfwidth blocks (width 2)
@@ -63,30 +63,6 @@ function render(R, C, clues, state, mark = null) {
     return lines.join('\n');
 }
 
-function enumerateIslands(state, g) {
-    const owners = new Int32Array(g.N).fill(-1);
-    const islands = [];
-    for (let s = 0; s < g.N; s++) {
-        if (state[s] !== WHITE || owners[s] !== -1) continue;
-        const id = islands.length;
-        const cells = [];
-        const stack = [s];
-        owners[s] = id;
-        while (stack.length) {
-            const cur = stack.pop();
-            cells.push(cur);
-            for (const nb of g.nbrs[cur]) {
-                if (state[nb] === WHITE && owners[nb] === -1) {
-                    owners[nb] = id;
-                    stack.push(nb);
-                }
-            }
-        }
-        islands.push({ id, cells });
-    }
-    return { owners, islands };
-}
-
 function coord(i, C) {
     return '(' + (((i / C) | 0) + 1) + ',' + ((i % C) + 1) + ')';
 }
@@ -118,37 +94,12 @@ for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) state[r * C + c] = puzzl
 
 const g = geom(R, C);
 const p = { R, C, clues: cluesFlat };
-const { islands } = enumerateIslands(state, g);
+const islands = enumeratePuzzleIslands(state, g).map((isl, id) => ({ id, cells: isl.cells }));
 
 const found = [];
 for (const isl of islands) {
-    const hasBlackNbr = new Uint8Array(R * C);
-    const seaAround = new Set();
-    for (const c of isl.cells) {
-        for (const nb of g.nbrs[c]) {
-            if (state[nb] === BLACK) {
-                hasBlackNbr[c] = 1;
-                seaAround.add(nb);
-            }
-        }
-    }
-    const frontier = isl.cells.filter((c) => hasBlackNbr[c]);
-    const seaList = [...seaAround];
-
-    const hits = [];
-    let tested = 0;
-    for (const a of frontier) {
-        for (const b of seaList) {
-            tested++;
-            state[a] = BLACK;
-            state[b] = WHITE;
-            const ok = isSolved(state, g, p);
-            state[a] = WHITE;
-            state[b] = BLACK;
-            if (ok) hits.push({ a, b });
-        }
-    }
-    if (hits.length) found.push({ id: isl.id, size: isl.cells.length, tested, hits });
+    const { swaps, candidates } = islandSwapInfo(state, g, p, isl.cells);
+    if (swaps.length) found.push({ id: isl.id, size: isl.cells.length, candidates, hits: swaps });
 }
 
 const chunks = [];
@@ -165,7 +116,7 @@ for (const f of found) {
         if (cluesFlat[c] > 0) { clue = cluesFlat[c]; break; }
     }
     chunks.push('');
-    chunks.push(`island #${f.id}  clue ${clue}  (${f.size} cells, ${f.tested} swaps tested)`);
+    chunks.push(`island #${f.id}  clue ${clue}  (${f.size} cells, ${f.candidates} pairs tried)`);
     for (const { a, b } of f.hits) {
         total++;
         state[a] = BLACK;

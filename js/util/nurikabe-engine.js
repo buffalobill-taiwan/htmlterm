@@ -163,7 +163,7 @@ export function islandCountBand(R, C) {
     return { minIslands: Math.max(1, Math.ceil(R * C / 8)), maxIslands: Math.floor(R * C / 6) };
 }
 
-// === Generator: carve → trimSea → placeClues (all board sizes) ===
+// === Generator: carve → trimSea → placeClues → pinShapes (all board sizes) ===
 // Internal cell model: BLACK = sea, WHITE = island. Converted to engine
 // WHITE/BLACK constants on output. No solver dependency.
 
@@ -412,6 +412,8 @@ function _orthoBlack(board, R, C, cell) {
 //            cells from two different, still-unclued islands, place both clues
 //   rule 5 : when rules 3-4 find nothing, place on the most sea-exposed unclued
 //            island's most sea-adjacent cell, then re-run the loop.
+// The clue-position pass (rule 6) runs afterwards in pinIslandShapes; see the
+// generatePuzzle docs.
 function _placeClues(board, R, C, rng) {
   const islands = _enumerateIslands(board, R, C);
   const clues = new Int32Array(R * C);
@@ -514,16 +516,166 @@ function _placeClues(board, R, C, rng) {
   return clues;
 }
 
+// === Final rule: pin island shapes by relocating clues ===
+// Works on the solver's cell model (WHITE/BLACK) because validity is judged by
+// `isSolved`. Also exported for the offline tools so the rule and its audit
+// share one implementation.
+
+/** White-island (BFS) regions of a fully WHITE/BLACK state, in scan order. */
+export function enumeratePuzzleIslands(state, g) {
+    const islands = [];
+    const seen = new Uint8Array(g.N);
+    for (let s = 0; s < g.N; s++) {
+        if (state[s] !== WHITE || seen[s]) continue;
+        const cells = [];
+        const stack = [s];
+        seen[s] = 1;
+        while (stack.length) {
+            const cur = stack.pop();
+            cells.push(cur);
+            for (const nb of g.nbrs[cur]) {
+                if (!seen[nb] && state[nb] === WHITE) {
+                    seen[nb] = 1;
+                    stack.push(nb);
+                }
+            }
+        }
+        islands.push({ cells });
+    }
+    return islands;
+}
+
+// Every single-cell shape relocation available to one island: swap one island
+// cell that borders the sea (`a`) with one surrounding sea cell (`b`), keep the
+// swap only if the whole board is still a valid solution. `candidates` counts
+// the (a, b) pairs tested, which equals the number of `isSolved` calls.
+export function islandSwapInfo(state, g, p, cells) {
+    const hasBlackNbr = new Uint8Array(g.N);
+    const seaSet = new Set();
+    for (const c of cells) {
+        for (const nb of g.nbrs[c]) {
+            if (state[nb] === BLACK) {
+                hasBlackNbr[c] = 1;
+                seaSet.add(nb);
+            }
+        }
+    }
+    const frontier = cells.filter((c) => hasBlackNbr[c]);
+    const seaList = [...seaSet];
+
+    const swaps = [];
+    for (const a of frontier) {
+        for (const b of seaList) {
+            state[a] = BLACK;
+            state[b] = WHITE;
+            if (isSolved(state, g, p)) swaps.push({ a, b });
+            state[a] = WHITE;
+            state[b] = BLACK;
+        }
+    }
+    return { swaps, candidates: frontier.length * seaList.length };
+}
+
+function _regionOf(state, g, start) {
+    const cells = [];
+    const seen = new Uint8Array(g.N);
+    const stack = [start];
+    seen[start] = 1;
+    while (stack.length) {
+        const cur = stack.pop();
+        cells.push(cur);
+        for (const nb of g.nbrs[cur]) {
+            if (!seen[nb] && state[nb] === WHITE) {
+                seen[nb] = 1;
+                stack.push(nb);
+            }
+        }
+    }
+    return cells;
+}
+
+/**
+ * Final clue-position rule (rule 6).  When an island can legally change shape,
+ * swap its shape and MOVE its clue onto the swapped-in cell; re-testing proves
+ * whether that pins the shape rigid.  Every legal swap is tried as a pin; the
+ * first one that leaves the island rigid is adopted (state/clues mutate).
+ *
+ * Pinning one island can make another changeable, so the pass loops until no
+ * further pin is adopted and then re-checks every island.  Only when the whole
+ * board ends rigid (SUCCESS) is the result kept; otherwise (an island still
+ * changeable) the entire pass is rolled back and the placed clues/shape -are
+ * left intact (FAIL).
+ *
+ * @param {Int8Array} state  WHITE/BLACK state (mutated on adoption)
+ * @param {Int32Array} clues flat clue grid (mutated on adoption)
+ * @returns {boolean} true when every island ended up rigid (SUCCESS)
+ */
+export function pinIslandShapes(state, clues, R, C, g) {
+    const p = { R, C, clues };
+    const origState = state.slice();
+    const origClues = clues.slice();
+
+    const pinOneIsland = () => {
+        for (const isl of enumeratePuzzleIslands(state, g)) {
+            let clueIdx = -1;
+            let clueVal = 0;
+            for (const c of isl.cells) {
+                if (clues[c] > 0) { clueIdx = c; clueVal = clues[c]; break; }
+            }
+            const { swaps } = islandSwapInfo(state, g, p, isl.cells);
+            if (swaps.length === 0) continue;
+            for (const { a, b } of swaps) {
+                state[a] = BLACK;
+                state[b] = WHITE;
+                clues[clueIdx] = 0;
+                clues[b] = clueVal;
+                const after = islandSwapInfo(state, g, p, _regionOf(state, g, b));
+                if (after.swaps.length === 0) return true;  // adopted
+                state[a] = WHITE;
+                state[b] = BLACK;
+                clues[clueIdx] = clueVal;
+                clues[b] = 0;
+            }
+            return false;  // island un-pinnable → FAIL
+        }
+        return false;  // nothing left to pin
+    };
+
+    // Loop to a fixpoint: each pass pins one more island, so the pass count is
+    // bounded by the number of islands; the guard can never trip in practice.
+    const maxPasses = enumeratePuzzleIslands(state, g).length + 1;
+    for (let pass = 0; pass <= maxPasses; pass++) {
+        if (!pinOneIsland()) break;
+    }
+
+    // Final verification: SUCCESS only when every island is rigid.
+    for (const isl of enumeratePuzzleIslands(state, g)) {
+        const { swaps } = islandSwapInfo(state, g, p, isl.cells);
+        if (swaps.length > 0) {
+            state.set(origState);
+            clues.set(origClues);
+            return false;
+        }
+    }
+    return true;
+}
+
 /**
  * Generate a Nurikabe puzzle.
  *
  * Output shape is `{ R, C, clues, solution }`, produced by the carve → trimSea →
- * placeClues generator (`_generateBoard` → `_trimSea` → `_placeClues`): start
- * from a checkerboard, carve down to the target island count (merges capped at
- * the board side length during carving) and trim the sea to a minimal connected
- * skeleton, then place one size clue per island. `_trimSea` grows islands to
- * their natural extent, so a final island may exceed the side-length cap. No
- * solver dependency; runs in O(board) time.
+ * placeClues → pinShapes generator (`_generateBoard` → `_trimSea` → `_placeClues`
+ * → `pinIslandShapes`): start from a checkerboard, carve down to the target
+ * island count (merges capped at the board side length during carving) and trim
+ * the sea to a minimal connected skeleton, then place one size clue per island.
+ * `_trimSea` grows islands to their natural extent, so a final island may exceed
+ * the side-length cap.
+ *
+ * The `pinIslandShapes` pass hardens the puzzle against the common duplicate
+ * solution: for each island that can legally change shape, the clue is moved
+ * onto the flexible cell, pinning the shape rigid. The pass applies only when
+ * every island ends up rigid (SUCCESS); otherwise the placed clues are restored
+ * unchanged.
  *
  * Output cells are two-state: a clue grid (`clues[r][c]` = island size, 0 = none)
  * plus a solution grid (`solution[r][c]` = WHITE or BLACK). The solver's three
@@ -550,13 +702,20 @@ export function generatePuzzle(R, C, opts = {}) {
         _trimSea(res.board, R, C);
         const clues = _placeClues(res.board, R, C, rng);
 
+        // Final rule (clue-pin): move each flexible island's clue onto a swapped-in
+        // cell so the shape goes rigid. On FAIL the board is restored unchanged.
+        const g = geom(R, C);
+        const state = new Int8Array(R * C);
+        for (let i = 0; i < R * C; i++) state[i] = res.board[i] === _W ? WHITE : BLACK;
+        pinIslandShapes(state, clues, R, C, g);
+
         const clues2d = Array.from({ length: R }, () => Array(C).fill(0));
         const solution2d = Array.from({ length: R }, () => Array(C).fill(WHITE));
         for (let r = 0; r < R; r++) {
             for (let c = 0; c < C; c++) {
                 const i = r * C + c;
                 clues2d[r][c] = clues[i];
-                solution2d[r][c] = res.board[i] === _W ? WHITE : BLACK;
+                solution2d[r][c] = state[i];
             }
         }
         return { R, C, clues: clues2d, solution: solution2d };

@@ -227,3 +227,20 @@ centered frame (rows 1–22), `displayWidth()` padding for correct CJK alignment
 game end (matching upstream `showFinalResult`); Enter/n on game-over clears
 screen then reopens settings dialog; `_render` empty branch keeps all slots
 deactivated when no game exists.
+
+nurikabe generator final rule (Aug 2026): a puzzle may in principle admit a
+second valid solution reachable by a single island-shape swap (one island cell
+replaced) with clues staying on the same island. The generator now closes that:
+`enumeratePuzzleIslands` / `islandSwapInfo` export the per-island swap search
+(int8 flood over the dual grid), and `pinIslandShapes` — invoked after
+`_placeClues` in `generatePuzzle` — fixes any changeable island by legally
+swapping its shape and *moving its clue* onto the swapped-in cell; the swap is
+adopted only when re-testing proves the island rigid, and the pass loops to a
+fixpoint because pinning one island can make a further one changeable. The
+result is kept only if the final verification sweep finds every island rigid
+(SUCCESS); otherwise the whole pass is rolled back (FAIL, puzzle unchanged).
+`tools/nurikabe-dupcheck.mjs` audits generated puzzles for single-swap
+alternatives and renders them with the swapped cells color-coded (red = cell
+out to sea, green = cell in); seeds 1–300 all validate (solved, one clue per
+island equal to its size), and the FAIL rate over seeds 200–299 (12×12) is
+13%.
