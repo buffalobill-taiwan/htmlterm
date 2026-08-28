@@ -696,7 +696,7 @@ export class Game {
     if (this.phase !== 'discard' && this.phase !== 'dealer_first_discard') return;
     const p = this.players[this.currentPlayer];
     if (p.isRiichi) return;
-    if (p.melds.length > 0) return;
+    if (p.melds.some(m => m.open)) return;
     if (p.score < 1000) return;
     if (this.wall.getRemainingCount() < 4) return;
 
