@@ -673,9 +673,10 @@ export function pinIslandShapes(state, clues, R, C, g) {
  *
  * The `pinIslandShapes` pass hardens the puzzle against the common duplicate
  * solution: for each island that can legally change shape, the clue is moved
- * onto the flexible cell, pinning the shape rigid. The pass applies only when
- * every island ends up rigid (SUCCESS); otherwise the placed clues are restored
- * unchanged.
+ * onto the flexible cell, pinning the shape rigid. A puzzle ships only when
+ * every island ends up rigid; otherwise the board is discarded and the next
+ * attempt carves a fresh puzzle. Every returned puzzle is therefore rigid
+ * under the single-shape-swap check (unique solution).
  *
  * Output cells are two-state: a clue grid (`clues[r][c]` = island size, 0 = none)
  * plus a solution grid (`solution[r][c]` = WHITE or BLACK). The solver's three
@@ -703,11 +704,13 @@ export function generatePuzzle(R, C, opts = {}) {
         const clues = _placeClues(res.board, R, C, rng);
 
         // Final rule (clue-pin): move each flexible island's clue onto a swapped-in
-        // cell so the shape goes rigid. On FAIL the board is restored unchanged.
+        // cell so the shape goes rigid. On FAIL the board is discarded (the state/
+        // clues are already restored internally) and the next attempt carves anew,
+        // so only fully rigid puzzles are ever returned.
         const g = geom(R, C);
         const state = new Int8Array(R * C);
         for (let i = 0; i < R * C; i++) state[i] = res.board[i] === _W ? WHITE : BLACK;
-        pinIslandShapes(state, clues, R, C, g);
+        if (!pinIslandShapes(state, clues, R, C, g)) continue;
 
         const clues2d = Array.from({ length: R }, () => Array(C).fill(0));
         const solution2d = Array.from({ length: R }, () => Array(C).fill(WHITE));

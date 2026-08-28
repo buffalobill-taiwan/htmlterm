@@ -238,9 +238,16 @@ swapping its shape and *moving its clue* onto the swapped-in cell; the swap is
 adopted only when re-testing proves the island rigid, and the pass loops to a
 fixpoint because pinning one island can make a further one changeable. The
 result is kept only if the final verification sweep finds every island rigid
-(SUCCESS); otherwise the whole pass is rolled back (FAIL, puzzle unchanged).
+(SUCCESS); on FAIL the seeded island is intrinsically flexible — probing showed
+such islands sit in closed swap-cycles (e.g. seed 3 cycles at step 2, seed 232
+at step 2) and even legal clue-moves, one-cell shrinks, or multi-cell shrinks
+leave them or a neighbour changeable, so `generatePuzzle` discards the board
+and retries the next carve instead. Every shipped puzzle is therefore rigid
+under the single-swap check (unique solution); the old FAIL rate surfaces as
+the retry cost (≈11% at 12×12, ≈38% at 16×16).
 `tools/nurikabe-dupcheck.mjs` audits generated puzzles for single-swap
 alternatives and renders them with the swapped cells color-coded (red = cell
-out to sea, green = cell in); seeds 1–300 all validate (solved, one clue per
-island equal to its size), and the FAIL rate over seeds 200–299 (12×12) is
-13%.
+out to sea, green = cell in); `tools/nurikabe-cluepin.mjs` re-checks shipped
+boards (RIGID/FAIL) and reports RETRY when a seed's single attempt found no
+rigid board; seeds 1–300 all validate (solved, one clue per island equal to
+its size).

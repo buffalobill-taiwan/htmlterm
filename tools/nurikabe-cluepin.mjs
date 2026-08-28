@@ -2,15 +2,20 @@
 /**
  * nurikabe-cluepin — audit the generator's final clue-pin rule (rule 6).
  *
- * generatePuzzle now runs the final rule from the clue-pin experiment: when an
- * island can legally change shape, its clue is moved onto the swapped-in cell,
- * which pins the shape rigid — but the pass applies only if every island ends
- * rigid (SUCCESS); otherwise the placed clues are kept (FAIL).
+ * generatePuzzle now runs the final clue-pin rule: when an island can legally
+ * change shape, its clue is moved onto the swapped-in cell, which pins the
+ * shape rigid. A puzzle ships only when every island ends up rigid; otherwise
+ * the board is discarded and the attempt retries with the next carve.
  *
- * This tool regenerates a seed's puzzle and measures the residual flexibility:
- * any island that can still change shape after generation is a FAIL, matching
- * the experiment's FAIL definition. "Can change shape" is a single-cell swap
- * that keeps the whole board a valid solution (non-exhaustive).
+ * Because only rigid boards are ever returned, this tool audits what actually
+ * ships: it regenerates the seed's puzzle (single attempt) and re-checks the
+ * residual flexibility — a single-cell swap that keeps the whole board a valid
+ * solution (non-exhaustive). The output is:
+ *   seed N RIGID   — a rigid puzzle shipped
+ *   seed N FAIL    — residual flexibility (should not occur; signals a bug)
+ * and when the single attempt found no rigid board (the retry cost, i.e. the
+ * old FAIL rate):
+ *   seed N RETRY   — generation failed this seed; caller should advance seed
  *
  * Usage:
  *   node tools/nurikabe-cluepin.mjs <seed> [size]
@@ -35,8 +40,8 @@ if (Number.isNaN(seed) || seed <= 0) {
 const puzzle = generatePuzzle(size, size, { seed, maxAttempts: 1 });
 
 if (!puzzle) {
-    process.stderr.write(`Failed to generate ${size}×${size} puzzle with seed ${seed}.\n`);
-    process.exit(1);
+    process.stdout.write(`seed ${seed} RETRY (no rigid ${size}×${size} board in this attempt)\n`);
+    process.exit(0);
 }
 
 const R = puzzle.R;
@@ -65,7 +70,7 @@ for (const isl of islands) {
 }
 
 if (flexible.length === 0) {
-    process.stdout.write(`seed ${seed} SUCCESS (${islands.length} islands, all rigid)\n`);
+    process.stdout.write(`seed ${seed} RIGID (${islands.length} islands, all rigid)\n`);
 } else {
     process.stdout.write(`seed ${seed} FAIL (${islands.length} islands, ${flexible.length} flexible: ${flexible.join(', ')})\n`);
 }
