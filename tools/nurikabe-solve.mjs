@@ -15,7 +15,7 @@
  * digits for clue ≤ 9.  Cell width = 2 halfwidth chars throughout.
  */
 
-import { generatePuzzle, formatClue, WHITE, BLACK } from '../js/util/nurikabe-engine.js';
+import { generatePuzzle, formatClue, BLACK } from '../js/util/nurikabe-engine.js';
 
 const SP = '\u3000'; // fullwidth space  (width 2)
 const SEA = '██';     // two halfwidth blocks (width 2)
