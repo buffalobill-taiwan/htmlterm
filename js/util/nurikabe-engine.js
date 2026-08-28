@@ -861,17 +861,15 @@ function deriveByRepair(R, C, solved, rng, maxRepairs, minIslands, maxIslands,
 }
 
 /**
- * Island-count band for an R×C board: [n-1, 2n] where n = max(R, C).
+ * Island-count band for an R×C board: [⌈R·C/8⌉, ⌊R·C/6⌋].
  *
- * The upper bound is the one that bites: capping the count forces larger average
- * islands, and large islands are what destroy unique solvability. A 1.5n cap
- * yields zero unique puzzles on 12×12 even under exhaustive DFS search
- * (measured: 84 boards -> 40 multi-solution, 33 unsolvable, 0 unique). 2n keeps
- * comfortably inside the feasible region for every size we ship (7, 12, 16).
+ * Ties the number of islands to the board *area* and keeps the range tight, so
+ * island counts (and with them puzzle variance) stay similar from game to game.
+ * All shipped sizes start carving from ⌊R/2⌋×⌊C/2⌋ islands, comfortably above
+ * the band's upper end (8×8: 16 > 10, 12×12: 36 > 24, 16×16: 64 > 42).
  */
 export function islandCountBand(R, C) {
-    const n = Math.max(R, C);
-    return { minIslands: n - 1, maxIslands: 2 * n };
+    return { minIslands: Math.max(1, Math.ceil(R * C / 8)), maxIslands: Math.floor(R * C / 6) };
 }
 
 /**
@@ -1150,8 +1148,10 @@ function _orthoBlack(board, R, C, cell) {
 //   rule 1 : size-1 island → its only cell
 //   rule 2 : a cell whose diagonal neighbour is another island's placed clue →
 //            place here (ties: most orthogonal sea neighbours, then random)
-//   rule 3 : when rule 2 finds nothing, place on the most sea-exposed unclued
-//            island's most sea-adjacent cell, then re-run rule 2.
+//   rule 3 : when rule 2 finds nothing, scan 2x2 squares for a diagonal pair of
+//            cells from two different, still-unclued islands, place both clues
+//   rule 4 : when rules 2-3 find nothing, place on the most sea-exposed unclued
+//            island's most sea-adjacent cell, then re-run the loop.
 function _placeClues(board, R, C, rng) {
   const islands = _enumerateIslands(board, R, C);
   const clues = new Int32Array(R * C);
