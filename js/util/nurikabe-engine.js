@@ -958,8 +958,9 @@ function _keepsSeaConnected(board, R, C, v) {
 }
 
 // Carve from a checkerboard (black if r even or c even; white only on odd×odd),
-// which starts with floor(N/2)^2 islands, then whiten black cells (keeping the sea
-// connected) until exactly `target` islands remain. Returns null if unreachable.
+// which starts with ⌊R/2⌋×⌊C/2⌋ single-cell islands, then randomly flip whole
+// odd rows or columns, then whiten black cells (keeping the sea connected) until
+// exactly `target` islands remain. Returns null if unreachable.
 function _generateBoard(R, C, target, rng, { maxRestarts = 50, maxStuck = 5000 } = {}) {
   const N = R * C;
   for (let restart = 0; restart < maxRestarts; restart++) {
@@ -1192,56 +1193,28 @@ function _placeClues(board, R, C, rng) {
     }
     if (progressed) continue;
 
-    // New logic: scan 2x2 squares to find opportunities for placing clues
-    for (let r = 0; r < R - 1; r++) {
+    // Scan 2x2 squares for a diagonal pair of cells from two different,
+    // still-unclued islands, and place both clues. Orthogonal neighbours can
+    // never belong to different islands, so only the diagonal pairs are playable.
+    for (let r = 0; r < R - 1 && !progressed; r++) {
       for (let c = 0; c < C - 1; c++) {
-        const cell1 = _idx(r, c, C);
-        const cell2 = _idx(r, c + 1, C);
-        const cell3 = _idx(r + 1, c, C);
-        const cell4 = _idx(r + 1, c + 1, C);
-        
-        // 检查这四个格子是否都未放置clue，并且属于不同岛屿
-        if (clues[cell1] !== 0 || clues[cell2] !== 0 || 
-            clues[cell3] !== 0 || clues[cell4] !== 0) continue;
-            
-        const island1 = owner[cell1];
-        const island2 = owner[cell2];
-        const island3 = owner[cell3];  
-        const island4 = owner[cell4];
-        
-        // 寻找两个不同的未放置clue的岛屿
-        if (island1 !== -1 && island2 !== -1 && island1 !== island2) {
-          // 放置它们对应的数字
-          clues[cell1] = islands[island1].size;
-          clues[cell2] = islands[island2].size;
-          clued[island1] = true;
-          clued[island2] = true;
-          progressed = true;
-          break;
-        } else if (island1 !== -1 && island3 !== -1 && island1 !== island3) {
-          clues[cell1] = islands[island1].size;
-          clues[cell3] = islands[island3].size;
-          clued[island1] = true;
-          clued[island3] = true;
-          progressed = true;
-          break;
-        } else if (island2 !== -1 && island4 !== -1 && island2 !== island4) {
-          clues[cell2] = islands[island2].size;
-          clues[cell4] = islands[island4].size;
-          clued[island2] = true;
-          clued[island4] = true;
-          progressed = true;
-          break;
-        } else if (island3 !== -1 && island4 !== -1 && island3 !== island4) {
-          clues[cell3] = islands[island3].size;
-          clues[cell4] = islands[island4].size;
-          clued[island3] = true;
-          clued[island4] = true;
+        const tl = _idx(r, c, C);
+        const tr = _idx(r, c + 1, C);
+        const bl = _idx(r + 1, c, C);
+        const br = _idx(r + 1, c + 1, C);
+        for (const [a, b] of [[tl, br], [tr, bl]]) {
+          if (clues[a] !== 0 || clues[b] !== 0) continue;
+          const oa = owner[a], ob = owner[b];
+          if (oa === -1 || ob === -1 || oa === ob) continue;
+          if (clued[oa] || clued[ob]) continue;
+          clues[a] = islands[oa].size;
+          clues[b] = islands[ob].size;
+          clued[oa] = true;
+          clued[ob] = true;
           progressed = true;
           break;
         }
       }
-      if (progressed) break;
     }
     if (progressed) continue;
 
@@ -1267,10 +1240,11 @@ function _placeClues(board, R, C, rng) {
  *
  * Output shape is `{ R, C, clues, solution }`, produced by the carve → trimSea →
  * placeClues generator (`_generateBoard` → `_trimSea` → `_placeClues`): start
- * from a checkerboard, carve down to the target island count (island size capped
- * at the side length during carving), trim the sea to a minimal connected
- * skeleton, and place one size clue per island. No solver dependency; runs in
- * O(board) time.
+ * from a checkerboard, carve down to the target island count (merges capped at
+ * the board side length during carving) and trim the sea to a minimal connected
+ * skeleton, then place one size clue per island. `_trimSea` grows islands to
+ * their natural extent, so a final island may exceed the side-length cap. No
+ * solver dependency; runs in O(board) time.
  *
  * Output cells are two-state: a clue grid (`clues[r][c]` = island size, 0 = none)
  * plus a solution grid (`solution[r][c]` = WHITE or BLACK). The solver's three
