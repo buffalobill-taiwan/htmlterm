@@ -3,7 +3,7 @@
  * nurikabe-solve — Reproduce a Nurikabe puzzle from its seed.
  *
  * Usage:
- *   node tools/nurikabe-solve.mjs <seed> [size] [--noretry] [--ptt]
+ *   node tools/nurikabe-solve.mjs <seed> [size] [--noretry] [--ptt] [--clueonly]
  *
  * Examples:
  *   node tools/nurikabe-solve.mjs 123456
@@ -22,17 +22,24 @@
  * Pass --ptt to render for PTT-style terminals, where █ and the box drawing
  * chars are fullwidth (one cell each): sea becomes a single █ and the border
  * dash count halves, so each row stays exactly `size` cells.
+ *
+ * Pass --clueonly to show only the puzzle: sea is rendered as fullwidth space
+ * (　) just like the empty island cells, so only the clue numbers stand out and
+ * the solution is not revealed.
  */
 
 import { generatePuzzle, generateDraftPuzzle, formatClue, BLACK } from '../js/util/nurikabe-engine.js';
 
 const args = process.argv.slice(2);
-const ptt = args.includes('--ptt');
-const noRetry = args.includes('--noretry');
-const positional = args.filter((a) => a !== '--noretry' && a !== '--ptt');
+const flags = args.filter((a) => a.startsWith('--'));
+const positional = args.filter((a) => !a.startsWith('--'));
+
+const ptt = flags.includes('--ptt');
+const noRetry = flags.includes('--noretry');
+const clueOnly = flags.includes('--clueonly');
 
 const SP = '\u3000';        // fullwidth space (width 2)
-const SEA = ptt ? '█' : '██'; // one fullwidth block (PTT) or two halfwidth (width 2)
+const SEA = clueOnly ? SP : (ptt ? '█' : '██'); // clueonly → blank sea, else one fullwidth block (PTT) or two halfwidth
 const DASH = ptt ? '─' : '─'.repeat(2); // border unit: fullwidth dash vs halfwidth pair
 
 function formatSolution(puzzle) {
@@ -61,7 +68,7 @@ const seed = parseInt(positional[0], 10);
 const size = parseInt(positional[1] || '12', 10);
 
 if (Number.isNaN(seed) || seed <= 0) {
-    process.stderr.write('Usage: node tools/nurikabe-solve.mjs <seed> [size] [--noretry] [--ptt]\n');
+    process.stderr.write('Usage: node tools/nurikabe-solve.mjs <seed> [size] [--noretry] [--ptt] [--clueonly]\n');
     process.exit(1);
 }
 

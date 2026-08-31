@@ -20,7 +20,7 @@
  *                    the seed.
  *
  * Usage:
- *   node tools/nurikabe-cluepin.mjs <seed> [size] [--noretry] [--ptt]
+ *   node tools/nurikabe-cluepin.mjs <seed> [size] [--noretry] [--ptt] [--clueonly]
  *
  * Examples:
  *   node tools/nurikabe-cluepin.mjs 250
@@ -33,21 +33,24 @@
  * why the seed cannot ship). Pass --noretry for single-attempt behaviour:
  * such seeds then report RETRY instead.
  *
- * --ptt is accepted for CLI compatibility with the other nurikabe tools but
- * has no effect here: this tool prints status lines only, never a board.
+ * --ptt and --clueonly are accepted for CLI compatibility with the other
+ * nurikabe tools but have no effect here: this tool prints status lines only,
+ * never a board.
  */
 
 import { generatePuzzle, generateDraftPuzzle, geom, WHITE, BLACK, enumeratePuzzleIslands, islandSwapInfo } from '../js/util/nurikabe-engine.js';
 
 const args = process.argv.slice(2);
-const noRetry = args.includes('--noretry');
-const positional = args.filter((a) => a !== '--noretry' && a !== '--ptt');
+const flags = args.filter((a) => a.startsWith('--'));
+const positional = args.filter((a) => !a.startsWith('--'));
+
+const noRetry = flags.includes('--noretry');
 
 const seed = parseInt(positional[0], 10);
 const size = parseInt(positional[1] || '12', 10);
 
 if (Number.isNaN(seed) || seed <= 0) {
-    process.stderr.write('Usage: node tools/nurikabe-cluepin.mjs <seed> [size] [--noretry] [--ptt]\n');
+    process.stderr.write('Usage: node tools/nurikabe-cluepin.mjs <seed> [size] [--noretry] [--ptt] [--clueonly]\n');
     process.exit(1);
 }
 

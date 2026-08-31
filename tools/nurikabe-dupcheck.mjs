@@ -13,7 +13,7 @@
  * swap can be missed.
  *
  * Usage:
- *   node tools/nurikabe-dupcheck.mjs <seed> [size] [--noretry] [--ptt]
+ *   node tools/nurikabe-dupcheck.mjs <seed> [size] [--noretry] [--ptt] [--clueonly]
  *
  * Examples:
  *   node tools/nurikabe-dupcheck.mjs 123456
@@ -30,6 +30,11 @@
  * chars are fullwidth (one cell each): sea becomes a single █ and the border
  * dash count halves, so each row stays exactly `size` cells.
  *
+ * Pass --clueonly to render the sea as fullwidth space (　) as well, hiding the
+ * solution the same way as the puzzle (see nurikabe-solve). In that mode the
+ * green "sea cell became island" highlight sits on a blank background, so it is
+ * hard to spot; the red "island cell became sea" highlight is unaffected.
+ *
  * Output uses ██ for sea, fullwidth space (　) for island, and fullwidth
  * digits for clue ≤ 9.  Cell width = 2 halfwidth chars throughout.  In each
  * rendered alternative the moved cells are highlighted: solid red for the
@@ -40,12 +45,15 @@
 import { generatePuzzle, generateDraftPuzzle, geom, WHITE, BLACK, formatClue, enumeratePuzzleIslands, islandSwapInfo } from '../js/util/nurikabe-engine.js';
 
 const args = process.argv.slice(2);
-const ptt = args.includes('--ptt');
-const noRetry = args.includes('--noretry');
-const positional = args.filter((a) => a !== '--noretry' && a !== '--ptt');
+const flags = args.filter((a) => a.startsWith('--'));
+const positional = args.filter((a) => !a.startsWith('--'));
+
+const ptt = flags.includes('--ptt');
+const noRetry = flags.includes('--noretry');
+const clueOnly = flags.includes('--clueonly');
 
 const SP = '\u3000';          // fullwidth space (width 2)
-const SEA = ptt ? '█' : '██';   // one fullwidth block (PTT) or two halfwidth (width 2)
+const SEA = clueOnly ? SP : (ptt ? '█' : '██'); // clueonly → blank sea, else one fullwidth block (PTT) or two halfwidth
 const DASH = ptt ? '─' : '─'.repeat(2); // border unit: fullwidth dash vs halfwidth pair
 const HL_OUT = '\x1B[41;31m'; // solid red — island cell moved out (now sea)
 const HL_IN = '\x1B[42m';     // green bg — sea cell moved in (now island)
@@ -86,7 +94,7 @@ const seed = parseInt(positional[0], 10);
 const size = parseInt(positional[1] || '12', 10);
 
 if (Number.isNaN(seed) || seed <= 0) {
-    process.stderr.write('Usage: node tools/nurikabe-dupcheck.mjs <seed> [size] [--noretry] [--ptt]\n');
+    process.stderr.write('Usage: node tools/nurikabe-dupcheck.mjs <seed> [size] [--noretry] [--ptt] [--clueonly]\n');
     process.exit(1);
 }
 
