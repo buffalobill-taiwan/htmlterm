@@ -7,37 +7,56 @@
  * shape rigid. A puzzle ships only when every island ends up rigid; otherwise
  * the board is discarded and the attempt retries with the next carve.
  *
- * Because only rigid boards are ever returned, this tool audits what actually
- * ships: it regenerates the seed's puzzle (single attempt) and re-checks the
- * residual flexibility — a single-cell swap that keeps the whole board a valid
+ * This tool audits the seed's single-attempt board and reports how much
+ * flexibility remains — a single-cell swap that keeps the whole board a valid
  * solution (non-exhaustive). The output is:
- *   seed N RIGID   — a rigid puzzle shipped
- *   seed N FAIL    — residual flexibility (should not occur; signals a bug)
- * and when the single attempt found no rigid board (the retry cost, i.e. the
- * old FAIL rate):
- *   seed N RETRY   — generation failed this seed; caller should advance seed
+ *   seed N RIGID   — a rigid puzzle shipped (generator's pin pass held)
+ *   seed N FAIL    — residual flexibility: a board that could not ship. From
+ *                    the shipped board this signals a bug; by default this is
+ *                    the discarded pre-pin board, audited to show exactly
+ *                    which islands stay flexible (why RETRY).
+ *   seed N RETRY   — no board at all in this attempt (single shot, --noretry,
+ *                    or a carve that failed outright); caller should advance
+ *                    the seed.
  *
  * Usage:
- *   node tools/nurikabe-cluepin.mjs <seed> [size]
+ *   node tools/nurikabe-cluepin.mjs <seed> [size] [--noretry] [--ptt]
  *
  * Examples:
  *   node tools/nurikabe-cluepin.mjs 250
  *   node tools/nurikabe-cluepin.mjs 250 16
  *
  * size defaults to 12 (medium). Use 8 for easy, 16 for hard.
+ *
+ * By default a seed whose rigidity pass fails is reported as FAIL, auditing
+ * the discarded pre-pin board to show which islands stay flexible (that is
+ * why the seed cannot ship). Pass --noretry for single-attempt behaviour:
+ * such seeds then report RETRY instead.
+ *
+ * --ptt is accepted for CLI compatibility with the other nurikabe tools but
+ * has no effect here: this tool prints status lines only, never a board.
  */
 
-import { generatePuzzle, geom, WHITE, BLACK, enumeratePuzzleIslands, islandSwapInfo } from '../js/util/nurikabe-engine.js';
+import { generatePuzzle, generateDraftPuzzle, geom, WHITE, BLACK, enumeratePuzzleIslands, islandSwapInfo } from '../js/util/nurikabe-engine.js';
 
-const seed = parseInt(process.argv[2], 10);
-const size = parseInt(process.argv[3] || '12', 10);
+const args = process.argv.slice(2);
+const noRetry = args.includes('--noretry');
+const positional = args.filter((a) => a !== '--noretry' && a !== '--ptt');
+
+const seed = parseInt(positional[0], 10);
+const size = parseInt(positional[1] || '12', 10);
 
 if (Number.isNaN(seed) || seed <= 0) {
-    process.stderr.write('Usage: node tools/nurikabe-cluepin.mjs <seed> [size]\n');
+    process.stderr.write('Usage: node tools/nurikabe-cluepin.mjs <seed> [size] [--noretry] [--ptt]\n');
     process.exit(1);
 }
 
-const puzzle = generatePuzzle(size, size, { seed, maxAttempts: 1 });
+const opts = { seed, maxAttempts: 1 };
+let puzzle = generatePuzzle(size, size, opts);
+
+if (!puzzle && !noRetry) {
+    puzzle = generateDraftPuzzle(size, size, opts);
+}
 
 if (!puzzle) {
     process.stdout.write(`seed ${seed} RETRY (no rigid ${size}×${size} board in this attempt)\n`);

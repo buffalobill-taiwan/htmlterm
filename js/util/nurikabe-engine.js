@@ -660,6 +660,34 @@ export function pinIslandShapes(state, clues, R, C, g) {
     return true;
 }
 
+// One carve: carve → trimSea → placeClues, shared by generatePuzzle (which then
+// runs the rigidity pass) and generateDraftPuzzle (which returns it as-is).
+// `seed` is the sole entropy source, in the same consumption order the final
+// loop uses (target pick, board carve, clue placement), so draft and shipped
+// boards come from the identical attempt-0 stream.
+function _buildAttempt(R, C, band, seed) {
+    const rng = mulberry32(seed);
+    const target = band.minIslands + Math.floor(rng() * (band.maxIslands - band.minIslands + 1));
+    const res = _generateBoard(R, C, target, rng);
+    if (!res) return null;
+    _trimSea(res.board, R, C);
+    return { board: res.board, clues: _placeClues(res.board, R, C, rng) };
+}
+
+// Flat solver state + clues → the 2D output shape of generatePuzzle.
+function _to2d(R, C, state, clues) {
+    const clues2d = Array.from({ length: R }, () => Array(C).fill(0));
+    const solution2d = Array.from({ length: R }, () => Array(C).fill(WHITE));
+    for (let r = 0; r < R; r++) {
+        for (let c = 0; c < C; c++) {
+            const i = r * C + c;
+            clues2d[r][c] = clues[i];
+            solution2d[r][c] = state[i];
+        }
+    }
+    return { R, C, clues: clues2d, solution: solution2d };
+}
+
 /**
  * Generate a Nurikabe puzzle.
  *
@@ -676,7 +704,9 @@ export function pinIslandShapes(state, clues, R, C, g) {
  * onto the flexible cell, pinning the shape rigid. A puzzle ships only when
  * every island ends up rigid; otherwise the board is discarded and the next
  * attempt carves a fresh puzzle. Every returned puzzle is therefore rigid
- * under the single-shape-swap check (unique solution).
+ * under the single-shape-swap check (unique solution). The discarded board,
+ * if needed (e.g. to audit why a seed fails), is available via
+ * `generateDraftPuzzle`.
  *
  * Output cells are two-state: a clue grid (`clues[r][c]` = island size, 0 = none)
  * plus a solution grid (`solution[r][c]` = WHITE or BLACK). The solver's three
@@ -694,34 +724,55 @@ export function generatePuzzle(R, C, opts = {}) {
     const deadline = Date.now() + timeBudgetMs;
 
     const band = islandCountBand(R, C);
+    const g = geom(R, C);
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
         if (Date.now() > deadline) break;
-        const rng = mulberry32(seed + attempt * 2654435761);
-        const target = band.minIslands + Math.floor(rng() * (band.maxIslands - band.minIslands + 1));
-        const res = _generateBoard(R, C, target, rng);
-        if (!res) continue;
-        _trimSea(res.board, R, C);
-        const clues = _placeClues(res.board, R, C, rng);
+        const d = _buildAttempt(R, C, band, seed + attempt * 2654435761);
+        if (!d) continue;
 
         // Final rule (clue-pin): move each flexible island's clue onto a swapped-in
         // cell so the shape goes rigid. On FAIL the board is discarded (the state/
         // clues are already restored internally) and the next attempt carves anew,
         // so only fully rigid puzzles are ever returned.
-        const g = geom(R, C);
         const state = new Int8Array(R * C);
-        for (let i = 0; i < R * C; i++) state[i] = res.board[i] === _W ? WHITE : BLACK;
-        if (!pinIslandShapes(state, clues, R, C, g)) continue;
+        for (let i = 0; i < R * C; i++) state[i] = d.board[i] === _W ? WHITE : BLACK;
+        if (!pinIslandShapes(state, d.clues, R, C, g)) continue;
+        return _to2d(R, C, state, d.clues);
+    }
+    return null;
+}
 
-        const clues2d = Array.from({ length: R }, () => Array(C).fill(0));
-        const solution2d = Array.from({ length: R }, () => Array(C).fill(WHITE));
-        for (let r = 0; r < R; r++) {
-            for (let c = 0; c < C; c++) {
-                const i = r * C + c;
-                clues2d[r][c] = clues[i];
-                solution2d[r][c] = state[i];
-            }
-        }
-        return { R, C, clues: clues2d, solution: solution2d };
+/**
+ * Carve a puzzle but skip the final rigidity pass (the pre-pin board).
+ *
+ * Runs exactly the carve → trimSea → placeClues step of `generatePuzzle`. A
+ * carve that is already all-rigid yields exactly the shipped board; a carve
+ * that only ships because the pin pass adopts a swapped cell/clue differs from
+ * it. When the rigidity pass fails (RETRY) the draft is exactly the board
+ * `generatePuzzle` discards — the offline tools use it to show what the solver
+ * would have to deal with, falling back to it only after `generatePuzzle`
+ * returns null.
+ *
+ * @param {number} R
+ * @param {number} C
+ * @param {{ seed?: number, maxAttempts?: number, timeBudgetMs?: number }} opts
+ * @returns {{ R: number, C: number, clues: number[][], solution: number[][] } | null}
+ */
+export function generateDraftPuzzle(R, C, opts = {}) {
+    const seed = opts.seed ?? (Date.now() & 0x7fffffff);
+    const maxAttempts = opts.maxAttempts ?? 1;
+    const timeBudgetMs = opts.timeBudgetMs ?? 3000;
+    const deadline = Date.now() + timeBudgetMs;
+
+    const band = islandCountBand(R, C);
+    const g = geom(R, C);
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        if (Date.now() > deadline) break;
+        const d = _buildAttempt(R, C, band, seed + attempt * 2654435761);
+        if (!d) continue;
+        const state = new Int8Array(R * C);
+        for (let i = 0; i < R * C; i++) state[i] = d.board[i] === _W ? WHITE : BLACK;
+        return _to2d(R, C, state, d.clues);
     }
     return null;
 }
