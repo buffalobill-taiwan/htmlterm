@@ -414,8 +414,8 @@ export class NurikabeCmd extends CmdBase {
         const msg = won
             ? bold(green('  Congratulations!')) + '  ' + yellow('Time: ' + timeStr)
             : bold(red('  Game Over')) + '  ' + yellow('Time: ' + timeStr);
-        term.write('\x1B[' + (fRow - 1) + ';1H' + msg);
-        term.write('\x1B[' + fRow + ';1H' + gray('  Press [n]ew game or [q]uit'));
+        term.write('\x1B[' + fRow + ';1H' + msg);
+        term.write('\x1B[' + (fRow + 1) + ';1H' + gray('  Press [n]ew game or [q]uit'));
     }
 
     _move(dr, dc) {
@@ -583,7 +583,7 @@ export class NurikabeCmd extends CmdBase {
             this._timerInterval = null;
         }
         if (this._size) {
-            term.write('\x1B[' + (this._footerRow() + 1) + ';1H');
+            term.write('\x1B[' + (this._footerRow() + 2) + ';1H');
         }
         this.close();
     }
