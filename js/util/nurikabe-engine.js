@@ -1,7 +1,6 @@
 // Nurikabe engine — solver + generator.
 // Ported from https://github.com/sen-ltd/nurikabe (MIT-style reference impl).
 
-export const UNKNOWN = 0;
 export const WHITE = 1;
 export const BLACK = 2;
 
@@ -95,8 +94,6 @@ function whiteRegion(state, g, p, start, seen) {
 }
 
 export function isSolved(state, g, p) {
-    for (let i = 0; i < g.N; i++) if (state[i] === UNKNOWN) return false;
-
     const seen = new Uint8Array(g.N);
     for (let i = 0; i < g.N; i++) {
         if (state[i] !== WHITE || seen[i]) continue;
@@ -709,8 +706,7 @@ function _to2d(R, C, state, clues) {
  * `generateDraftPuzzle`.
  *
  * Output cells are two-state: a clue grid (`clues[r][c]` = island size, 0 = none)
- * plus a solution grid (`solution[r][c]` = WHITE or BLACK). The solver's three
- * states (UNKNOWN/WHITE/BLACK) exist only during solving, never in this output.
+ * plus a solution grid (`solution[r][c]` = WHITE or BLACK).
  *
  * @param {number} R
  * @param {number} C
