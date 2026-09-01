@@ -215,13 +215,14 @@ function _keepsSeaConnected(board, R, C, v) {
 // which starts with ⌊R/2⌋×⌊C/2⌋ single-cell islands, then randomly flip whole
 // odd rows or columns, then whiten black cells (keeping the sea connected) until
 // exactly `target` islands remain. Returns null if unreachable.
-function _generateBoard(R, C, target, rng, { maxRestarts = 50, maxStuck = 5000 } = {}) {
+function _generateBoard(R, C, target, rng, { maxRestarts = 50, maxStuck = 5000 } = {}, onStage = null) {
   const N = R * C;
   for (let restart = 0; restart < maxRestarts; restart++) {
     const board = new Uint8Array(N);
     for (let r = 0; r < R; r++)
       for (let c = 0; c < C; c++)
         board[_idx(r, c, C)] = (r % 2 === 0 || c % 2 === 0) ? _B : _W;
+    if (onStage) onStage(board, 'initial');
 
     // Randomize the initial board to avoid predictable patterns
     if (rng() < 0.5) {
@@ -243,6 +244,7 @@ function _generateBoard(R, C, target, rng, { maxRestarts = 50, maxStuck = 5000 }
         }
       }
     }
+    if (onStage) onStage(board, 'flipped');
 
     const dsu = new _DSU(N);
     for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) {
@@ -258,7 +260,10 @@ function _generateBoard(R, C, target, rng, { maxRestarts = 50, maxStuck = 5000 }
     }
     let islands = roots.size;
 
-    if (islands === target) return { board, islands, R, C };
+    if (islands === target) {
+      if (onStage) onStage(board, 'carved');
+      return { board, islands, R, C };
+    }
     if (islands < target) return null;
 
     const blackCells = [];
@@ -306,7 +311,10 @@ function _generateBoard(R, C, target, rng, { maxRestarts = 50, maxStuck = 5000 }
       blackCells.pop();
       stuck = 0;
     }
-    if (islands === target) return { board, islands, R, C };
+    if (islands === target) {
+      if (onStage) onStage(board, 'carved');
+      return { board, islands, R, C };
+    }
   }
   return null;
 }
@@ -655,6 +663,23 @@ export function pinIslandShapes(state, clues, R, C, g) {
         }
     }
     return true;
+}
+
+// One carve: carve → trimSea → placeClues, shared by generatePuzzle (which then
+// runs the rigidity pass) and generateDraftPuzzle (which returns it as-is).
+// `seed` is the sole entropy source, in the same consumption order the final
+// loop uses (target pick, board carve, clue placement), so draft and shipped
+// boards come from the identical attempt-0 stream.
+export function buildAttempt(R, C, band, seed, onStage = null) {
+    const rng = mulberry32(seed);
+    const target = band.minIslands + Math.floor(rng() * (band.maxIslands - band.minIslands + 1));
+    const res = _generateBoard(R, C, target, rng, undefined, onStage);
+    if (!res) return null;
+    const carve = res.board.slice();
+    _trimSea(res.board, R, C);
+    const trimmed = res.board.slice();
+    const clues = _placeClues(res.board, R, C, rng);
+    return { board: res.board, clues, carve, trimmed, islands: target };
 }
 
 // One carve: carve → trimSea → placeClues, shared by generatePuzzle (which then
