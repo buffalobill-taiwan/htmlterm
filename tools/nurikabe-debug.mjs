@@ -48,8 +48,11 @@ const clueOnly = flags.includes('--clueonly');
 const SP = '\u3000';        // fullwidth space (width 2)
 const SEA = clueOnly ? SP : (ptt ? '█' : '██'); // clueonly → blank sea, else one fullwidth block (PTT) or two halfwidth
 const DASH = ptt ? '─' : '─'.repeat(2); // border unit: fullwidth dash vs halfwidth pair
+const HL_OUT = '\x1B[41;31m'; // solid red — island cell that can change shape (become sea)
 const HL_IN = '\x1B[42m';   // green bg — sea cell that can change shape (become island)
 const HL_RESET = '\x1B[0m';
+const FLEX_OUT = 1;         // flex[] marker: island cell that can become sea (red)
+const FLEX_IN = 2;          // flex[] marker: sea cell that can become island (green)
 
 const B_SEA = 1;   // internal black (sea)
 const W_ISL = 0;   // internal white (island)
@@ -57,8 +60,9 @@ const W_ISL = 0;   // internal white (island)
 // `board` is a flat array in the engine's internal model (B_SEA/W_ISL).
 // `clues` is a flat array of clue values (0 = none). Any element may be null to
 // mark "not yet meaningful at this stage" and render as blank.
-// `hl` is a Set of cell indices whose sea is highlighted (RETRY flexible cells).
-function render(R, C, board, clues = null, hl = null) {
+// `flex` is a Set of flexible cell indices (RETRY): island cells → red,
+// sea cells → green, matching nurikabe-dupcheck's HL_OUT/HL_IN.
+function render(R, C, board, clues = null, flex = null) {
     const lines = [];
     const inner = DASH.repeat(C);
     lines.push('┌' + inner + '┐');
@@ -73,7 +77,10 @@ function render(R, C, board, clues = null, hl = null) {
                 // Flexible sea cells render as a blank green cell (as in
                 // nurikabe-dupcheck), not the solid SEA block, so the green
                 // background stays visible.
-                row += (hl && hl.has(i)) ? HL_IN + SP + HL_RESET : SEA;
+                row += (flex && flex[i] === FLEX_IN) ? HL_IN + SP + HL_RESET : SEA;
+            } else if (flex && flex[i] === FLEX_OUT) {
+                // Flexible island cell that can become sea — solid red.
+                row += HL_OUT + SP + HL_RESET;
             } else {
                 row += SP;
             }
@@ -143,11 +150,12 @@ if (pinned) {
     chunks.push(render(size, size, finalState, cluesFlat));
 } else if (!noRetry) {
     // The pre-pin board was discarded: it has residual flexibility. Find every
-    // flexible island and highlight (green, as in nurikabe-dupcheck) the sea
-    // cells it could legally move into — the sea whose shape can change.
+    // flexible island and highlight, as in nurikabe-dupcheck, both the sea cells
+    // it could legally move into (green) and the island cells it could vacate
+    // (red) — the cells whose shape can change.
     const p = { R: size, C: size, clues: cluesFlat };
     const islands = enumeratePuzzleIslands(state, g);
-    const flexibleSea = new Set();
+    const flex = new Int8Array(size * size);
     const flexible = [];
     for (const isl of islands) {
         const { swaps } = islandSwapInfo(state, g, p, isl.cells);
@@ -155,16 +163,19 @@ if (pinned) {
             let clue = 0;
             for (const c of isl.cells) if (cluesFlat[c] > 0) { clue = cluesFlat[c]; break; }
             let sea = 0;
-            for (const { b } of swaps) { flexibleSea.add(b); sea++; }
+            for (const { a, b } of swaps) {
+                flex[a] = FLEX_OUT;
+                if (flex[b] === 0) { flex[b] = FLEX_IN; sea++; }
+            }
             flexible.push(`clue${clue}(${sea} sea cells)`);
         }
     }
     const finalState = new Int8Array(size * size);
     for (let i = 0; i < size * size; i++) finalState[i] = state[i] === BLACK ? B_SEA : W_ISL;
     chunks.push('[6] rigidity pass failed (RETRY) — showing pre-pin board');
-    chunks.push(render(size, size, finalState, cluesFlat, flexibleSea));
+    chunks.push(render(size, size, finalState, cluesFlat, flex));
     chunks.push(flexible.length
-        ? `  flexible islands: ${flexible.join(', ')}  (green sea = cells it can move into)`
+        ? `  flexible islands: ${flexible.join(', ')}  (red cell = vacated island, green = sea it moves into)`
         : '  (no flexible islands detected)');
 } else {
     process.stderr.write(`Failed to generate ${size}×${size} puzzle with seed ${seed}.\n`);
