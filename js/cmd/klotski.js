@@ -1,11 +1,14 @@
-import { term } from '../system/sys.js';
+import { system, term } from '../system/sys.js';
 import { CmdBase } from './CmdBase.js';
 import { Dialog } from '../dialog/Dialog.js';
+import { ConfirmDialog } from '../dialog/ConfirmDialog.js';
 import { centeredDialogPos } from '../dialog/position.js';
 import { parseCSI } from '../system/TextInputModel.js';
 import { bold, yellow, cyan, gray, CURSOR_HIDE, makeCell } from '../util/sgr.js';
 import { VirtualBuffer } from '../util/VirtualBuffer.js';
 import { bufWidth } from '../util/display-width.js';
+import { LEVELS } from '../util/klotski-levels.js';
+import klotskiSolutions from '../util/klotski-solutions.js';
 
 const COLS = 4;
 const ROWS = 5;
@@ -19,20 +22,6 @@ const SIDEBAR_Y = 3;
 const SIDEBAR_W = 36;
 const SIDEBAR_H = 14;
 const FINISH_FALL = 6;
-
-const LEVELS = [
-    { name: '比翼橫空', mini: 28, board: 'BBAA' + 'CCAA' + 'DDEE' + 'N@OH' + 'P@QH' },
-    { name: '捷足先登', mini: 32, board: 'NAAO' + 'PAAQ' + '@BB@' + 'HIJK' + 'HIJK' },
-    { name: '勇闖五關', mini: 34, board: 'NAAO' + 'PAAQ' + 'BBCC' + 'DDEE' + '@FF@' },
-    { name: '五將逼宮', mini: 36, board: 'BBCC' + 'HAAI' + 'HAAI' + 'NDDO' + 'P@@Q' },
-    { name: '四將連關', mini: 39, board: 'AABB' + 'AACC' + 'HIDD' + 'HINO' + 'P@@Q' },
-    { name: '雨聲淅瀝', mini: 47, board: 'HAAN' + 'HAAO' + 'IBBJ' + 'IK@J' + 'PK@Q' },
-    { name: '左右佈兵', mini: 54, board: 'NAAO' + 'PAAQ' + 'HIJK' + 'HIJK' + '@BB@' },
-    { name: '齊頭並進', mini: 60, board: 'HAAI' + 'HAAI' + 'NOPQ' + 'JBBK' + 'J@@K' },
-    { name: '兵分三路', mini: 72, board: 'NAAO' + 'HAAI' + 'HBBI' + 'JPQK' + 'J@@K' },
-    { name: '橫刀立關', mini: 81, board: 'HAAI' + 'HAAI' + 'JBBK' + 'JNOK' + 'P@@Q' },
-    { name: '層層設防', mini: 102, board: 'HAAI' + 'HAAI' + 'NBBO' + 'PCCQ' + '@DD@' },
-];
 
 const NAME_COLOR = {
     '曹': 9,
@@ -131,6 +120,7 @@ export class KlotskiCmd extends CmdBase {
     }
 
     _showLevelMenu() {
+        this._stopAuto();
         this._cancelFinishAnim();
         this._stopTimer();
         this._completed = false;
@@ -329,11 +319,11 @@ export class KlotskiCmd extends CmdBase {
         vb.writeStr(5, 0, gray(' 目標 ') + bold('≤ ' + lv.mini));
         vb.writeStr(6, 0, gray(' 時間 ') + bold(_fmtTime(this._time)));
         vb.writeStr(7, 0, gray('─'.repeat(20)));
-        vb.writeStr(9, 0, gray(' Space/↵ 選取方塊'));
-        vb.writeStr(10, 0, gray(' ←↑↓→ 滑動'));
+        vb.writeStr(9, 0, gray('  Space/↵ 選取'));
+        vb.writeStr(10, 0, gray('  ←↑↓→   滑動'));
         vb.writeStr(11, 0, gray(' Z 撤銷  R 重設'));
         vb.writeStr(12, 0, gray(' N 新關  P 暫停'));
-        vb.writeStr(13, 0, gray(' Q 離開'));
+        vb.writeStr(13, 0, gray(' A 自動  Q 離開'));
     }
 
     _setCell(buf, r, c, cell) {
@@ -490,10 +480,12 @@ export class KlotskiCmd extends CmdBase {
         if (this._completed || this._paused) return;
         const b = this._blocks[id];
         if (!this._canSlide(id, dr, dc)) return;
-        const last = this._history[this._history.length - 1];
-        if (!last || last.id !== id) {
-            this._history.push({ id, fromR: b.r, fromC: b.c });
-            this._moves++;
+        if (!this._autoPlay) {
+            const last = this._history[this._history.length - 1];
+            if (!last || last.id !== id) {
+                this._history.push({ id, fromR: b.r, fromC: b.c });
+                this._moves++;
+            }
         }
         for (let dy = 0; dy < b.h; dy++)
             for (let dx = 0; dx < b.w; dx++)
@@ -526,6 +518,7 @@ export class KlotskiCmd extends CmdBase {
 
     _restart() {
         const lv = LEVELS[this._levelIdx];
+        this._stopAuto();
         this._stopTimer();
         this._cancelFinishAnim();
         this._moves = 0;
@@ -569,6 +562,57 @@ export class KlotskiCmd extends CmdBase {
         if (this._completed) return;
         this._paused = !this._paused;
         this._render();
+    }
+
+    _showAutoConfirm() {
+        if (this._completed || this._autoPlay) return;
+        system.createDialog(ConfirmDialog, 'klotski-auto', {
+            title: '確認',
+            message: '是否自動演示？\n將重設局面並自動解題。',
+            footer: '←→ 選擇  ↩ 確認  ESC 取消',
+            onConfirm: () => this._startAuto(),
+            onCancel: () => {},
+        });
+    }
+
+    _stopAuto() {
+        this._autoPlay = false;
+        if (this._autoTimer) { clearTimeout(this._autoTimer); this._autoTimer = null; }
+    }
+
+    _startAuto() {
+        this._stopAuto();
+        const lv = LEVELS[this._levelIdx];
+        this._stopTimer();
+        this._cancelFinishAnim();
+        this._moves = 0;
+        this._time = 0;
+        this._completed = false;
+        this._finishing = false;
+        this._animOffset = 0;
+        this._paused = false;
+        this._selected = null;
+        this._history = [];
+        this._cursor = { r: 2, c: 1 };
+        this._buildBlocks(lv.board);
+        this._buildBoardGrid();
+        this._render();
+        const flat = klotskiSolutions[lv.board];
+        if (!flat) { this._startTimer(); return; }
+        this._autoPlay = true;
+        let i = 0;
+        let lastId = -1;
+        const step = () => {
+            if (this._completed) { this._stopAuto(); this._startTimer(); return; }
+            if (this._paused) { this._autoTimer = setTimeout(step, 300); return; }
+            if (i >= flat.length) { this._stopAuto(); this._startTimer(); return; }
+            const mv = flat[i++];
+            if (mv.id !== lastId) this._moves++;
+            lastId = mv.id;
+            this._slide(mv.id, mv.dr, mv.dc);
+            this._autoTimer = setTimeout(step, 300);
+        };
+        this._autoTimer = setTimeout(step, 500);
     }
 
     _startFinishAnim() {
@@ -621,6 +665,7 @@ export class KlotskiCmd extends CmdBase {
     }
 
     _quit() {
+        this._stopAuto();
         this._cancelFinishAnim();
         if (this._levelDialog) {
             this._levelDialog.close();
@@ -651,6 +696,25 @@ export class KlotskiCmd extends CmdBase {
                 const ch = data.toLowerCase();
                 if (ch === 'n') { this._showLevelMenu(); return; }
                 if (ch === 'q') { this._quit(); return; }
+            }
+            return;
+        }
+
+        if (this._autoPlay) {
+            if (code === 0x1B) {
+                const s = typeof data === 'string' ? data : '';
+                if (s === '\x1B[A' || s === '\x1B[B' || s === '\x1B[C' || s === '\x1B[D') return;
+                if (s === '\x1B[3~' || s === '\x1B[2~') return;
+                if (s === '\x1B[H' || s === '\x1B[F') return;
+                if (s === '\x1B[5~' || s === '\x1B[6~') return;
+                this._quit(); return;
+            }
+            if (typeof data === 'string') {
+                const ch = data.toLowerCase();
+                if (ch === 'p') { this._togglePause(); return; }
+                if (ch === 'r') { this._restart(); return; }
+                if (ch === 'q') { this._quit(); return; }
+                if (ch === 'n') { this._showLevelMenu(); return; }
             }
             return;
         }
@@ -698,6 +762,7 @@ export class KlotskiCmd extends CmdBase {
             if (ch === 'p') { this._togglePause(); return; }
             if (ch === 'r') { this._restart(); return; }
             if (ch === 'n') { this._showLevelMenu(); return; }
+            if (ch === 'a') { this._showAutoConfirm(); return; }
             if (ch === 'q') { this._quit(); return; }
         }
     }
