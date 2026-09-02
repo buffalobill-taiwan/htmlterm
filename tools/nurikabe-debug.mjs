@@ -14,7 +14,7 @@
  * Each stage of the generator (matching the attempt-0 stream used by
  * generatePuzzle / generateDraftPuzzle) is printed in order:
  *   1. initial   — checkerboard where even rows/cols are sea
- *   2. flips     — after randomly flipping odd rows OR odd columns
+ *   2. flips     — after flipping odd rows OR odd columns, then whole-board mirroring
  *   3. carve     — after thinning to the chosen island count
  *   4. trim      — after sea trim (islands filled / minimal sea)
  *   5. clues     — after placing the clue cells
@@ -127,8 +127,8 @@ chunks.push('[1] initial — even rows/cols are sea');
 chunks.push(render(size, size, stages['initial']));
 chunks.push('');
 
-chunks.push('[2] after odd-row/odd-col flips');
-chunks.push(render(size, size, stages['flipped']));
+chunks.push('[2] after odd-row/odd-col flips and whole-board mirroring');
+chunks.push(render(size, size, stages['mirrored']));
 chunks.push('');
 
 chunks.push(`[3] carved to island count = ${d.islands}`);
