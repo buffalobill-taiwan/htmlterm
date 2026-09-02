@@ -213,8 +213,9 @@ function _keepsSeaConnected(board, R, C, v) {
 
 // Carve from a checkerboard (black if r even or c even; white only on odd×odd),
 // which starts with ⌊R/2⌋×⌊C/2⌋ single-cell islands, then randomly flip whole
-// odd rows or columns, then whiten black cells (keeping the sea connected) until
-// exactly `target` islands remain. Returns null if unreachable.
+// odd rows or columns, then optionally mirror the whole board top-bottom and/or
+// left-right, then whiten black cells (keeping the sea connected) until exactly
+// `target` islands remain. Returns null if unreachable.
 function _generateBoard(R, C, target, rng, { maxRestarts = 50, maxStuck = 5000 } = {}, onStage = null) {
   const N = R * C;
   for (let restart = 0; restart < maxRestarts; restart++) {
@@ -245,6 +246,31 @@ function _generateBoard(R, C, target, rng, { maxRestarts = 50, maxStuck = 5000 }
       }
     }
     if (onStage) onStage(board, 'flipped');
+
+    // Whole-board mirroring: after the per-row/column flips the even-N checker
+    // board still leaves the bottom/right edges with one more island corner than
+    // the top/left. Mirror the whole board top-bottom and/or left-right so border
+    // distribution becomes symmetric. Mirroring is a positional bijection, so it
+    // preserves island count and size and cannot affect the carve that follows.
+    if (rng() < 0.5) {
+      // vertical (top-bottom) flip
+      for (let r = 0; r < Math.floor(R / 2); r++) {
+        for (let c = 0; c < C; c++) {
+          const a = _idx(r, c, C), b = _idx(R - 1 - r, c, C);
+          const t = board[a]; board[a] = board[b]; board[b] = t;
+        }
+      }
+    }
+    if (rng() < 0.5) {
+      // horizontal (left-right) flip
+      for (let r = 0; r < R; r++) {
+        for (let c = 0; c < Math.floor(C / 2); c++) {
+          const a = _idx(r, c, C), b = _idx(r, C - 1 - c, C);
+          const t = board[a]; board[a] = board[b]; board[b] = t;
+        }
+      }
+    }
+    if (onStage) onStage(board, 'mirrored');
 
     const dsu = new _DSU(N);
     for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) {
