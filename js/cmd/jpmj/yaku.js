@@ -1015,8 +1015,10 @@ export function evaluateHand(hand, openMelds, winTile, winType, gameState) {
         const yaku = checkAllYaku(handInfo, { ...gameState, winType, winTile });
         const standaloneYaku = checkStandaloneYaku(handInfo, { ...gameState, winType, winTile });
         const fu = calculateFu(handInfo, { ...gameState, winType, winTile });
-        const doraHan = gameState && gameState.doraIndicators ? countDora(allTiles, gameState.doraIndicators) : 0;
-        const uraDoraHan = gameState && gameState.uraDoraIndicators && gameState.isRiichi ? countDora(allTiles, gameState.uraDoraIndicators) : 0;
+        const meldTiles = openMelds.flatMap(m => m.tiles);
+        const allTilesForDora = allTiles.concat(meldTiles);
+        const doraHan = gameState && gameState.doraIndicators ? countDora(allTilesForDora, gameState.doraIndicators) : 0;
+        const uraDoraHan = gameState && gameState.uraDoraIndicators && gameState.isRiichi ? countDora(allTilesForDora, gameState.uraDoraIndicators) : 0;
         const totalHan = yaku.reduce((s, y) => s + y.han, 0) + doraHan + uraDoraHan;
         handInfo.yaku = yaku;
         handInfo.standaloneYaku = standaloneYaku;
