@@ -28,7 +28,7 @@ dialogs, and TSR-style widgets.
 ### Demo shell
 
 - Frame-stack command runner with rAF-based Typewriter output
-- 30 built-in commands (games, widgets, interactive tests — see below)
+- 31 built-in commands (games, widgets, interactive tests — see below)
 - Dialog framework (`MenuDialog`, `InputDialog`, `ShowDialog`) with overlay compositing
 - VirtualBuffer compositing abstraction for nested UI layout
 - TSR widgets (clock, DVD logo) — draggable, position remembered
@@ -96,6 +96,7 @@ Open `index.html` in a modern browser, or visit the live demo:
 | `help` | Show command list; `help <cmd>` for details and usage |
 | `klotski` | Play Klotski 華容道 sliding-block puzzle (11 fayaa layouts) |
 | `jpmj` | Play Japanese Mahjong (14-tile riichi style, 6 AI personalities, riichi/dora/honba) |
+| `memory` | Play a card-matching Memory game (flip to find matching pairs, three difficulty levels) |
 | `menu` | Open command menu dialog |
 | `mbti` | MBTI personality test (interactive) |
 | `minesw` | Play Minesweeper (three difficulty levels) |
