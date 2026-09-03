@@ -31,5 +31,6 @@ export { NurikabeCmd } from './nurikabe.js';
 export { PuyoCmd } from './puyo.js';
 export { GweledCmd } from './gweled.js';
 export { KlotskiCmd } from './klotski.js';
+export { MemoryCmd } from './memory.js';
 export { JpmjCmd } from './jpmj/index.js';
 
