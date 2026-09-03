@@ -21,7 +21,7 @@ const NUM_COLORS = [
     '\x1B[90m',                // 8 — gray
 ];
 
-const CELL_HIDDEN = '・';  // ・ katakana middle dot (hidden cell)
+const CELL_HIDDEN = '▒▒';  // unopened cell
 const CELL_EMPTY  = '　';  // fullwidth space (revealed empty, 0 neighbors)
 const CELL_FLAG   = 'Ｆ';  // Ｆ
 const CELL_MINE   = '＊';  // ＊
