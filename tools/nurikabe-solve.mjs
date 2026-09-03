@@ -11,10 +11,12 @@
  *
  * size defaults to 12 (medium). Use 8 for easy, 16 for hard.
  *
- * By default a seed whose rigidity pass fails (RETRY) is shown as its
- * pre-pin board — the one the generator discards — instead of failing. Pass
- * --noretry for single-attempt behaviour: such seeds then report
- * "Failed to generate" instead.
+ * Like the live game, a seed whose rigidity pass fails (RETRY) is discarded
+ * and the next seed (seed+1, seed+2, …) is tried until one ships, so the board
+ * shown is exactly the one the player would get (which may come from a later
+ * seed). The shipping seed is reported in the header. Pass --noretry for
+ * single-attempt behaviour: such seeds then report "Failed to generate"
+ * instead of retrying.
  *
  * Output uses ██ for sea, fullwidth space (　) for island, and fullwidth
  * digits for clue ≤ 9.  Cell width = 2 halfwidth chars throughout.
@@ -28,7 +30,7 @@
  * the solution is not revealed.
  */
 
-import { generatePuzzle, generateDraftPuzzle, formatClue, BLACK } from '../js/util/nurikabe-engine.js';
+import { generatePuzzle, formatClue, BLACK } from '../js/util/nurikabe-engine.js';
 
 const args = process.argv.slice(2);
 const flags = args.filter((a) => a.startsWith('--'));
@@ -72,11 +74,13 @@ if (Number.isNaN(seed) || seed <= 0) {
     process.exit(1);
 }
 
-const opts = { seed, maxAttempts: 1 };
-let puzzle = generatePuzzle(size, size, opts);
-
-if (!puzzle && !noRetry) {
-    puzzle = generateDraftPuzzle(size, size, opts);
+const retryCap = size <= 8 ? 300 : size <= 12 ? 600 : 1200;
+const maxAttempts = noRetry ? 1 : retryCap;
+let puzzle = null;
+let shippedSeed = seed;
+for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const p = generatePuzzle(size, size, { seed: seed + attempt, maxAttempts: 1 });
+    if (p) { puzzle = p; shippedSeed = seed + attempt; break; }
 }
 
 if (!puzzle) {
@@ -84,4 +88,5 @@ if (!puzzle) {
     process.exit(1);
 }
 
+process.stdout.write(`Nurikabe seed ${seed} ships as ${shippedSeed}  size ${size}\n\n`);
 process.stdout.write(formatSolution(puzzle) + '\n');

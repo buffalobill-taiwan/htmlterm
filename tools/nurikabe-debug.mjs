@@ -11,8 +11,9 @@
  *
  * size defaults to 12 (medium). Use 8 for easy, 16 for hard.
  *
- * Each stage of the generator (matching the attempt-0 stream used by
- * generatePuzzle / generateDraftPuzzle) is printed in order:
+ * The stages of the seed that actually ships (matching the attempt stream used
+ * by generatePuzzle, retrying seed+1, seed+2, … until one passes rigid) are
+ * printed in order:
  *   1. initial   — checkerboard where even rows/cols are sea
  *   2. flips     — after flipping odd rows OR odd columns, then whole-board mirroring
  *   3. carve     — after thinning to the chosen island count
@@ -20,9 +21,9 @@
  *   5. clues     — after placing the clue cells
  *   6. final     — after the rigidity (clue-pin) pass
  *
- * By default a seed whose rigidity pass fails (RETRY) is shown as its pre-pin
- * final board instead of failing. Pass --noretry for single-attempt behaviour:
- * such seeds then report "Failed to generate" instead.
+ * The shipping seed is reported in the header, so the board shown is exactly
+ * the one the player would get. Pass --noretry for single-attempt behaviour:
+ * such seeds then report "Failed to generate" instead of retrying.
  *
  * Output uses ██ for sea, fullwidth space (　) for island, and fullwidth digits
  * for clue ≤ 9. Cell width = 2 halfwidth chars throughout.
@@ -35,7 +36,7 @@
  * solution the same way as the puzzle (see nurikabe-solve).
  */
 
-import { geom, WHITE, BLACK, formatClue, islandCountBand, pinIslandShapes, buildAttempt, enumeratePuzzleIslands, islandSwapInfo } from '../js/util/nurikabe-engine.js';
+import { generatePuzzle, geom, WHITE, BLACK, formatClue, islandCountBand, pinIslandShapes, buildAttempt, enumeratePuzzleIslands, islandSwapInfo } from '../js/util/nurikabe-engine.js';
 
 const args = process.argv.slice(2);
 const flags = args.filter((a) => a.startsWith('--'));
@@ -100,8 +101,30 @@ if (Number.isNaN(seed) || seed <= 0) {
 }
 
 const band = islandCountBand(size, size);
+
+// Find the seed that actually ships, exactly as the live game: discard the
+// given seed if its rigidity pass fails and try seed+1, seed+2, … until one
+// ships (or the game's attempt cap runs out). --noretry keeps the audit path:
+// a single attempt on the given seed, failing loudly on RETRY.
+const retryCap = size <= 8 ? 300 : size <= 12 ? 600 : 1200;
+let shippedSeed = seed;
+if (!noRetry) {
+    let found = false;
+    for (let attempt = 0; attempt < retryCap; attempt++) {
+        if (generatePuzzle(size, size, { seed: seed + attempt, maxAttempts: 1 })) {
+            shippedSeed = seed + attempt;
+            found = true;
+            break;
+        }
+    }
+    if (!found) {
+        process.stderr.write(`Failed to generate ${size}×${size} puzzle with seed ${seed}.\n`);
+        process.exit(1);
+    }
+}
+
 const stages = {};
-const attemptSeed = seed; // attempt 0: seed + 0 * 2654435761
+const attemptSeed = shippedSeed;
 
 const d = buildAttempt(size, size, band, attemptSeed, (board, tag) => {
     if (board) stages[tag] = board.slice();
@@ -116,11 +139,13 @@ if (!d) {
 const state = new Int8Array(size * size);
 for (let i = 0; i < size * size; i++) state[i] = d.trimmed[i] === B_SEA ? BLACK : WHITE;
 const cluesFlat = d.clues;
+const prePinClues = Int32Array.from(d.clues);
 const g = geom(size, size);
 const pinned = pinIslandShapes(state, cluesFlat, size, size, g);
 
 const chunks = [];
-chunks.push(`Nurikabe seed ${seed}  size ${size}  (island count ${d.islands})`);
+const headerSeed = noRetry ? seed : shippedSeed;
+chunks.push(`Nurikabe seed ${seed} ships as ${headerSeed}  size ${size}  (island count ${d.islands})`);
 chunks.push('');
 
 chunks.push('[1] initial — even rows/cols are sea');
@@ -140,19 +165,47 @@ chunks.push(render(size, size, d.trimmed));
 chunks.push('');
 
 chunks.push('[5] clue cells placed');
-chunks.push(render(size, size, d.trimmed, cluesFlat));
+chunks.push(render(size, size, d.trimmed, prePinClues));
 chunks.push('');
 
 if (pinned) {
     const finalState = new Int8Array(size * size);
     for (let i = 0; i < size * size; i++) finalState[i] = state[i] === BLACK ? B_SEA : W_ISL;
-    chunks.push('[6] final — rigid (clue-pin) solution');
+    // Report which clue cells the pin pass relocated (pre-pin → post-pin).
+    // The pin pass empties one pre-pin clue cell and fills a new cell with the
+    // same value, so pair each vacated cell with the cell that gained its value.
+    const left = new Map();   // value -> [pre-pin cells now empty]
+    const entered = new Map(); // value -> [post-pin cells that were empty]
+    for (let i = 0; i < size * size; i++) {
+        if (prePinClues[i] > 0 && cluesFlat[i] === 0) {
+            const v = prePinClues[i];
+            if (!left.has(v)) left.set(v, []);
+            left.get(v).push(i);
+        } else if (prePinClues[i] === 0 && cluesFlat[i] > 0) {
+            const v = cluesFlat[i];
+            if (!entered.has(v)) entered.set(v, []);
+            entered.get(v).push(i);
+        }
+    }
+    const moved = [];
+    for (const [v, from] of left) {
+        const to = entered.get(v) || [];
+        for (let k = 0; k < from.length; k++) {
+            const a = from[k], b = to[k];
+            moved.push(`clue${v} (${Math.floor(a / size)},${a % size})→(${Math.floor(b / size)},${b % size})`);
+        }
+    }
+    const pinNote = moved.length
+        ? `  [moved clues: ${moved.join(', ')}]`
+        : '';
+    chunks.push('[6] final — rigid (clue-pin) solution' + pinNote);
     chunks.push(render(size, size, finalState, cluesFlat));
-} else if (!noRetry) {
-    // The pre-pin board was discarded: it has residual flexibility. Find every
-    // flexible island and highlight, as in nurikabe-dupcheck, both the sea cells
-    // it could legally move into (green) and the island cells it could vacate
-    // (red) — the cells whose shape can change.
+} else if (noRetry) {
+    // Only reachable under --noretry when the seed's single attempt failed
+    // rigid: the pre-pin board was discarded. Find every flexible island and
+    // highlight, as in nurikabe-dupcheck, both the sea cells it could legally
+    // move into (green) and the island cells it could vacate (red) — the cells
+    // whose shape can change.
     const p = { R: size, C: size, clues: cluesFlat };
     const islands = enumeratePuzzleIslands(state, g);
     const flex = new Int8Array(size * size);
@@ -177,9 +230,6 @@ if (pinned) {
     chunks.push(flexible.length
         ? `  flexible islands: ${flexible.join(', ')}  (red cell = vacated island, green = sea it moves into)`
         : '  (no flexible islands detected)');
-} else {
-    process.stderr.write(`Failed to generate ${size}×${size} puzzle with seed ${seed}.\n`);
-    process.exit(1);
 }
 
 process.stdout.write(chunks.join('\n') + '\n');
