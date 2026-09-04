@@ -1,7 +1,7 @@
 import { term } from '../system/sys.js';
 import { CmdBase } from './CmdBase.js';
 import { SelectDialog } from '../dialog/SelectDialog.js';
-import { bold, red, green, yellow, cyan, gray, CURSOR_HIDE } from '../util/sgr.js';
+import { bold, red, green, yellow, cyan, gray, CURSOR_HIDE, makeCell } from '../util/sgr.js';
 import { isWide } from '../util/unicode-width.js';
 import { VirtualBuffer } from '../util/VirtualBuffer.js';
 
@@ -12,8 +12,6 @@ const DIFFICULTY = {
 };
 
 const REVEAL_MS = 800;
-
-const CELL_BACK = '▒▒';
 
 function _pool() {
     const out = [];
@@ -51,7 +49,11 @@ export class MemoryCmd extends CmdBase {
     }
 
     _boardW() {
-        return this._cols * 2 + 2;
+        return this._cols * 4 + 2;
+    }
+
+    _boardH() {
+        return this._rows * 2 + 2;
     }
 
     _pickDifficulty() {
@@ -154,12 +156,12 @@ export class MemoryCmd extends CmdBase {
     }
 
     _footerRow() {
-        return 6 + (this._rows || 0);
+        return this._rows * 2 + 6;
     }
 
     _initVBs() {
         this._boardX = Math.floor((term.cols - this._boardW()) / 2);
-        this._boardVB = new VirtualBuffer(this._boardW(), this._rows + 2);
+        this._boardVB = new VirtualBuffer(this._boardW(), this._boardH());
         if (!this._rootVB)
             this._rootVB = new VirtualBuffer(term.cols, term.rows);
     }
@@ -201,30 +203,60 @@ export class MemoryCmd extends CmdBase {
         vb.writeStr(0, 0, '╔' + '═'.repeat(lineW - 2) + '╗');
         for (let r = 0; r < this._rows; r++)
             this._drawBoardRow(vb, r);
-        vb.writeStr(this._rows + 1, 0, '╚' + '═'.repeat(lineW - 2) + '╝');
+        for (let y = 1; y < this._rows * 2 + 1; y++) {
+            vb.setCell(y, 0, makeCell('║', { fg: 7, bg: 0 }, 1));
+            vb.setCell(y, lineW - 1, makeCell('║', { fg: 7, bg: 0 }, 1));
+        }
+        vb.writeStr(this._rows * 2 + 1, 0, '╚' + '═'.repeat(lineW - 2) + '╝');
     }
 
     _drawBoardRow(vb, r) {
-        let s = '║';
-        for (let c = 0; c < this._cols; c++)
-            s += this._cellStr(r, c);
-        s += '║';
-        vb.writeStr(r + 1, 0, s);
+        const baseY = r * 2 + 1;
+        for (let c = 0; c < this._cols; c++) {
+            const slot = this._slot(r, c);
+            for (let rr = 0; rr < 2; rr++) {
+                for (let cc = 0; cc < 4; cc++) {
+                    const cell = slot[rr][cc];
+                    if (cell) vb.setCell(baseY + rr, 1 + c * 4 + cc, cell);
+                }
+            }
+        }
     }
 
-    _cellStr(r, c) {
+    _slot(r, c) {
         const isCur = r === this._highlightRow && c === this._highlightCol && !this._pending && !this._completed;
         const open = this._revealed[r][c];
         const matched = this._matchedSet.has(this._cellSym[r][c]) && open;
-        let cell;
-        if (open) {
-            cell = this._cellSym[r][c];
-        } else {
-            cell = CELL_BACK;
+        const bg = isCur ? 104 : 0;
+        const rows = [[null, null, null, null], [null, null, null, null]];
+        if (!open) {
+            const ch = '▒';
+            for (const sub of [0, 1]) {
+                const xOff = sub * 2;
+                for (let rr = 0; rr < 2; rr++) {
+                    for (let cc = 0; cc < 2; cc++) {
+                        const cell = makeCell(ch, { fg: 7, bg }, 1);
+                        cell.clip = true;
+                        cell.clipOffX = -cc;
+                        cell.clipOffY = -rr;
+                        rows[rr][xOff + cc] = cell;
+                    }
+                }
+            }
+            return rows;
         }
-        let body = (isCur ? '\x1B[30;104m' + cell + '\x1B[0m' : cell);
-        if (matched) return green(body);
-        return body;
+        const sym = this._cellSym[r][c];
+        const fg = matched ? 2 : 7;
+        for (let rr = 0; rr < 2; rr++) {
+            for (let cc = 0; cc < 4; cc++) {
+                const cell = makeCell(sym, { fg, bg }, 1);
+                cell.clip = true;
+                cell.clipOffX = -cc;
+                cell.clipOffY = -rr;
+                rows[rr][cc] = cell;
+            }
+        }
+        return rows;
     }
 
     _move(dr, dc) {
@@ -292,7 +324,7 @@ export class MemoryCmd extends CmdBase {
         this._revealAll();
         term.write(CURSOR_HIDE);
         this._render();
-        const msgRow = this._rows + 4;
+        const msgRow = this._rows * 2 + 4;
         const msg = won
             ? bold(green('  Congratulations! Cleared in ' + this._moves + ' moves, ' + this._failCount + ' fails.'))
             : bold(red('  Game Over! ' + this._failCount + '/' + this._maxFails + ' fails.'));
