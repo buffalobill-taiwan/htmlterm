@@ -3,7 +3,7 @@ import { CmdBase } from './CmdBase.js';
 import { SelectDialog } from '../dialog/SelectDialog.js';
 import { bold, red, green, yellow, cyan, gray, CURSOR_HIDE } from '../util/sgr.js';
 import { isWide } from '../util/unicode-width.js';
-import { bufWidth } from '../util/display-width.js';
+import { VirtualBuffer } from '../util/VirtualBuffer.js';
 
 const DIFFICULTY = {
     easy:   { cols: 4, rows: 3, label: 'Easy',   maxFails: 3, revealMs: 800 },
@@ -14,7 +14,6 @@ const DIFFICULTY = {
 const REVEAL_MS = 800;
 
 const CELL_BACK = '▒▒';
-const CELL_MATCH = '✓';
 
 function _pool() {
     const out = [];
@@ -53,20 +52,6 @@ export class MemoryCmd extends CmdBase {
 
     _boardW() {
         return this._cols * 2 + 2;
-    }
-
-    _boardX() {
-        return Math.floor((term.cols - this._boardW()) / 2);
-    }
-
-    _pad() {
-        return ' '.repeat(this._boardX());
-    }
-
-    _center(str) {
-        const w = bufWidth(str);
-        const pad = Math.max(0, Math.floor((term.cols - w) / 2));
-        return ' '.repeat(pad) + str;
     }
 
     _pickDifficulty() {
@@ -116,8 +101,8 @@ export class MemoryCmd extends CmdBase {
         this._pairsLeft = this._total / 2;
         this._moves = 0;
         this._failCount = 0;
-        this._cursorRow = Math.floor(cfg.rows / 2);
-        this._cursorCol = Math.floor(cfg.cols / 2);
+        this._highlightRow = Math.floor(cfg.rows / 2);
+        this._highlightCol = Math.floor(cfg.cols / 2);
         this._pending = true;
         this._completed = false;
         this._won = false;
@@ -147,13 +132,10 @@ export class MemoryCmd extends CmdBase {
         }
 
         this.open();
-        term.write('\x1B[2J\x1B[1;1H');
         term.write(CURSOR_HIDE);
-
+        this._initVBs();
         this._revealAll();
-        this._drawHeader();
-        this._drawBoard();
-        this._drawFooter();
+        this._render();
 
         this._flipTimer = setTimeout(() => {
             this._flipTimer = null;
@@ -161,9 +143,7 @@ export class MemoryCmd extends CmdBase {
                 for (let c = 0; c < this._cols; c++)
                     this._revealed[r][c] = false;
             this._pending = false;
-            this._drawHeader();
-            this._drawBoard();
-            this._placeCursor();
+            this._render();
         }, this._revealMs);
     }
 
@@ -177,81 +157,86 @@ export class MemoryCmd extends CmdBase {
         return 6 + (this._rows || 0);
     }
 
-    _drawHeader() {
+    _initVBs() {
+        this._boardX = Math.floor((term.cols - this._boardW()) / 2);
+        this._boardVB = new VirtualBuffer(this._boardW(), this._rows + 2);
+        if (!this._rootVB)
+            this._rootVB = new VirtualBuffer(term.cols, term.rows);
+    }
+
+    _render() {
+        this._boardVB.clear();
+        this._rootVB.clear();
+
+        for (let r = 0; r < this._rootVB.height; r++)
+            this._rootVB.writeStr(r, 0, ' '.repeat(this._rootVB.width));
+
+        this._drawHeader(this._rootVB);
+        this._drawFooter(this._rootVB);
+        this._drawBoard(this._boardVB);
+        this._rootVB.embed(this._boardVB, this._boardX, 2);
+        term.writeVB(this._rootVB);
+    }
+
+    _renderRow(r) {
+        this._drawBoardRow(this._boardVB, r);
+        term.writeVB(this._rootVB);
+    }
+
+    _drawHeader(vb) {
         const cfg = DIFFICULTY[this._difficulty];
         const title = '  Memory [' + cfg.label + ']';
         const stats = 'Moves: ' + this._moves +
             '  Fails: ' + red(this._failCount + '/' + this._maxFails) +
             '  Pairs left: ' + yellow(this._pairsLeft);
-        term.write('\x1B[1;1H' + this._center(bold(cyan(title)) +
-            '  ' + stats));
+        vb.centerRow(0, bold(cyan(title)) + '  ' + stats);
     }
 
-    _drawBoard() {
-        const boardY = 3;
+    _drawFooter(vb) {
+        vb.centerRow(1, gray('  ←↑↓→ Move   Enter Flip   [n]ew [q]uit'));
+    }
+
+    _drawBoard(vb) {
         const lineW = this._boardW();
-        const pad = this._pad();
-        let s = '\x1B[' + boardY + ';1H';
-        s += pad + '╔' + '═'.repeat(lineW - 2) + '╗';
-        for (let r = 0; r < this._rows; r++) {
-            s += '\x1B[' + (boardY + 1 + r) + ';1H';
-            s += pad + '║';
-            for (let c = 0; c < this._cols; c++)
-                s += this._cellStr(r, c);
-            s += '║';
-        }
-        s += '\x1B[' + (boardY + 1 + this._rows) + ';1H';
-        s += pad + '╚' + '═'.repeat(lineW - 2) + '╝';
-        term.write(s);
+        vb.writeStr(0, 0, '╔' + '═'.repeat(lineW - 2) + '╗');
+        for (let r = 0; r < this._rows; r++)
+            this._drawBoardRow(vb, r);
+        vb.writeStr(this._rows + 1, 0, '╚' + '═'.repeat(lineW - 2) + '╝');
     }
 
-    _drawRow(r) {
-        const boardY = 3;
-        const pad = this._pad();
-        let s = '\x1B[' + (boardY + 1 + r) + ';1H' + pad + '║';
+    _drawBoardRow(vb, r) {
+        let s = '║';
         for (let c = 0; c < this._cols; c++)
             s += this._cellStr(r, c);
         s += '║';
-        term.write(s);
+        vb.writeStr(r + 1, 0, s);
     }
 
     _cellStr(r, c) {
-        const isCur = r === this._cursorRow && c === this._cursorCol && !this._pending && !this._completed;
+        const isCur = r === this._highlightRow && c === this._highlightCol && !this._pending && !this._completed;
         const open = this._revealed[r][c];
         const matched = this._matchedSet.has(this._cellSym[r][c]) && open;
         let cell;
-        if (open && matched) {
-            cell = CELL_MATCH;
-        } else if (open) {
+        if (open) {
             cell = this._cellSym[r][c];
         } else {
             cell = CELL_BACK;
         }
         let body = (isCur ? '\x1B[30;104m' + cell + '\x1B[0m' : cell);
-        if (open && matched) return green(body);
+        if (matched) return green(body);
         return body;
-    }
-
-    _placeCursor() {
-        term.write('\x1B[' + (this._cursorRow + 4) + ';' + (this._boardX() + 1 + this._cursorCol * 2 + 1) + 'H');
-    }
-
-    _drawFooter() {
-        term.write('\x1B[2;1H\x1B[2K' + this._center(gray('  ←↑↓→ Move   Enter Flip   [n]ew [q]uit')));
     }
 
     _move(dr, dc) {
         if (this._pending || this._completed) return;
-        const nr = this._cursorRow + dr;
-        const nc = this._cursorCol + dc;
+        const nr = this._highlightRow + dr;
+        const nc = this._highlightCol + dc;
         if (nr < 0 || nr >= this._rows || nc < 0 || nc >= this._cols) return;
-        const oldR = this._cursorRow;
-        const oldC = this._cursorCol;
-        this._cursorRow = nr;
-        this._cursorCol = nc;
-        this._drawRow(oldR);
-        this._drawRow(nr);
-        this._placeCursor();
+        const oldR = this._highlightRow;
+        this._highlightRow = nr;
+        this._highlightCol = nc;
+        this._renderRow(oldR);
+        this._renderRow(nr);
     }
 
     _flip(r, c) {
@@ -264,17 +249,16 @@ export class MemoryCmd extends CmdBase {
         this._revealed[r][c] = true;
 
         if (this._flipped.length === 1) {
-            this._drawHeader();
-            this._drawRow(r);
-            this._placeCursor();
+            this._drawHeader(this._rootVB);
+            this._renderRow(r);
             return;
         }
 
         this._moves++;
         this._pending = true;
         term.write(CURSOR_HIDE);
-        this._drawHeader();
-        this._drawRow(r);
+        this._drawHeader(this._rootVB);
+        this._renderRow(r);
         const [a, b] = this._flipped;
         const same = this._cellSym[a.r][a.c] === this._cellSym[b.r][b.c];
         this._flipTimer = setTimeout(() => {
@@ -289,10 +273,9 @@ export class MemoryCmd extends CmdBase {
                 this._revealed[b.r][b.c] = false;
             }
             this._pending = false;
-            this._drawHeader();
-            this._drawRow(a.r);
-            this._drawRow(b.r);
-            this._placeCursor();
+            this._drawHeader(this._rootVB);
+            this._renderRow(a.r);
+            this._renderRow(b.r);
             if (same && this._pairsLeft === 0) {
                 this._gameOver(true);
             } else if (!same && this._failCount >= this._maxFails) {
@@ -308,14 +291,14 @@ export class MemoryCmd extends CmdBase {
         this._flipped = [];
         this._revealAll();
         term.write(CURSOR_HIDE);
-        this._drawHeader();
-        this._drawBoard();
-        const msgRow = this._rows + 5;
+        this._render();
+        const msgRow = this._rows + 4;
         const msg = won
             ? bold(green('  Congratulations! Cleared in ' + this._moves + ' moves, ' + this._failCount + ' fails.'))
             : bold(red('  Game Over! ' + this._failCount + '/' + this._maxFails + ' fails.'));
-        term.write('\x1B[' + msgRow + ';1H\x1B[2K' + this._center(msg));
-        term.write('\x1B[' + (msgRow + 1) + ';1H\x1B[2K' + this._center(gray('  Press [n]ew game or [q]uit')));
+        this._rootVB.centerRow(msgRow, msg);
+        this._rootVB.centerRow(msgRow + 1, gray('  Press [n]ew game or [q]uit'));
+        term.writeVB(this._rootVB);
     }
 
     _onKey(data) {
@@ -353,7 +336,7 @@ export class MemoryCmd extends CmdBase {
         if (code === 0x03) { this._quit(); return; }
 
         if (code === 0x0D || code === 0x0A || code === 0x20) {
-            this._flip(this._cursorRow, this._cursorCol);
+            this._flip(this._highlightRow, this._highlightCol);
             return;
         }
 
