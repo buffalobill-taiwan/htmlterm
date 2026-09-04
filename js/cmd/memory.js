@@ -92,6 +92,7 @@ export class MemoryCmd extends CmdBase {
             this._difficultyDialog = null;
         }
         if (this._flipTimer) { clearTimeout(this._flipTimer); this._flipTimer = null; }
+        if (this._revealTimer) { clearTimeout(this._revealTimer); this._revealTimer = null; }
 
         const cfg = DIFFICULTY[diff];
         this._difficulty = diff;
@@ -137,16 +138,29 @@ export class MemoryCmd extends CmdBase {
         term.write(CURSOR_HIDE);
         this._initVBs();
         this._revealAll();
+        this._revealTicksLeft = Math.round(this._revealMs / 100);
         this._render();
 
-        this._flipTimer = setTimeout(() => {
-            this._flipTimer = null;
-            for (let r = 0; r < this._rows; r++)
-                for (let c = 0; c < this._cols; c++)
-                    this._revealed[r][c] = false;
-            this._pending = false;
-            this._render();
-        }, this._revealMs);
+        this._revealTimer = setInterval(() => {
+            const oldN = this._revealTicksLeft;
+            this._revealTicksLeft--;
+            if (this._revealTicksLeft <= 0) {
+                clearInterval(this._revealTimer);
+                this._revealTimer = null;
+                for (let r = 0; r < this._rows; r++)
+                    for (let c = 0; c < this._cols; c++)
+                        this._revealed[r][c] = false;
+                this._pending = false;
+                this._render();
+                return;
+            }
+            const lineW = this._boardW();
+            const blank = makeCell(' ', { fg: 7, bg: 0 }, 1);
+            this._rootVB.setCell(2, this._boardX - oldN, blank);
+            this._rootVB.setCell(2, this._boardX + lineW + oldN - 1, blank);
+            this._drawRevealDots(this._rootVB);
+            term.writeVB(this._rootVB);
+        }, 100);
     }
 
     _revealAll() {
@@ -177,7 +191,18 @@ export class MemoryCmd extends CmdBase {
         this._drawFooter(this._rootVB);
         this._drawBoard(this._boardVB);
         this._rootVB.embed(this._boardVB, this._boardX, 2);
+        this._drawRevealDots(this._rootVB);
         term.writeVB(this._rootVB);
+    }
+
+    _drawRevealDots(vb) {
+        if (!(this._pending && this._revealTicksLeft > 0)) return;
+        const lineW = this._boardW();
+        const n = Math.min(this._revealTicksLeft, this._boardX - 1);
+        for (let i = 1; i <= n; i++)
+            vb.setCell(2, this._boardX - i, makeCell('.', { fg: 7, bg: 0 }, 1));
+        for (let i = 0; i < n; i++)
+            vb.setCell(2, this._boardX + lineW + i, makeCell('.', { fg: 7, bg: 0 }, 1));
     }
 
     _renderRow(r) {
@@ -387,6 +412,10 @@ export class MemoryCmd extends CmdBase {
         if (this._flipTimer) {
             clearTimeout(this._flipTimer);
             this._flipTimer = null;
+        }
+        if (this._revealTimer) {
+            clearInterval(this._revealTimer);
+            this._revealTimer = null;
         }
         term.write('\x1B[' + (this._footerRow() + 1) + ';1H');
         this.close();
