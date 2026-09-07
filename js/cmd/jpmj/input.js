@@ -38,7 +38,7 @@ export const inputMixin = {
             else items.unshift({ label: '立直', action: 'riichi' });
         }
         const hasPass = items.some(i => i.action === 'pass' || (i.action && i.action.type === 'pass'));
-        if (!hasPass && items.length > 0) {
+        if (!hasPass && items.length > 0 && this._game.phase === 'call_pending') {
             items.push({ label: '過', action: 'pass' });
         }
         return items;
@@ -256,8 +256,7 @@ export const inputMixin = {
                 return;
             }
             if (s === '\x1B[B') {
-                const hasKanOptions = this._game.availableActions.some(a => typeof a === 'object');
-                if (this._game.phase !== 'call_pending' && !hasKanOptions) {
+                if (this._game.phase !== 'call_pending') {
                     this._cursorMode = 'hand';
                     const p = this._game.players[0];
                     this._handCursor = Math.max(0, p.hand.length - 1);
