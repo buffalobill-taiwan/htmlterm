@@ -312,33 +312,43 @@ export class MemoryCmd extends CmdBase {
         }
 
         this._moves++;
+        const [a, b] = this._flipped;
+        const same = this._cellSym[a.r][a.c] === this._cellSym[b.r][b.c];
+
+        if (same) {
+            this._resolveFlip(a, b, same);
+            return;
+        }
+
         this._pending = true;
         term.write(CURSOR_HIDE);
         this._drawHeader(this._rootVB);
         this._renderRow(r);
-        const [a, b] = this._flipped;
-        const same = this._cellSym[a.r][a.c] === this._cellSym[b.r][b.c];
         this._flipTimer = setTimeout(() => {
             this._flipTimer = null;
-            this._flipped = [];
-            if (same) {
-                this._matchedSet.add(this._cellSym[a.r][a.c]);
-                this._pairsLeft--;
-            } else {
-                this._failCount++;
-                this._revealed[a.r][a.c] = false;
-                this._revealed[b.r][b.c] = false;
-            }
-            this._pending = false;
-            this._drawHeader(this._rootVB);
-            this._renderRow(a.r);
-            this._renderRow(b.r);
-            if (same && this._pairsLeft === 0) {
-                this._gameOver(true);
-            } else if (!same && this._failCount >= this._maxFails) {
-                this._gameOver(false);
-            }
+            this._resolveFlip(a, b, same);
         }, REVEAL_MS);
+    }
+
+    _resolveFlip(a, b, same) {
+        this._flipped = [];
+        if (!same) {
+            this._failCount++;
+            this._revealed[a.r][a.c] = false;
+            this._revealed[b.r][b.c] = false;
+        } else {
+            this._matchedSet.add(this._cellSym[a.r][a.c]);
+            this._pairsLeft--;
+        }
+        this._pending = false;
+        this._drawHeader(this._rootVB);
+        this._renderRow(a.r);
+        this._renderRow(b.r);
+        if (same && this._pairsLeft === 0) {
+            this._gameOver(true);
+        } else if (!same && this._failCount >= this._maxFails) {
+            this._gameOver(false);
+        }
     }
 
     _gameOver(won) {
