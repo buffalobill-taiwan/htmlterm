@@ -1,7 +1,7 @@
-import { term } from '../system/sys.js';
-import { CmdBase } from './CmdBase.js';
-import { CURSOR_HIDE } from '../util/sgr.js';
-import { bufWidth } from '../util/display-width.js';
+import { term } from '../../system/sys.js';
+import { CmdBase } from '../CmdBase.js';
+import { CURSOR_HIDE } from '../../util/sgr.js';
+import { bufWidth } from '../../util/display-width.js';
 import { VALID_WORDS } from './valid-words.js';
 
 const WORDS = [
