@@ -3,7 +3,7 @@
  * nurikabe-debug — Show every formation step of a Nurikabe puzzle from its seed.
  *
  * Usage:
- *   node tools/nurikabe-debug.mjs <seed> [size] [--noretry] [--ptt] [--clueonly]
+ *   node tools/nurikabe-debug.mjs <seed> [size] [--noretry] [--ptt] [--clueonly] [--clues]
  *
  * Examples:
  *   node tools/nurikabe-debug.mjs 123456
@@ -34,6 +34,10 @@
  *
  * Pass --clueonly to render the sea as fullwidth space (　) as well, hiding the
  * solution the same way as the puzzle (see nurikabe-solve).
+ *
+ * Pass --clues to append a final line holding the final board as
+ * `<R> <C> "r,c,v r,c,v ..."` (1-indexed clue triplets), ready to feed
+ * tools/nurikabe-dupcheck.py.
  */
 
 import { generatePuzzle, geom, WHITE, BLACK, formatClue, islandCountBand, pinIslandShapes, buildAttempt, enumeratePuzzleIslands, islandSwapInfo } from '../js/util/nurikabe-engine.js';
@@ -45,6 +49,7 @@ const positional = args.filter((a) => !a.startsWith('--'));
 const ptt = flags.includes('--ptt');
 const noRetry = flags.includes('--noretry');
 const clueOnly = flags.includes('--clueonly');
+const emitClues = flags.includes('--clues');
 
 const SP = '\u3000';        // fullwidth space (width 2)
 const SEA = clueOnly ? SP : (ptt ? '█' : '██'); // clueonly → blank sea, else one fullwidth block (PTT) or two halfwidth
@@ -96,7 +101,7 @@ const seed = parseInt(positional[0], 10);
 const size = parseInt(positional[1] || '12', 10);
 
 if (Number.isNaN(seed) || seed <= 0) {
-    process.stderr.write('Usage: node tools/nurikabe-debug.mjs <seed> [size] [--noretry] [--ptt] [--clueonly]\n');
+    process.stderr.write('Usage: node tools/nurikabe-debug.mjs <seed> [size] [--noretry] [--ptt] [--clueonly] [--clues]\n');
     process.exit(1);
 }
 
@@ -230,6 +235,17 @@ if (pinned) {
     chunks.push(flexible.length
         ? `  flexible islands: ${flexible.join(', ')}  (red cell = vacated island, green = sea it moves into)`
         : '  (no flexible islands detected)');
+}
+
+if (emitClues) {
+    const tri = [];
+    for (let r = 0; r < size; r++) {
+        for (let c = 0; c < size; c++) {
+            const v = cluesFlat[r * size + c];
+            if (v > 0) tri.push(`${r + 1},${c + 1},${v}`);
+        }
+    }
+    chunks.push(`${size} ${size} "${tri.join(' ')}"`);
 }
 
 process.stdout.write(chunks.join('\n') + '\n');
