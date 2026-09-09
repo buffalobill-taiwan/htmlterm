@@ -8,10 +8,11 @@ rigidity check (js/util/nurikabe-engine.js, islandSwapInfo), this is a full
 oracle: any second solution, however far from the first, is detected.
 
 Usage:
-  python3 tools/nurikabe-dupcheck.py <R> <C> "r,c,v r,c,v ..." [--timeout N]
+  python3 tools/nurikabe-dupcheck.py <R> <C> "r,c,v r,c,v ..." [--timeout N] [--ptt]
 
 Example:
   python3 tools/nurikabe-dupcheck.py 8 8 "1,3,3 3,3,1 3,5,1 4,7,8 6,1,6 6,4,8 6,7,6 7,5,1 8,1,1"
+  python3 tools/nurikabe-dupcheck.py --ptt 8 8 "1,3,3 3,3,1 3,5,1 4,7,8 6,1,6 6,4,8 6,7,6 7,5,1 8,1,1"
 
 Each clue is row,column,value, 1-indexed exactly like the printed grid.
 
@@ -29,6 +30,10 @@ fullwidth space (　) for empty island cells, fullwidth digits for clues ≤ 9
 (halfwidth ≥ 10), box-drawing border with a 2-char-thick dash. Cell width is
 2 halfwidth chars throughout.
 
+Pass --ptt to render for PTT-style terminals, where █ and the box drawing
+chars are fullwidth (one cell each): sea becomes a single '█' and the border
+dash count halves, so each row stays exactly `<C>` cells.
+
 Encoding (from the reference solver): white[r,c,k] cell-to-island ownership,
 black[r,c] sea; one owner per cell; island sizes == clue values; clue cell
 owned by its island; distinct islands never orthogonally adjacent; island
@@ -42,27 +47,35 @@ from ortools.sat.python import cp_model
 import sys
 import time
 
-SP = '\u3000'          # fullwidth space (width 2)
+SP = '\u3000'    # fullwidth space (width 2)
+
+# Rendering constants chosen per --ptt, mirroring nurikabe-solve/debug: default
+# uses two halfwidth blocks per cell, PTT uses one fullwidth glyph per cell.
 SEA = '\u2588\u2588'   # two halfwidth blocks = one cell
+SEA_PTT = '\u2588'     # one fullwidth block
+DASH_MUL = 2           # border dash count multiple per cell (default)
+DASH_MUL_PTT = 1       # ... one dash per cell in PTT mode
 
 
 def fmt_num(n):
     return chr(0xFF10 + n) if n <= 9 else str(n)
 
 
-def render(R, C, black_vals, clue_of_cell):
-    lines = ['┌' + '─' * (2 * C) + '┐']
+def render(R, C, black_vals, clue_of_cell, ptt=False):
+    dash_mul = DASH_MUL_PTT if ptt else DASH_MUL
+    sea = SEA_PTT if ptt else SEA
+    lines = ['┌' + '─' * (dash_mul * C) + '┐']
     for r in range(R):
         row = '│'
         for c in range(C):
             if black_vals[r, c]:
-                row += SEA
+                row += sea
             elif (r, c) in clue_of_cell:
                 row += fmt_num(clue_of_cell[r, c])
             else:
                 row += SP
         lines.append(row + '│')
-    lines.append('└' + '─' * (2 * C) + '┘')
+    lines.append('└' + '─' * (dash_mul * C) + '┘')
     return '\n'.join(lines)
 
 
@@ -171,6 +184,7 @@ def _read_black(solver, black, R, C):
 
 def parse_args(argv):
     timeout = 60
+    ptt = False
     positional = []
     i = 0
     while i < len(argv):
@@ -183,18 +197,20 @@ def parse_args(argv):
             timeout = int(argv[i])
         elif a.startswith('--timeout='):
             timeout = int(a.split('=', 1)[1])
+        elif a == '--ptt':
+            ptt = True
         else:
             positional.append(a)
         i += 1
-    return positional, timeout
+    return positional, timeout, ptt
 
 
 def main():
-    positional, timeout = parse_args(sys.argv[1:])
+    positional, timeout, ptt = parse_args(sys.argv[1:])
 
     if len(positional) < 3:
         sys.stderr.write(
-            'Usage: python3 tools/nurikabe-dupcheck.py <R> <C> "r,c,v r,c,v ..." [--timeout N]\n')
+            'Usage: python3 tools/nurikabe-dupcheck.py <R> <C> "r,c,v r,c,v ..." [--timeout N] [--ptt]\n')
         sys.exit(2)
 
     try:
@@ -248,7 +264,7 @@ def main():
         sys.exit(2)
 
     board1 = _read_black(solver1, black, R, C)
-    sys.stdout.write(render(R, C, board1, clue_of_cell) + '\n')
+    sys.stdout.write(render(R, C, board1, clue_of_cell, ptt) + '\n')
 
     lits = [black[r, c].Not() if v else black[r, c]
             for (r, c), v in board1.items()]
@@ -260,7 +276,7 @@ def main():
 
     if status2 in (cp_model.OPTIMAL, cp_model.FEASIBLE):
         board2 = _read_black(solver2, black, R, C)
-        sys.stdout.write('\n' + render(R, C, board2, clue_of_cell) + '\n')
+        sys.stdout.write('\n' + render(R, C, board2, clue_of_cell, ptt) + '\n')
         sys.stderr.write('NOT UNIQUE — second solution found.\n')
         sys.exit(1)
 
