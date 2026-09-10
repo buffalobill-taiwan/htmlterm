@@ -758,7 +758,7 @@ export class KlotskiCmd extends CmdBase {
 
         if (typeof data === 'string') {
             const ch = data.toLowerCase();
-            if (ch === 'z') { this._undo(); return; }
+            if (ch === 'z') { if (this._selected === null) this._undo(); return; }
             if (ch === 'p') { this._togglePause(); return; }
             if (ch === 'r') { this._restart(); return; }
             if (ch === 'n') { this._showLevelMenu(); return; }
