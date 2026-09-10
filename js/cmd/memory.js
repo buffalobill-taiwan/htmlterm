@@ -49,7 +49,7 @@ export class MemoryCmd extends CmdBase {
     }
 
     _boardW() {
-        return this._cols * 4 + 2;
+        return this._cols * 4 + (this._cols - 1) + 2;
     }
 
     _boardH() {
@@ -242,7 +242,7 @@ export class MemoryCmd extends CmdBase {
             for (let rr = 0; rr < 2; rr++) {
                 for (let cc = 0; cc < 4; cc++) {
                     const cell = slot[rr][cc];
-                    if (cell) vb.setCell(baseY + rr, 1 + c * 4 + cc, cell);
+                    if (cell) vb.setCell(baseY + rr, 1 + c * 5 + cc, cell);
                 }
             }
         }
