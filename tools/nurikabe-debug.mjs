@@ -12,14 +12,15 @@
  * size defaults to 12 (medium). Use 8 for easy, 16 for hard.
  *
  * The stages of the seed that actually ships (matching the attempt stream used
- * by generatePuzzle, retrying seed+1, seed+2, … until one passes rigid) are
- * printed in order:
+ * by generatePuzzle, retrying seed+1, seed+2, … until one passes both rigidity
+ * passes) are printed in order:
  *   1. initial   — checkerboard where even rows/cols are sea
  *   2. flips     — after flipping odd rows OR odd columns, then whole-board mirroring
  *   3. carve     — after thinning to the chosen island count
  *   4. trim      — after sea trim (islands filled / minimal sea)
  *   5. clues     — after placing the clue cells
- *   6. final     — after the rigidity (clue-pin) pass
+ *   6. pinned    — after the 1-swap rigidity (clue-pin) pass
+ *   7. final     — after the 2-swap remedy pass (the shipped player board)
  *
  * The shipping seed is reported in the header, so the board shown is exactly
  * the one the player would get. Pass --noretry for single-attempt behaviour:
@@ -40,7 +41,7 @@
  * tools/nurikabe-dupcheck.py.
  */
 
-import { generatePuzzle, geom, WHITE, BLACK, formatClue, islandCountBand, pinIslandShapes, buildAttempt, enumeratePuzzleIslands, islandSwapInfo } from '../js/util/nurikabe-engine.js';
+import { generatePuzzle, geom, WHITE, BLACK, formatClue, islandCountBand, pinIslandShapes, buildAttempt, enumeratePuzzleIslands, islandSwapInfo, remedy2Swap } from '../js/util/nurikabe-engine.js';
 
 const args = process.argv.slice(2);
 const flags = args.filter((a) => a.startsWith('--'));
@@ -95,6 +96,33 @@ function render(R, C, board, clues = null, flex = null) {
     }
     lines.push('└' + inner + '┘');
     return lines.join('\n');
+}
+
+// Cells a pass relocated between two clue grids, as "clue5 (4,3)→(6,2)" strings:
+// the pin pass (and likewise the 2-swap remedy) empties one clue cell and fills
+// a new cell with the same value, so pair each vacated cell with the cell that
+// gained its value.
+function movedClues(size, from, to) {
+    const left = new Map();     // value -> cells that lost it
+    const entered = new Map();  // value -> cells that gained it
+    for (let i = 0; i < size * size; i++) {
+        if (from[i] > 0 && to[i] === 0) {
+            if (!left.has(from[i])) left.set(from[i], []);
+            left.get(from[i]).push(i);
+        } else if (from[i] === 0 && to[i] > 0) {
+            if (!entered.has(to[i])) entered.set(to[i], []);
+            entered.get(to[i]).push(i);
+        }
+    }
+    const out = [];
+    for (const [v, fromCells] of left) {
+        const toCells = entered.get(v) || [];
+        for (let k = 0; k < fromCells.length; k++) {
+            const a = fromCells[k], b = toCells[k];
+            out.push(`clue${v} (${Math.floor(a / size)},${a % size})→(${Math.floor(b / size)},${b % size})`);
+        }
+    }
+    return out;
 }
 
 const seed = parseInt(positional[0], 10);
@@ -176,35 +204,44 @@ chunks.push('');
 if (pinned) {
     const finalState = new Int8Array(size * size);
     for (let i = 0; i < size * size; i++) finalState[i] = state[i] === BLACK ? B_SEA : W_ISL;
-    // Report which clue cells the pin pass relocated (pre-pin → post-pin).
-    // The pin pass empties one pre-pin clue cell and fills a new cell with the
-    // same value, so pair each vacated cell with the cell that gained its value.
-    const left = new Map();   // value -> [pre-pin cells now empty]
-    const entered = new Map(); // value -> [post-pin cells that were empty]
-    for (let i = 0; i < size * size; i++) {
-        if (prePinClues[i] > 0 && cluesFlat[i] === 0) {
-            const v = prePinClues[i];
-            if (!left.has(v)) left.set(v, []);
-            left.get(v).push(i);
-        } else if (prePinClues[i] === 0 && cluesFlat[i] > 0) {
-            const v = cluesFlat[i];
-            if (!entered.has(v)) entered.set(v, []);
-            entered.get(v).push(i);
-        }
-    }
-    const moved = [];
-    for (const [v, from] of left) {
-        const to = entered.get(v) || [];
-        for (let k = 0; k < from.length; k++) {
-            const a = from[k], b = to[k];
-            moved.push(`clue${v} (${Math.floor(a / size)},${a % size})→(${Math.floor(b / size)},${b % size})`);
-        }
-    }
-    const pinNote = moved.length
-        ? `  [moved clues: ${moved.join(', ')}]`
-        : '';
-    chunks.push('[6] final — rigid (clue-pin) solution' + pinNote);
+    const pinMoved = movedClues(size, prePinClues, cluesFlat);
+    const pinNote = pinMoved.length ? `  [moved clues: ${pinMoved.join(', ')}]` : '';
+    chunks.push('[6] pinned — after the 1-swap rigidity (clue-pin) pass' + pinNote);
     chunks.push(render(size, size, finalState, cluesFlat));
+
+    // [7] final — the 2-swap remedy pass, always part of the generator. The
+    // pinned board is either already 2-swap rigid (a no-op) or gets one remedy:
+    // the cooperative two-island escape's combined shape is adopted and at most
+    // one clue is relocated, then the whole board is re-verified from scratch.
+    const swapClues = Int32Array.from(cluesFlat);
+    const swapState0 = state.slice();
+    const swapOK = remedy2Swap(state, cluesFlat, size, size, g, { prePinClues });
+    if (swapOK) {
+        const swapMoved = movedClues(size, swapClues, cluesFlat);
+        let shape = false;
+        for (let i = 0; i < size * size; i++) if (swapState0[i] !== state[i]) { shape = true; break; }
+        const swapBoard = new Int8Array(size * size);
+        for (let i = 0; i < size * size; i++) swapBoard[i] = state[i] === BLACK ? B_SEA : W_ISL;
+        let note;
+        if (shape && swapMoved.length) {
+            note = `  [2-swap remedy: shape adopted, clues moved: ${swapMoved.join(', ')}]`;
+        } else if (shape) {
+            note = '  [2-swap remedy: shape adopted]';
+        } else if (swapMoved.length) {
+            note = `  [2-swap remedy: clues moved: ${swapMoved.join(', ')}]`;
+        } else {
+            note = '  (2-swap rigid, no remedy needed)';
+        }
+        chunks.push('[7] final — after the 2-swap remedy pass' + note);
+        chunks.push(render(size, size, swapBoard, cluesFlat));
+    } else if (noRetry) {
+        // The pinned board is 1-swap rigid but its escape pair could not be
+        // rescued, so generatePuzzle discards it (RETRY).
+        const swapBoard = new Int8Array(size * size);
+        for (let i = 0; i < size * size; i++) swapBoard[i] = swapState0[i] === BLACK ? B_SEA : W_ISL;
+        chunks.push('[7] 2-swap remedy failed (RETRY) — board discarded');
+        chunks.push(render(size, size, swapBoard, swapClues));
+    }
 } else if (noRetry) {
     // Only reachable under --noretry when the seed's single attempt failed
     // rigid: the pre-pin board was discarded. Find every flexible island and

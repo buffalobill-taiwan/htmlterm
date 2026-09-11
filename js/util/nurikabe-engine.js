@@ -607,6 +607,186 @@ export function islandSwapInfo(state, g, p, cells) {
     return { swaps, candidates: frontier.length * seaList.length };
 }
 
+// Candidate cells for one island's shape change, unfiltered by validity:
+// `out` island cells that border the sea (removable), `in` sea cells
+// surrounding the island (absorbable). Unlike islandSwapInfo, nothing is
+// tested against isSolved, so a pair of individually-invalid swaps can still
+// be tried together.
+function _frontier(state, R, C, cells) {
+    const out = [];
+    const inSet = new Set();
+    for (const idx of cells) {
+        const r = Math.floor(idx / C), c = idx % C;
+        for (const [dr, dc] of _DIRS) {
+            const nr = r + dr, nc = c + dc;
+            if (nr < 0 || nr >= R || nc < 0 || nc >= C) continue;
+            const ni = nr * C + nc;
+            if (state[ni] === BLACK) {
+                if (!out.includes(idx)) out.push(idx);
+                inSet.add(ni);
+            }
+        }
+    }
+    return { out, in: [...inSet] };
+}
+
+/**
+ * Find the first pairwise (2-swap) escape: two islands that can simultaneously
+ * change shape by one cell-exchange each and still form a valid solution.
+ *
+ * This is the "cooperative" duplicate the pin pass misses: each of two islands
+ * moves one cell in and one cell out, individually-invalid but valid when
+ * combined (single-island rigidity only allows one island to move at a time,
+ * so such escapes are invisible to pinIslandShapes).
+ *
+ * @param {Int8Array} state WHITE/BLACK state (untouched on return)
+ * @param {Int32Array} clues flat clue grid
+ * @returns {{ i: number, j: number, a: number, b: number, a2: number,
+ *   b2: number, cellsI: number[], cellsJ: number[] } | null}
+ */
+function _find2SwapPair(state, clues, R, C, g) {
+    const p = { R, C, clues };
+    const islands = enumeratePuzzleIslands(state, g);
+    const fronts = islands.map(isl =>
+        isl.cells.length <= 1 ? null : _frontier(state, R, C, isl.cells)
+    );
+
+    for (let i = 0; i < islands.length; i++) {
+        const fi = fronts[i];
+        if (!fi || !fi.out.length || !fi.in.length) continue;
+        for (let j = i + 1; j < islands.length; j++) {
+            const fj = fronts[j];
+            if (!fj || !fj.out.length || !fj.in.length) continue;
+            for (const a of fi.out) {
+                for (const b of fi.in) {
+                    state[a] = BLACK;
+                    state[b] = WHITE;
+                    for (const a2 of fj.out) {
+                        for (const b2 of fj.in) {
+                            if (b2 === b) continue;
+                            state[a2] = BLACK;
+                            state[b2] = WHITE;
+                            const ok = isSolved(state, g, p);
+                            state[a2] = WHITE;
+                            state[b2] = BLACK;
+                            if (ok) {
+                                state[a] = WHITE;
+                                state[b] = BLACK;
+                                return { i, j, a, b, a2, b2, cellsI: islands[i].cells, cellsJ: islands[j].cells };
+                            }
+                        }
+                    }
+                    state[a] = WHITE;
+                    state[b] = BLACK;
+                }
+            }
+        }
+    }
+    return null;
+}
+
+/**
+ * Pairwise (2-swap) rigidity: no two islands can simultaneously change shape
+ * by one cell exchange each and still form a valid solution.
+ *
+ * @param {Int8Array} state WHITE/BLACK state (untouched on return)
+ * @param {Int32Array} clues flat clue grid
+ * @returns {boolean} true when the board is 2-swap rigid (no such pair)
+ */
+export function is2SwapRigid(state, clues, R, C, g) {
+    return _find2SwapPair(state, clues, R, C, g) === null;
+}
+
+/**
+ * Single-island rigidity check without any clue movement: every island must
+ * have no legal one-cell shape exchange. Used to re-verify a whole board from
+ * scratch after a remedy touches it.
+ *
+ * @param {Int8Array} state WHITE/BLACK state (untouched on return)
+ * @param {Int32Array} clues flat clue grid
+ * @returns {boolean} true when no island has a legal swap
+ */
+function _is1SwapRigid(state, clues, R, C, g) {
+    const p = { R, C, clues };
+    return enumeratePuzzleIslands(state, g)
+        .every(isl => islandSwapInfo(state, g, p, isl.cells).swaps.length === 0);
+}
+
+/**
+ * One-shot remedy for a board that fails the 2-swap rigidity check. The
+ * cooperative escape pair's shape change is adopted permanently (both islands
+ * keep their size and clue count, only the escaping shapes become the
+ * solution), then at most ONE clue is relocated onto the swapped-in cell -
+ * mirroring the 1-swap pin - and the whole board is re-validated from scratch
+ * (isSolved + single-island rigidity + 2-swap rigidity). No further repair is
+ * attempted: if that single relocation (or none) does not make the entire
+ * board rigid, everything is rolled back and false is returned so the attempt
+ * is discarded.
+ *
+ * Each island's clue may be relocated at most once in its lifetime: pass the
+ * pre-pin clue grid in opts.prePinClues (snapshot before pinIslandShapes ran)
+ * and an island whose clue has already been moved is not relocated again.
+ *
+ * @param {Int8Array} state WHITE/BLACK state (mutated on success)
+ * @param {Int32Array} clues flat clue grid (mutated on success)
+ * @param {number} R
+ * @param {number} C
+ * @param {*} g geom(R, C)
+ * @param {{ prePinClues?: Int32Array }} [opts]
+ * @returns {boolean} true when the board ends rigid (already rigid on entry,
+ *   or rescued by the remedy); false when it could not be rescued
+ */
+export function remedy2Swap(state, clues, R, C, g, opts = {}) {
+    const v = _find2SwapPair(state, clues, R, C, g);
+    if (!v) return true; // already 2-swap rigid, nothing to remedy
+
+    const origState = state.slice();
+    const origClues = clues.slice();
+
+    const clueI = v.cellsI.find(c => clues[c] > 0);
+    const clueJ = v.cellsJ.find(c => clues[c] > 0);
+    // An island whose clue is no longer where it was before the pin pass has
+    // already spent its one remedy; do not relocate it again.
+    const movable = cell => !opts.prePinClues || opts.prePinClues[cell] === clues[cell];
+
+    const relocate = [];
+    if (v.b !== clueI && movable(clueI)) relocate.push([clueI, v.b]);
+    if (v.b2 !== clueJ && movable(clueJ)) relocate.push([clueJ, v.b2]);
+
+    // Adopt the cooperative shape change: both islands keep count by trading
+    // one cell, so isSolved stays valid regardless of the clue-relocation test.
+    state[v.a] = BLACK;
+    state[v.b] = WHITE;
+    state[v.a2] = BLACK;
+    state[v.b2] = WHITE;
+
+    const p = { R, C, clues };
+    // Candidate 0: no clue move at all; then one relocation on either island.
+    for (const mv of [null, ...relocate]) {
+        if (mv) {
+            const [from, to] = mv;
+            const val = clues[from];
+            clues[from] = 0;
+            clues[to] = val;
+        }
+        if (isSolved(state, g, p) &&
+            _is1SwapRigid(state, clues, R, C, g) &&
+            is2SwapRigid(state, clues, R, C, g)) {
+            return true;
+        }
+        if (mv) {
+            const [from, to] = mv;
+            const val = clues[to];
+            clues[to] = 0;
+            clues[from] = val;
+        }
+    }
+
+    state.set(origState);
+    clues.set(origClues);
+    return false;
+}
+
 function _regionOf(state, g, start) {
     const cells = [];
     const seen = new Uint8Array(g.N);
@@ -747,14 +927,17 @@ function _to2d(R, C, state, clues) {
  * `_trimSea` grows islands to their natural extent, so a final island may exceed
  * the side-length cap.
  *
- * The `pinIslandShapes` pass hardens the puzzle against the common duplicate
- * solution: for each island that can legally change shape, the clue is moved
- * onto the flexible cell, pinning the shape rigid. A puzzle ships only when
- * every island ends up rigid; otherwise the board is discarded and the next
- * attempt carves a fresh puzzle. Every returned puzzle is therefore rigid
- * under the single-shape-swap check (unique solution). The discarded board,
- * if needed (e.g. to audit why a seed fails), is available via
- * `generateDraftPuzzle`.
+ * Every shipped puzzle passes two successive hardening passes. The first
+ * (`pinIslandShapes`) handles the common duplicate solution: for each island
+ * that can legally change shape, the clue is moved onto the flexible cell,
+ * pinning the shape rigid. The second (`remedy2Swap`) closes the cooperative
+ * escape: when two islands can each change shape by one cell exchange that is
+ * only valid combined, the combined shape is adopted and at most one clue is
+ * relocated (each island's clue only ever moves once), then the whole board is
+ * re-verified from scratch. A board that fails either pass is discarded and the
+ * next attempt carves a fresh puzzle, so every returned puzzle is rigid under
+ * both the single- and pairwise-shape-swap checks. A discarded board, if needed
+ * (e.g. to audit why a seed fails), is available via `generateDraftPuzzle`.
  *
  * Output cells are two-state: a clue grid (`clues[r][c]` = island size, 0 = none)
  * plus a solution grid (`solution[r][c]` = WHITE or BLACK).
@@ -777,13 +960,18 @@ export function generatePuzzle(R, C, opts = {}) {
         const d = _buildAttempt(R, C, band, seed + attempt * 2654435761);
         if (!d) continue;
 
-        // Final rule (clue-pin): move each flexible island's clue onto a swapped-in
-        // cell so the shape goes rigid. On FAIL the board is discarded (the state/
-        // clues are already restored internally) and the next attempt carves anew,
-        // so only fully rigid puzzles are ever returned.
+        // Two hardening passes, each discarding the board on FAIL with the
+        // state/clues already restored internally:
+        //  1) clue-pin: move each flexible island's clue onto a swapped-in cell
+        //     so the single-island shape goes rigid;
+        //  2) 2-swap remedy: adopt a cooperative two-island escape's combined
+        //     shape and relocate at most one clue, then re-verify the whole
+        //     board. remedy2Swap is a no-op on boards already 2-swap rigid.
         const state = new Int8Array(R * C);
         for (let i = 0; i < R * C; i++) state[i] = d.board[i] === _W ? WHITE : BLACK;
+        const prePin = d.clues.slice();
         if (!pinIslandShapes(state, d.clues, R, C, g)) continue;
+        if (!remedy2Swap(state, d.clues, R, C, g, { prePinClues: prePin })) continue;
         return _to2d(R, C, state, d.clues);
     }
     return null;
