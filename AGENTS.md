@@ -30,6 +30,8 @@ Read the document that matches the work being done before changing that area.
 - Do not commit or push unless the user's message literally contains the word "commit".
 - There is no automated-test or CI requirement. Validate browser-facing changes
   manually and run appropriate syntax/static checks.
+- Do not add `jsconfig.json`, `tsconfig.json`, `.editorconfig`, `.vscode/`, or
+  any other LSP/editor configuration files to this repository.
 
 ## Core invariants
 
