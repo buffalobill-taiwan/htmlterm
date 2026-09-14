@@ -446,6 +446,7 @@ export class OthelloCmd extends CmdBase {
         this._thinkHighlight = null;
         this._passMsg = null;
         this._result = null;
+        this._firstMove = true;
 
         this.open();
         term.write('\x1B[2J\x1B[1;1H');
@@ -588,6 +589,8 @@ export class OthelloCmd extends CmdBase {
             msg = this._turn === WHITE ? yellow(' AI thinking...') : fg(240)(' Flipping...');
         } else if (this._passMsg) {
             msg = fg(240)(this._passMsg);
+        } else if (this._turn === BLACK && this._firstMove) {
+            msg = fg(240)(' Your turn — [p] pass, AI moves first');
         } else {
             msg = fg(240)(' Your turn');
         }
@@ -595,8 +598,9 @@ export class OthelloCmd extends CmdBase {
     }
 
     _drawFooter(root) {
+        const pass = this._firstMove ? '   [p]ass' : '';
         root.writeStr(FOOTER_Y, 1, '  ' +
-            fg(240)('←↑↓→ Move   Enter Place   [n]ew [q]uit'));
+            fg(240)('←↑↓→ Move   Enter Place' + pass + '   [n]ew [q]uit'));
     }
 
     // ── Turn flow ───────────────────────────────────────────────────────────
@@ -610,10 +614,18 @@ export class OthelloCmd extends CmdBase {
         this._playMove(r, c);
     }
 
+    _passFirst() {
+        if (this._completed || this._flipBusy) return;
+        if (this._turn !== BLACK || !this._firstMove) return;
+        this._firstMove = false;
+        this._startAiTurn();
+    }
+
     _playMove(r, c) {
         const p = this._turn;
         const flips = applyMove(this._board, r, c, p);
         if (!flips) return;
+        this._firstMove = false;
 
         const map = new Map();
         let maxRing = 0;
@@ -818,6 +830,7 @@ export class OthelloCmd extends CmdBase {
             const ch = data.toLowerCase();
             if (ch === 'q') { this._quit(); return; }
             if (ch === 'n') { this._newGame(); return; }
+            if (ch === 'p') { this._passFirst(); return; }
         }
     }
 
