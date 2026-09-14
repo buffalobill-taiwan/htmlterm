@@ -153,27 +153,83 @@ function _styleClueCursor(status, ch) {
     return '\x1B[107;31m\x1B[1m' + ch + '\x1B[0m';
 }
 
+const MIN_SIZE = 4;
+const MAX_SIZE = 18;
+const SEED_MAX = 0x7fffffff;
+
+function _sizeLabel(size) {
+    if (size === 8) return 'Easy';
+    if (size === 12) return 'Medium';
+    if (size === 16) return 'Hard';
+    return size + '×' + size;
+}
+
 export class NurikabeCmd extends CmdBase {
     execute(args) {
         const p = this.parseArgs(args, {
-            flags: { '--easy': Boolean, '--medium': Boolean, '--hard': Boolean },
+            flags: {
+                '--easy': Boolean, '--medium': Boolean, '--hard': Boolean,
+                '--seed': Number, '--size': Number,
+            },
         });
         if (p.hasHelp) return this.showHelp();
-        let diff = null;
-        if (p.flag('--easy'))   diff = 'easy';
-        if (p.flag('--medium')) diff = 'medium';
-        if (p.flag('--hard'))   diff = 'hard';
-        if (diff) {
-            this._startGame(diff);
-        } else {
-            this._pickDifficulty();
+
+        let diffSize = null;
+        if (p.flag('--easy'))   diffSize = DIFFICULTY.easy.size;
+        if (p.flag('--medium')) diffSize = DIFFICULTY.medium.size;
+        if (p.flag('--hard'))   diffSize = DIFFICULTY.hard.size;
+
+        if (p.rest.length > 2) return this._badArgs();
+        let posSeed = null;
+        let posSize = null;
+        if (p.rest.length >= 1) {
+            const n = this._toInt(p.rest[0]);
+            if (n === null) return this._badArgs();
+            posSeed = n;
         }
+        if (p.rest.length === 2) {
+            const n = this._toInt(p.rest[1]);
+            if (n === null) return this._badArgs();
+            posSize = n;
+        }
+
+        const flagSeed = this._numFlag(p.flag('--seed'));
+        const flagSize = this._numFlag(p.flag('--size'));
+        if (flagSeed === undefined || flagSize === undefined) return this._badArgs();
+
+        const seed = flagSeed !== null ? flagSeed : posSeed;
+        const size = flagSize !== null ? flagSize : (posSize !== null ? posSize : (diffSize !== null ? diffSize : DIFFICULTY.medium.size));
+
+        const hasParams = seed !== null || posSize !== null || flagSize !== null;
+        if (!hasParams && diffSize === null) return this._pickDifficulty();
+
+        if (seed !== null && (seed < 0 || seed > SEED_MAX)) return this._badArgs();
+        if (size < MIN_SIZE || size > MAX_SIZE) return this._badArgs();
+        this._startGame(size, seed);
+    }
+
+    _toInt(v) {
+        if (typeof v !== 'string' && typeof v !== 'number') return null;
+        const n = Number(v);
+        return Number.isInteger(n) ? n : null;
+    }
+
+    _numFlag(v) {
+        if (v === null) return null;
+        if (typeof v === 'boolean') return undefined;
+        const n = this._toInt(v);
+        return n === null ? undefined : n;
+    }
+
+    _badArgs() {
+        this.error('invalid arguments');
+        this.showHelp();
+        return null;
     }
 
     _pickDifficulty() {
         this._completed = false;
         this._timer = 0;
-        this._difficulty = null;
         this._generating = false;
         this._spaceHeld = false;
         this._paintTarget = null;
@@ -192,7 +248,7 @@ export class NurikabeCmd extends CmdBase {
             footer: '← → Move  ↩ Confirm  ESC Quit',
             onSelect: (idx) => {
                 this._difficultyDialog = null;
-                this._startGame(opts[idx].toLowerCase());
+                this._startGame(DIFFICULTY[opts[idx].toLowerCase()].size);
             },
             onCancel: () => {
                 this._difficultyDialog = null;
@@ -203,14 +259,13 @@ export class NurikabeCmd extends CmdBase {
         this._difficultyDialog = dialog;
     }
 
-    async _startGame(diff) {
-        const cfg = DIFFICULTY[diff];
-        this._difficulty = diff;
-        this._size = cfg.size;
+    async _startGame(size, seed = null) {
+        this._size = size;
+        this._label = _sizeLabel(size);
         this._completed = false;
         this._won = false;
-        this._cursorRow = Math.floor(cfg.size / 2);
-        this._cursorCol = Math.floor(cfg.size / 2);
+        this._cursorRow = Math.floor(size / 2);
+        this._cursorCol = Math.floor(size / 2);
         this._timer = 0;
         this._difficultyDialog = null;
         this._generating = true;
@@ -229,7 +284,7 @@ export class NurikabeCmd extends CmdBase {
 
         this.holdBusy();
         const epoch = this.abortEpoch;
-        const gen = await this._generateAsync(cfg.size, epoch);
+        const gen = await this._generateAsync(size, epoch, seed);
         this.releaseBusy();
 
         if (this.closed || epoch !== this.abortEpoch) return;
@@ -245,11 +300,11 @@ export class NurikabeCmd extends CmdBase {
         this._seed = gen.seed;
         this._clues = gen.puzzle.clues;
         this._solution = gen.puzzle.solution;
-        this._player = _create2D(cfg.size, cfg.size, WHITE);
-        this._geom = geom(cfg.size, cfg.size);
+        this._player = _create2D(size, size, WHITE);
+        this._geom = geom(size, size);
         this._puzzleFlat = {
-            R: cfg.size,
-            C: cfg.size,
+            R: size,
+            C: size,
             clues: gen.puzzle.clues.flat(),
         };
         this._updateClueColors();
@@ -265,16 +320,16 @@ export class NurikabeCmd extends CmdBase {
         }, 1000);
     }
 
-    async _generateAsync(size, epoch) {
+    async _generateAsync(size, epoch, seed = null) {
         const maxAttempts = size <= 8 ? 300 : size <= 12 ? 600 : 1200;
-        const seed = Date.now() & 0x7fffffff;
+        const baseSeed = seed != null ? seed : (Date.now() & 0x7fffffff);
         for (let attempt = 0; attempt < maxAttempts; attempt++) {
             if (epoch !== this.abortEpoch) return null;
             const puzzle = generatePuzzle(size, size, {
-                seed: seed + attempt,
+                seed: baseSeed + attempt,
                 maxAttempts: 1,
             });
-            if (puzzle) return { puzzle, seed: seed + attempt };
+            if (puzzle) return { puzzle, seed: baseSeed + attempt };
             // Yield to the UI thread every attempt so the browser never freezes.
             // For large boards each attempt can take 10-100ms; batching would cause jank.
             await new Promise((r) => setTimeout(r, 0));
@@ -283,16 +338,14 @@ export class NurikabeCmd extends CmdBase {
     }
 
     _renderGenerating() {
-        const cfg = DIFFICULTY[this._difficulty];
-        term.write('\x1B[1;1H' + bold(cyan('  Nurikabe [' + cfg.label + ']')) +
+        term.write('\x1B[1;1H' + bold(cyan('  Nurikabe [' + this._label + ']')) +
             '\n\n' + yellow('  Generating puzzle...'));
     }
 
     _drawHeader() {
-        const cfg = DIFFICULTY[this._difficulty];
         const t = _formatTime(this._timer);
-        const pad = Math.max(0, 48 - cfg.label.length);
-        term.write('\x1B[1;1H' + bold(cyan('  Nurikabe [' + cfg.label + ']')) +
+        const pad = Math.max(0, 48 - this._label.length);
+        term.write('\x1B[1;1H' + bold(cyan('  Nurikabe [' + this._label + ']')) +
             ' '.repeat(Math.max(0, pad)) +
             yellow(t));
     }
@@ -595,5 +648,5 @@ export class NurikabeCmd extends CmdBase {
     static get commandName() { return 'nurikabe'; }
     static get help() { return 'Play Nurikabe'; }
     static get menu() { return 'Nurikabe'; }
-    static get usage() { return 'nurikabe [--easy|--medium|--hard]'; }
+    static get usage() { return 'nurikabe [--easy|--medium|--hard] [<seed> [<size>]]'; }
 }
