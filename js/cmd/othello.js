@@ -463,19 +463,21 @@ export class OthelloCmd extends CmdBase {
             sq2:  cont(0),
             hint:  makeCell('・', 250, 0, false, 2),
             hint2: cont(0),
-            black:     makeCell('⬤', 15, 0, true, 2),
+            black:     makeCell('◯', 15, 0, true, 2),
             blackC:    cont(0),
-            white:     makeCell('◯', 15, 0, true, 2),
+            white:     makeCell('⬤', 15, 0, true, 2),
             whiteC:    cont(0),
-            curBlack:  makeCell('⬤', 15, 5, true, 2),
+            curBlack:  makeCell('◯', 15, 5, true, 2),
             curBlackC: cont(5),
-            curWhite:  makeCell('◯', 15, 5, true, 2),
+            curWhite:  makeCell('⬤', 15, 5, true, 2),
             curWhiteC: cont(5),
+            curHint:    makeCell('・', 15, 5, false, 2),
+            curHint2:   cont(5),
             curSq:     makeCell('　', 15, 5, false, 2),
             curSq2:    cont(5),
-            thinkBlack:  makeCell('⬤', 0, 3, true, 2),
+            thinkBlack:  makeCell('◯', 0, 3, true, 2),
             thinkBlackC: cont(3),
-            thinkWhite:  makeCell('◯', 15, 3, true, 2),
+            thinkWhite:  makeCell('⬤', 15, 3, true, 2),
             thinkWhiteC: cont(3),
             thinkSq:     makeCell('　', 15, 3, false, 2),
             thinkSq2:    cont(3),
@@ -552,13 +554,13 @@ export class OthelloCmd extends CmdBase {
         } else if (isThink) {
             cell = C.thinkSq;
             cell2 = C.thinkSq2;
+        } else if (!this._flipBusy && !this._passMsg && !this._completed &&
+                this._turn === BLACK && isValid(this._board, r, c, BLACK)) {
+            if (isCur) { cell = C.curHint; cell2 = C.curHint2; }
+            else { cell = C.hint; cell2 = C.hint2; }
         } else if (isCur) {
             cell = C.curSq;
             cell2 = C.curSq2;
-        } else if (!this._flipBusy && !this._passMsg && !this._completed &&
-                this._turn === BLACK && isValid(this._board, r, c, BLACK)) {
-            cell = C.hint;
-            cell2 = C.hint2;
         } else {
             cell = C.sq;
             cell2 = C.sq2;
@@ -572,7 +574,7 @@ export class OthelloCmd extends CmdBase {
         const b = countPieces(this._board, BLACK);
         const w = countPieces(this._board, WHITE);
         const left = '  ' + bold(cyan('Othello')) + ' [' + label + ']';
-        const right = '  ' + fg(240)('⬤') + ' ' + b + '   ' + fg(240)('◯') + ' ' + w + '  ';
+        const right = '  ' + fg(240)('◯') + ' ' + b + '   ' + fg(240)('⬤') + ' ' + w + '  ';
         const pad = Math.max(0, root.width - bufWidth(left) - bufWidth(right));
         root.writeStr(0, 0, left + ' '.repeat(pad) + right);
     }
