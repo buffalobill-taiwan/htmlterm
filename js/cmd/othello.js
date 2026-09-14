@@ -42,6 +42,7 @@ const POS = [
 
 const FLIP_MS = 150;
 const THINK_MS = 150;
+const BLINK_MS = 150;
 const PASS_MS = 700;
 const HARD_TIME_LIMIT = 500;
 
@@ -554,7 +555,8 @@ export class OthelloCmd extends CmdBase {
         } else if (isCur) {
             cell = C.curSq;
             cell2 = C.curSq2;
-        } else if (this._turn === BLACK && isValid(this._board, r, c, BLACK)) {
+        } else if (!this._flipBusy && !this._passMsg && !this._completed &&
+                this._turn === BLACK && isValid(this._board, r, c, BLACK)) {
             cell = C.hint;
             cell2 = C.hint2;
         } else {
@@ -714,6 +716,7 @@ export class OthelloCmd extends CmdBase {
             if (this.abortEpoch !== epoch) return;
             if (this._completed) return;
             this._thinkHighlight = null;
+            this._render();
             let mv = null;
             if (this._difficulty === 'easy') {
                 mv = aiMoveEasy(this._board, WHITE);
@@ -727,7 +730,25 @@ export class OthelloCmd extends CmdBase {
                 this._render();
                 return;
             }
-            this._playMove(mv[0], mv[1]);
+            this._thinkHighlight = mv;
+            this._render();
+            const blinkSeq = [null, mv, null];
+            for (let i = 0; i < blinkSeq.length; i++) {
+                const t = setTimeout(() => {
+                    if (this.abortEpoch !== epoch) return;
+                    if (this._completed) return;
+                    this._thinkHighlight = blinkSeq[i];
+                    this._render();
+                }, (i + 1) * BLINK_MS);
+                this._timers.push(t);
+            }
+            const playT = setTimeout(() => {
+                if (this.abortEpoch !== epoch) return;
+                if (this._completed) return;
+                this._thinkHighlight = null;
+                this._playMove(mv[0], mv[1]);
+            }, 4 * BLINK_MS);
+            this._timers.push(playT);
         }, (cands.length + 1) * THINK_MS);
         this._timers.push(decideT);
     }
