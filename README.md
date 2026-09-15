@@ -28,7 +28,7 @@ dialogs, and TSR-style widgets.
 ### Demo shell
 
 - Frame-stack command runner with rAF-based Typewriter output
-- 31 built-in commands (games, widgets, interactive tests — see below)
+- 32 built-in commands (games, widgets, interactive tests — see below)
 - Dialog framework (`MenuDialog`, `InputDialog`, `ShowDialog`) with overlay compositing
 - VirtualBuffer compositing abstraction for nested UI layout
 - TSR widgets (clock, DVD logo) — draggable, position remembered
@@ -101,6 +101,7 @@ Open `index.html` in a modern browser, or visit the live demo:
 | `mbti` | MBTI personality test (interactive) |
 | `minesw` | Play Minesweeper (three difficulty levels) |
 | `nurikabe` | Play Nurikabe logic puzzle (three difficulty levels, hold C to highlight sea) |
+| `othello` | Play Othello/Reversi (8×8 board, hint dots, 3 AI difficulties) |
 | `puyo` | Play Puyo Puyo (column gravity, no floating puyos, chain elimination, 3-5 colors) |
 | `quiz` | Math quiz challenge |
 | `sleep` | Wait for N seconds (default 1) |
@@ -108,7 +109,7 @@ Open `index.html` in a modern browser, or visit the live demo:
 | `sudoku` | Play Sudoku puzzle (interactive cursor navigation) |
 | `tetris` | Play Tetris (SRS rotation, T-Spin, ghost piece, hold, line-clear flash) |
 | `time` | Measure execution time of a command |
-| `wordle` | Play Wordle (fullwidth grid, 3-row keyboard, 16k guess dictionary) |
+| `wordle` | Play Wordle (fullwidth grid, big-glyph keyboard, 16k guess dictionary) |
 
 ### Keyboard shortcuts
 
