@@ -2,6 +2,7 @@ import { term } from '../../system/sys.js';
 import { CmdBase } from '../CmdBase.js';
 import { CURSOR_HIDE } from '../../util/sgr.js';
 import { bufWidth } from '../../util/display-width.js';
+import { VirtualBuffer } from '../../util/VirtualBuffer.js';
 import { VALID_WORDS } from './valid-words.js';
 
 const WORDS = [
@@ -131,11 +132,14 @@ function evaluateGuess(guess, answer) {
     return result;
 }
 
-const TITLE_ROW = 1;
-const GRID_START = 2;
-const MSG_ROW = 15;
-const KEYBOARD_Y = 17;
-const COL = 33;
+const TITLE_Y = 0;
+const TITLE_X = 34;
+const BOARD_X = 32;
+const BOARD_Y = 1;
+const BOARD_W = 16;
+const BOARD_H = 13;
+const MSG_Y = 14;
+const KEYBOARD_Y = 16;
 
 const KEY_ROWS = [
     ['q','w','e','r','t','y','u','i','o','p'],
@@ -169,80 +173,98 @@ export class WordleCmd extends CmdBase {
 
         this.open();
         term.write(CURSOR_HIDE);
+        this._initVBs();
         this._render();
     }
 
-    _render() {
-        let out = '\x1B[2J\x1B[H' +
-            `\x1B[${TITLE_ROW};35H\x1B[1m\x1B[33mＷＯＲＤＬＥ${RESET}` +
-            `\x1B[${GRID_START};${COL}H${TOP_BORDER}`;
+    _initVBs() {
+        this._boardVB = new VirtualBuffer(BOARD_W, BOARD_H);
+        this._rootVB = new VirtualBuffer(term.cols, term.rows);
+        this._boardSlot = this._rootVB.addChildSlot();
+        this._boardSlot.vb = this._boardVB;
+        this._boardSlot.x = BOARD_X;
+        this._boardSlot.y = BOARD_Y;
+        this._boardSlot.active = true;
+    }
 
+    _render() {
+        const root = this._rootVB;
+        for (let r = 0; r < root.height; r++)
+            root.writeStr(r, 0, ' '.repeat(root.width));
+
+        root.writeStr(TITLE_Y, TITLE_X, '\x1B[1;33mＷＯＲＤＬＥ\x1B[0m');
+
+        const board = this._boardVB;
+        for (let r = 0; r < board.height; r++)
+            board.writeStr(r, 0, ' '.repeat(board.width));
+
+        board.writeStr(0, 0, TOP_BORDER);
         for (let i = 0; i < 6; i++) {
-            const contentY = GRID_START + 1 + i * 2;
+            const contentY = 1 + i * 2;
 
             if (i < this._guesses.length) {
-                out += `\x1B[${contentY};${COL}H`;
                 const guess = this._guesses[i];
                 const result = evaluateGuess(guess, this._answer);
-                out += BORDER + '│' + RESET;
+                let row = BORDER + '│' + RESET;
                 for (let j = 0; j < 5; j++) {
                     const fw = toFullwidth(guess[j]);
-                    out += colorCode(result[j]) + fw + RESET + BORDER + '│' + RESET;
+                    row += colorCode(result[j]) + fw + RESET + BORDER + '│' + RESET;
                 }
+                board.writeStr(contentY, 0, row);
             } else if (this._revealState && i === this._revealState.rowIdx) {
-                out += `\x1B[${contentY};${COL}H`;
-                out += BORDER + '│' + RESET;
+                let row = BORDER + '│' + RESET;
                 for (let j = 0; j < 5; j++) {
                     const fw = toFullwidth(this._revealState.guess[j]);
                     if (j < this._revealState.pos) {
-                        out += colorCode(this._revealState.result[j]) + fw + RESET;
+                        row += colorCode(this._revealState.result[j]) + fw + RESET;
                     } else {
-                        out += '\x1B[97;44m' + fw + RESET;
+                        row += '\x1B[97;44m' + fw + RESET;
                     }
-                    out += BORDER + '│' + RESET;
+                    row += BORDER + '│' + RESET;
                 }
+                board.writeStr(contentY, 0, row);
             } else if (!this._gameOver && i === this._guesses.length) {
-                out += `\x1B[${contentY};${COL}H`;
-                out += BORDER + '│' + RESET;
+                let row = BORDER + '│' + RESET;
                 for (let j = 0; j < 5; j++) {
                     if (j < this._currentGuess.length) {
                         const fw = toFullwidth(this._currentGuess[j]);
-                        out += '\x1B[97;44m' + fw + RESET;
+                        row += '\x1B[97;44m' + fw + RESET;
                     } else {
-                        out += BORDER + '　' + RESET;
+                        row += BORDER + '　' + RESET;
                     }
-                    out += BORDER + '│' + RESET;
+                    row += BORDER + '│' + RESET;
                 }
+                board.writeStr(contentY, 0, row);
             } else {
-                out += `\x1B[${contentY};${COL}H${EMPTY_ROW}`;
+                board.writeStr(contentY, 0, EMPTY_ROW);
             }
 
-            const sepY = GRID_START + 2 + i * 2;
-            out += `\x1B[${sepY};${COL}H` + (i < 5 ? SEP_BORDER : BOT_BORDER);
+            board.writeStr(2 + i * 2, 0, i < 5 ? SEP_BORDER : BOT_BORDER);
         }
 
         if (this._message) {
             const mw = bufWidth(this._message);
-            const cx = Math.max(1, Math.floor((80 - mw) / 2) + 1);
-            out += `\x1B[${MSG_ROW};${cx}H${this._message}${RESET}\x1B[K`;
+            const cx = Math.max(0, Math.floor((root.width - mw) / 2));
+            root.writeStr(MSG_Y, cx, this._message + RESET);
         }
 
         for (let ri = 0; ri < KEY_ROWS.length; ri++) {
             const row = KEY_ROWS[ri];
             const w = row.length * 2;
-            const cx = Math.floor((80 - w) / 2) + 1;
+            const cx = Math.max(0, Math.floor((root.width - w) / 2));
             const y = KEYBOARD_Y + ri;
-            out += `\x1B[${y};${cx}H`;
+            let str = '';
             for (const ch of row) {
                 const s = this._keyState[ch];
                 const c = s === 'correct' ? '\x1B[97;42m' :
                           s === 'present' ? '\x1B[97;43m' :
                           s === 'absent' ? '\x1B[97;100m' : '\x1B[90m';
-                out += c + toFullwidth(ch) + RESET;
+                str += c + toFullwidth(ch) + RESET;
             }
+            root.writeStr(y, cx, str);
         }
 
-        term.write(out);
+        term.writeVB(root);
     }
 
     _updateKeyState(guess, result) {
