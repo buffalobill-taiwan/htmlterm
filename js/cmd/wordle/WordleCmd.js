@@ -139,7 +139,10 @@ const BOARD_Y = 1;
 const BOARD_W = 16;
 const BOARD_H = 13;
 const MSG_Y = 14;
+const KEYBOARD_X = 30;
 const KEYBOARD_Y = 16;
+const KEYBOARD_W = 20;
+const KEYBOARD_H = 3;
 
 const KEY_ROWS = [
     ['q','w','e','r','t','y','u','i','o','p'],
@@ -185,6 +188,13 @@ export class WordleCmd extends CmdBase {
         this._boardSlot.x = BOARD_X;
         this._boardSlot.y = BOARD_Y;
         this._boardSlot.active = true;
+
+        this._keyboardVB = new VirtualBuffer(KEYBOARD_W, KEYBOARD_H);
+        this._keyboardSlot = this._rootVB.addChildSlot();
+        this._keyboardSlot.vb = this._keyboardVB;
+        this._keyboardSlot.x = KEYBOARD_X;
+        this._keyboardSlot.y = KEYBOARD_Y;
+        this._keyboardSlot.active = true;
     }
 
     _render() {
@@ -248,11 +258,13 @@ export class WordleCmd extends CmdBase {
             root.writeStr(MSG_Y, cx, this._message + RESET);
         }
 
+        const kb = this._keyboardVB;
+        for (let r = 0; r < kb.height; r++)
+            kb.writeStr(r, 0, ' '.repeat(kb.width));
         for (let ri = 0; ri < KEY_ROWS.length; ri++) {
             const row = KEY_ROWS[ri];
             const w = row.length * 2;
-            const cx = Math.max(0, Math.floor((root.width - w) / 2));
-            const y = KEYBOARD_Y + ri;
+            const cx = Math.max(0, Math.floor((kb.width - w) / 2));
             let str = '';
             for (const ch of row) {
                 const s = this._keyState[ch];
@@ -261,7 +273,7 @@ export class WordleCmd extends CmdBase {
                           s === 'absent' ? '\x1B[97;100m' : '\x1B[90m';
                 str += c + toFullwidth(ch) + RESET;
             }
-            root.writeStr(y, cx, str);
+            kb.writeStr(ri, cx, str);
         }
 
         term.writeVB(root);
