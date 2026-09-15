@@ -16,12 +16,6 @@ const DIRS = [
     [1, -1],  [1, 0],  [1, 1],
 ];
 
-const CORNERS = [[0, 0], [0, 7], [7, 0], [7, 7]];
-// X-squares (diagonal to a corner) and C-squares (edge-adjacent to a corner)
-const X_SQUARES = [[1, 1], [1, 6], [6, 1], [6, 6]];
-const C_SQUARES = [[0, 1], [1, 0], [0, 6], [1, 7], [7, 0], [6, 1], [6, 7], [7, 6]];
-const DANGER_SQUARES = X_SQUARES.concat(C_SQUARES);
-
 const DIFFICULTY = {
     easy:   { label: 'Easy' },
     medium: { label: 'Medium' },
@@ -44,7 +38,6 @@ const FLIP_MS = 150;
 const THINK_MS = 150;
 const BLINK_MS = 150;
 const PASS_MS = 700;
-const HARD_TIME_LIMIT = 500;
 
 const GRID_X = 31;
 const GRID_Y = 4;
@@ -146,9 +139,9 @@ function aiMoveEasy(board, p) {
     return moves[(Math.random() * moves.length) | 0];
 }
 
-// ── Medium: minimax + alpha-beta, depth 3, positional weights + mobility ───
+// ── Shared evaluation: positional weights + mobility ─────────────────
 
-function evalMedium(board, ai) {
+function evalPos(board, ai) {
     const opp = other(ai);
     let score = 0;
     for (let r = 0; r < N; r++)
@@ -162,8 +155,29 @@ function evalMedium(board, ai) {
     return score + (my - op) * 8;
 }
 
+// ── Medium: depth-1 — pick the move that maximizes the static eval ──────────
+
+function aiMoveMedium(board, ai) {
+    const moves = getValidMoves(board, ai);
+    if (!moves.length) return null;
+    let best = null;
+    let bestScore = -Infinity;
+    for (const [r, c] of moves) {
+        const flips = applyMove(board, r, c, ai);
+        const s = evalPos(board, ai);
+        undoMove(board, r, c, ai, flips);
+        if (s > bestScore) {
+            bestScore = s;
+            best = [r, c];
+        }
+    }
+    return best;
+}
+
+// ── Hard: minimax + alpha-beta, depth 3 (root + 2 replies) on evalPos ───────
+
 function minimax(board, depth, alpha, beta, isMaximizing, ai) {
-    if (depth <= 0) return evalMedium(board, ai);
+    if (depth <= 0) return evalPos(board, ai);
     const me = isMaximizing ? ai : other(ai);
     const moves = getValidMoves(board, me);
     if (moves.length === 0) {
@@ -196,7 +210,7 @@ function minimax(board, depth, alpha, beta, isMaximizing, ai) {
     return best;
 }
 
-function aiMoveMedium(board, ai) {
+function aiMoveHard(board, ai) {
     const moves = getValidMoves(board, ai);
     if (!moves.length) return null;
     let best = null;
@@ -209,177 +223,6 @@ function aiMoveMedium(board, ai) {
             bestScore = s;
             best = [r, c];
         }
-    }
-    return best;
-}
-
-// ── Hard: iterative deepening negamax + alpha-beta, 6-feature eval ─────────
-
-function cornerAdjToEmpty(board, r, c) {
-    for (const [cr, cc] of CORNERS) {
-        if (Math.abs(cr - r) <= 1 && Math.abs(cc - c) <= 1 && board[idx(cr, cc)] === EMPTY) {
-            return true;
-        }
-    }
-    return false;
-}
-
-function evalHard(board, ai) {
-    const opp = other(ai);
-    let filled = 0;
-    let myD = 0;
-    let opD = 0;
-    for (const v of board) {
-        if (v === EMPTY) continue;
-        filled++;
-        if (v === ai) myD++;
-        else opD++;
-    }
-    const phase = filled - 4;
-    const interp = (openW, endW) =>
-        Math.round((openW * (60 - phase) + endW * phase) / 60);
-
-    const myMoves = getValidMoves(board, ai).length;
-    const opMoves = getValidMoves(board, opp).length;
-
-    let myPM = 0;
-    let opPM = 0;
-    let myFr = 0;
-    let opFr = 0;
-    for (let r = 0; r < N; r++)
-        for (let c = 0; c < N; c++) {
-            const i = idx(r, c);
-            const v = board[i];
-            if (v === EMPTY) {
-                let a = false;
-                let o = false;
-                for (const [dr, dc] of DIRS) {
-                    const rr = r + dr;
-                    const cc = c + dc;
-                    if (!inb(rr, cc)) continue;
-                    const nv = board[idx(rr, cc)];
-                    if (nv === ai) a = true;
-                    else if (nv === opp) o = true;
-                }
-                if (a) myPM++;
-                if (o) opPM++;
-            } else {
-                let adjEmpty = false;
-                for (const [dr, dc] of DIRS) {
-                    const rr = r + dr;
-                    const cc = c + dc;
-                    if (inb(rr, cc) && board[idx(rr, cc)] === EMPTY) {
-                        adjEmpty = true;
-                        break;
-                    }
-                }
-                if (adjEmpty) {
-                    if (v === ai) myFr++;
-                    else opFr++;
-                }
-            }
-        }
-
-    let myCor = 0;
-    let opCor = 0;
-    for (const [r, c] of CORNERS) {
-        const v = board[idx(r, c)];
-        if (v === ai) myCor++;
-        else if (v === opp) opCor++;
-    }
-
-    let myDanger = 0;
-    let opDanger = 0;
-    for (const [r, c] of DANGER_SQUARES) {
-        if (!cornerAdjToEmpty(board, r, c)) continue;
-        const v = board[idx(r, c)];
-        if (v === ai) myDanger++;
-        else if (v === opp) opDanger++;
-    }
-
-    return (myD - opD) * interp(1, 14) +
-        (myMoves - opMoves) * interp(24, 5) +
-        (myPM - opPM) * interp(8, 2) +
-        (myCor - opCor) * 160 +
-        (myDanger - opDanger) * interp(-45, -5) +
-        (myFr - opFr) * interp(-12, -3);
-}
-
-function orderMoves(board, p, moves) {
-    return moves
-        .map((m) => {
-            let s = 0;
-            const r = m[0];
-            const c = m[1];
-            if ((r === 0 || r === 7) && (c === 0 || c === 7)) s += 100000;
-            else if (r === 0 || r === 7 || c === 0 || c === 7) s += 200;
-            const flips = discFlips(board, r, c, p);
-            if (flips) s += flips.length;
-            return [m, s];
-        })
-        .sort((a, b) => b[1] - a[1])
-        .map((x) => x[0]);
-}
-
-const TIMEOUT = Symbol('timeout');
-
-function negamax(board, depth, alpha, beta, me, ai, start, limit) {
-    if (Date.now() - start > limit) throw TIMEOUT;
-    if (depth <= 0) return evalHard(board, ai);
-    const moves = getValidMoves(board, me);
-    if (moves.length === 0) {
-        if (getValidMoves(board, other(me)).length === 0) {
-            return discDiff(board, ai) * 10000;
-        }
-        return -negamax(board, depth - 1, -beta, -alpha, other(me), ai, start, limit);
-    }
-    const ranked = orderMoves(board, me, moves);
-    let best = -Infinity;
-    for (const [r, c] of ranked) {
-        const flips = applyMove(board, r, c, me);
-        let s;
-        try {
-            s = -negamax(board, depth - 1, -beta, -alpha, other(me), ai, start, limit);
-        } finally {
-            undoMove(board, r, c, me, flips);
-        }
-        if (s > best) best = s;
-        if (s > alpha) alpha = s;
-        if (alpha >= beta) break;
-    }
-    return best;
-}
-
-function aiMoveHard(board, ai, limit = HARD_TIME_LIMIT) {
-    const moves = getValidMoves(board, ai);
-    if (!moves.length) return null;
-    const start = Date.now();
-    let best = moves[0];
-    for (let depth = 1; depth <= 10; depth++) {
-        let cur = null;
-        let curScore = -Infinity;
-        let alpha = -Infinity;
-        try {
-            for (const [r, c] of orderMoves(board, ai, moves)) {
-                const flips = applyMove(board, r, c, ai);
-                let s;
-                try {
-                    s = -negamax(board, depth - 1, -Infinity, -alpha, other(ai), ai, start, limit);
-                } finally {
-                    undoMove(board, r, c, ai, flips);
-                }
-                if (s > curScore) {
-                    curScore = s;
-                    cur = [r, c];
-                }
-                if (s > alpha) alpha = s;
-            }
-        } catch (e) {
-            if (e === TIMEOUT) break;
-            throw e;
-        }
-        if (Date.now() - start > limit) break;
-        if (cur !== null) best = cur;
     }
     return best;
 }
