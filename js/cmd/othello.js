@@ -290,6 +290,7 @@ export class OthelloCmd extends CmdBase {
         this._passMsg = null;
         this._result = null;
         this._firstMove = true;
+        this._cursorFlips = null;
 
         this.open();
         term.write('\x1B[2J\x1B[1;1H');
@@ -311,14 +312,18 @@ export class OthelloCmd extends CmdBase {
             blackC:    cont(0),
             white:     makeCell('⬤', 15, 0, true, 2),
             whiteC:    cont(0),
-            curBlack:  makeCell('◯', 15, 5, true, 2),
-            curBlackC: cont(5),
-            curWhite:  makeCell('⬤', 15, 5, true, 2),
-            curWhiteC: cont(5),
-            curHint:    makeCell('・', 15, 5, false, 2),
-            curHint2:   cont(5),
-            curSq:     makeCell('　', 15, 5, false, 2),
-            curSq2:    cont(5),
+            flipBlack:  makeCell('◯', 15, 5, true, 2),
+            flipBlackC: cont(5),
+            flipWhite:  makeCell('⬤', 15, 5, true, 2),
+            flipWhiteC: cont(5),
+            curBlack:  makeCell('◯', 15, 13, true, 2),
+            curBlackC: cont(13),
+            curWhite:  makeCell('⬤', 15, 13, true, 2),
+            curWhiteC: cont(13),
+            curHint:    makeCell('・', 15, 13, false, 2),
+            curHint2:   cont(13),
+            curSq:     makeCell('　', 15, 13, false, 2),
+            curSq2:    cont(13),
             thinkBlack:  makeCell('◯', 0, 3, true, 2),
             thinkBlackC: cont(3),
             thinkWhite:  makeCell('⬤', 15, 3, true, 2),
@@ -360,6 +365,13 @@ export class OthelloCmd extends CmdBase {
         }
         vb.writeStr(9, 0, fg(250)('╚' + '═'.repeat(16) + '╝'));
 
+        this._cursorFlips = null;
+        if (this._flipBusy === false && this._completed === false && this._passMsg === null &&
+                this._turn === BLACK) {
+            const flips = discFlips(this._board, this._cursorR, this._cursorC, BLACK);
+            if (flips) this._cursorFlips = new Set(flips);
+        }
+
         for (let r = 0; r < N; r++)
             for (let c = 0; c < N; c++)
                 this._drawSquare(vb, r, c);
@@ -387,7 +399,10 @@ export class OthelloCmd extends CmdBase {
         }
 
         let cell, cell2;
-        if (shown === BLACK) {
+        if (shown !== EMPTY && this._cursorFlips && this._cursorFlips.has(idx(r, c))) {
+            if (shown === BLACK) { cell = C.flipBlack; cell2 = C.flipBlackC; }
+            else { cell = C.flipWhite; cell2 = C.flipWhiteC; }
+        } else if (shown === BLACK) {
             if (isThink) { cell = C.thinkBlack; cell2 = C.thinkBlackC; }
             else if (isCur) { cell = C.curBlack; cell2 = C.curBlackC; }
             else { cell = C.black; cell2 = C.blackC; }
