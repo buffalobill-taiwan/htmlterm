@@ -2,6 +2,7 @@ import { system, term } from '../../system/sys.js';
 import { makeOverlayGetCell } from '../../util/sgr.js';
 import { VerticalSelectDialog } from '../../dialog/VerticalSelectDialog.js';
 import { displayWidth } from '../../util/display-width.js';
+import { VirtualBuffer } from '../../util/VirtualBuffer.js';
 import { getWaitingTiles, checkTenpai } from './yaku.js';
 
 export const inputMixin = {
@@ -454,10 +455,7 @@ export const inputMixin = {
                 this._showEffectAndContinue();
                 return;
             }
-            const labels = options.map(o =>
-                '捨' + o.tile.name + '→聽' + o.waits.map(w => w.name).join('')
-            );
-            const maxLen = Math.max(...labels.map(l => displayWidth(l)));
+            const maxW = 3 + Math.max(...options.map(o => o.waits.length)) * 2;
             const stackDepth = system.cmdStack.length;
             const removeHook = system.addFramePopHook(() => {
                 if (system.cmdStack.length === stackDepth) {
@@ -468,9 +466,11 @@ export const inputMixin = {
             system.createDialog(VerticalSelectDialog, 'jpmj-riichi', {
                 title: '立直',
                 message: 'どの牌を捨てますか？',
-                options: labels,
-                width: maxLen + 6,
+                options,
+                width: Math.max(displayWidth('どの牌を捨てますか？') + 4, maxW + 10),
                 cols: 1,
+                cellHeight: 2,
+                renderOption: (idx, o, sel) => this._buildRiichiStripVB(o, sel),
                 onSelect: (idx) => {
                     this._game.humanRiichi(options[idx].handIdx);
                     this._cursorMode = 'hand';
@@ -486,7 +486,6 @@ export const inputMixin = {
 
         if (action && typeof action === 'object') {
             if (action.type === 'chi' && action.chiSets && action.chiSets.length > 1) {
-                const chiLabels = action.chiSets.map(set => set.map(t => t.name).join(' '));
                 const removeHook = system.addFramePopHook(() => {
                     if (system.cmdStack.length === stackDepth) {
                         removeHook();
@@ -496,9 +495,11 @@ export const inputMixin = {
                 system.createDialog(VerticalSelectDialog, 'jpmj-chi', {
                     title: 'チー選択',
                     message: 'どの組み合わせでチーしますか？',
-                    options: chiLabels,
-                    width: 40,
+                    options: action.chiSets,
+                    width: displayWidth('どの組み合わせでチーしますか？') + 6,
                     cols: 1,
+                    cellHeight: 2,
+                    renderOption: (idx, set, sel) => this._buildTileStripVB(set, sel),
                     onSelect: (idx) => {
                         const call = { ...action, chosenChiSet: idx };
                         g.humanCall(call);
@@ -534,9 +535,8 @@ export const inputMixin = {
                     this._showEffectAndContinue();
                     return;
                 }
-                const labels = opts.map(o => o.desc);
-                const maxLen = Math.max(...labels.map(l => displayWidth(l)));
                 const key = action.type === 'ankans' ? 'jpmj-ankans' : 'jpmj-kakans';
+                const kanLabel = action.type === 'ankans' ? '暗槓' : '加槓';
                 const stackDepth = system.cmdStack.length;
                 const removeHook = system.addFramePopHook(() => {
                     if (system.cmdStack.length === stackDepth) {
@@ -546,9 +546,11 @@ export const inputMixin = {
                 });
                 system.createDialog(VerticalSelectDialog, key, {
                     title: action.type === 'ankans' ? '暗槓選択' : '加槓選択',
-                    options: labels,
-                    width: maxLen + 6,
+                    options: opts,
+                    width: Math.max(displayWidth(action.type === 'ankans' ? '暗槓選択' : '加槓選択') + 6, 2 + 1 + displayWidth(kanLabel) + 10),
                     cols: 1,
+                    cellHeight: 2,
+                    renderOption: (idx, o, sel) => this._buildTileStripVB([o.tile], sel, kanLabel),
                     onSelect: (idx) => {
                         g.executeKan(opts[idx]);
                         this._cursorMode = 'hand';
@@ -660,6 +662,28 @@ export const inputMixin = {
             x += items[i].label.length + 1;
         }
         return { row: 19, col: x };
+    },
+
+    _buildTileStripVB(tiles, cursor, label) {
+        const n = tiles.length;
+        const pal = cursor ? this._palCursor : this._palNormal;
+        const labelW = label ? displayWidth(label) : 0;
+        const vb = new VirtualBuffer(n * 2 + (label ? 1 + labelW : 0), 2);
+        const buf = vb._buffer;
+        for (let i = 0; i < n; i++) this._writeTile2x2(buf, 0, i * 2, pal[tiles[i].key()]);
+        if (label) vb.writeStr(0, n * 2 + 1, label);
+        return vb;
+    },
+
+    _buildRiichiStripVB(o, cursor) {
+        const waits = o.waits;
+        const pal = cursor ? this._palCursor : this._palNormal;
+        const vb = new VirtualBuffer(3 + waits.length * 2, 2);
+        const buf = vb._buffer;
+        this._writeTile2x2(buf, 0, 0, pal[o.tile.key()]);
+        for (let i = 0; i < waits.length; i++) this._writeTile2x2(buf, 0, 3 + i * 2, pal[waits[i].key()]);
+        vb.writeStr(0, 2, '→');
+        return vb;
     },
 
     _drawPauseOverlay() {
