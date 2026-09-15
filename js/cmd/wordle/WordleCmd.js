@@ -1,6 +1,6 @@
 import { term } from '../../system/sys.js';
 import { CmdBase } from '../CmdBase.js';
-import { CURSOR_HIDE } from '../../util/sgr.js';
+import { CURSOR_HIDE, makeCell } from '../../util/sgr.js';
 import { bufWidth } from '../../util/display-width.js';
 import { VirtualBuffer } from '../../util/VirtualBuffer.js';
 import { VALID_WORDS } from './valid-words.js';
@@ -139,10 +139,10 @@ const BOARD_Y = 1;
 const BOARD_W = 16;
 const BOARD_H = 13;
 const MSG_Y = 14;
-const KEYBOARD_X = 30;
+const KEYBOARD_X = 20;
 const KEYBOARD_Y = 16;
-const KEYBOARD_W = 20;
-const KEYBOARD_H = 3;
+const KEYBOARD_W = 40;
+const KEYBOARD_H = 6;
 
 const KEY_ROWS = [
     ['q','w','e','r','t','y','u','i','o','p'],
@@ -262,18 +262,27 @@ export class WordleCmd extends CmdBase {
         for (let r = 0; r < kb.height; r++)
             kb.writeStr(r, 0, ' '.repeat(kb.width));
         for (let ri = 0; ri < KEY_ROWS.length; ri++) {
-            const row = KEY_ROWS[ri];
-            const w = row.length * 2;
-            const cx = Math.max(0, Math.floor((kb.width - w) / 2));
-            let str = '';
-            for (const ch of row) {
+            const keys = KEY_ROWS[ri];
+            const rowW = keys.length * 4;
+            const cx = Math.max(0, Math.floor((kb.width - rowW) / 2));
+            for (let k = 0; k < keys.length; k++) {
+                const ch = keys[k];
                 const s = this._keyState[ch];
-                const c = s === 'correct' ? '\x1B[97;42m' :
-                          s === 'present' ? '\x1B[97;43m' :
-                          s === 'absent' ? '\x1B[97;100m' : '\x1B[90m';
-                str += c + toFullwidth(ch) + RESET;
+                const fg = s === 'correct' ? 15 : s === 'present' ? 15 : s === 'absent' ? 15 : 8;
+                const bg = s === 'correct' ? 2 : s === 'present' ? 3 : s === 'absent' ? 8 : 0;
+                const fw = toFullwidth(ch);
+                const x = cx + k * 4;
+                const y = ri * 2;
+                for (let rr = 0; rr < 2; rr++) {
+                    for (let cc = 0; cc < 4; cc++) {
+                        const cell = makeCell(fw, fg, bg, false, 1);
+                        cell.clip = true;
+                        cell.clipOffX = -cc;
+                        cell.clipOffY = -rr;
+                        kb.setCell(y + rr, x + cc, cell);
+                    }
+                }
             }
-            kb.writeStr(ri, cx, str);
         }
 
         term.writeVB(root);
@@ -419,7 +428,7 @@ export class WordleCmd extends CmdBase {
             this._revealState = null;
             this.releaseBusy();
         }
-        term.write(`\x1B[20;1H`);
+        term.write(`\x1B[${KEYBOARD_Y + KEYBOARD_H + 1};1H`);
         super.close();
     }
 
