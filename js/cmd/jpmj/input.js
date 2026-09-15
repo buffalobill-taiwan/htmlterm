@@ -1,6 +1,5 @@
 import { system, term } from '../../system/sys.js';
 import { makeOverlayGetCell } from '../../util/sgr.js';
-import { SelectDialog } from '../../dialog/SelectDialog.js';
 import { VerticalSelectDialog } from '../../dialog/VerticalSelectDialog.js';
 import { displayWidth } from '../../util/display-width.js';
 import { getWaitingTiles, checkTenpai } from './yaku.js';
@@ -494,11 +493,12 @@ export const inputMixin = {
                         this._showEffectAndContinue();
                     }
                 });
-                system.createDialog(SelectDialog, 'jpmj-chi', {
+                system.createDialog(VerticalSelectDialog, 'jpmj-chi', {
                     title: 'チー選択',
                     message: 'どの組み合わせでチーしますか？',
                     options: chiLabels,
                     width: 40,
+                    cols: 1,
                     onSelect: (idx) => {
                         const call = { ...action, chosenChiSet: idx };
                         g.humanCall(call);
