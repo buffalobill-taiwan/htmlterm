@@ -11,7 +11,7 @@ export class VerticalSelectDialog extends Dialog {
     constructor(term, opts) {
         const width = opts.width || 36;
         const message = opts.message || '';
-        const lines = message.split('\n');
+        const lines = message ? message.split('\n') : [];
         const options = opts.options || ['OK'];
         const cols = opts.cols || 3;
         const rows = Math.ceil(options.length / cols);
@@ -31,6 +31,9 @@ export class VerticalSelectDialog extends Dialog {
         this._selCol = 0;
         this._onSelect = opts.onSelect || (() => {});
         this._onCancel = opts.onCancel || (() => {});
+        this._renderOption = opts.renderOption || null;
+        this._cellWidth = opts.cellWidth || null;
+        this._wrap = opts.wrap || false;
     }
 
     _renderContent() {
@@ -40,8 +43,15 @@ export class VerticalSelectDialog extends Dialog {
 
         const contentY = 3 + this._lines.length;
 
-        const maxLen = Math.max(...this._options.map(o => this._bufWidth(o)));
-        const cellW = maxLen + 4;
+        let cellW;
+        if (this._cellWidth != null) {
+            cellW = this._cellWidth;
+        } else if (this._renderOption) {
+            cellW = this.width - 2;
+        } else {
+            const maxLen = Math.max(...this._options.map(o => this._bufWidth(o)));
+            cellW = maxLen + 4;
+        }
         const totalW = cellW * this._cols;
         const leftPad = Math.floor((this.width - 2 - totalW) / 2);
 
@@ -54,15 +64,22 @@ export class VerticalSelectDialog extends Dialog {
             for (let c = 0; c < this._cols; c++) {
                 const idx = r * this._cols + c;
                 if (idx >= this._options.length) break;
-                const opt = this._options[idx];
-                const optW = this._bufWidth(opt);
                 const isSelected = r === this._selRow && c === this._selCol;
-                const pad = cellW - 2 - optW;
-                const left = Math.floor(pad / 2);
-                const right = Math.ceil(pad / 2);
-                const content = ' ' + ' '.repeat(left) + opt + ' '.repeat(right + 1);
-                const sgr = isSelected ? '\x1B[7m\x1B[1m' : '';
-                this._vb.writeStr(row, cx, sgr + content, this.width - 1);
+
+                if (this._renderOption) {
+                    const rendered = this._renderOption(idx, this._options[idx], isSelected);
+                    const sgr = isSelected ? '\x1B[7m\x1B[1m' : '';
+                    this._vb.writeStr(row, cx, sgr + rendered, this.width - 1);
+                } else {
+                    const opt = this._options[idx];
+                    const optW = this._bufWidth(opt);
+                    const pad = cellW - 2 - optW;
+                    const left = Math.floor(pad / 2);
+                    const right = Math.ceil(pad / 2);
+                    const content = ' ' + ' '.repeat(left) + opt + ' '.repeat(right + 1);
+                    const sgr = isSelected ? '\x1B[7m\x1B[1m' : '';
+                    this._vb.writeStr(row, cx, sgr + content, this.width - 1);
+                }
                 cx += cellW;
             }
 
@@ -77,14 +94,14 @@ export class VerticalSelectDialog extends Dialog {
             const csi = parseCSI(data);
             if (!csi) { this._onCancel(); return 'close'; }
             const { final } = csi;
-            if (final === 'A' && this._selRow > 0) {
-                this._selRow--;
-            } else if (final === 'B' && this._selRow < this._rows - 1) {
-                this._selRow++;
-            } else if (final === 'D' && this._selCol > 0) {
-                this._selCol--;
-            } else if (final === 'C' && this._selCol < this._cols - 1) {
-                this._selCol++;
+            if (final === 'A') {
+                this._selRow = this._selRow > 0 ? this._selRow - 1 : (this._wrap ? this._rows - 1 : 0);
+            } else if (final === 'B') {
+                this._selRow = this._selRow < this._rows - 1 ? this._selRow + 1 : (this._wrap ? 0 : this._rows - 1);
+            } else if (final === 'D') {
+                this._selCol = this._selCol > 0 ? this._selCol - 1 : (this._wrap ? this._cols - 1 : 0);
+            } else if (final === 'C') {
+                this._selCol = this._selCol < this._cols - 1 ? this._selCol + 1 : (this._wrap ? 0 : this._cols - 1);
             }
             const idx = this._selRow * this._cols + this._selCol;
             if (idx >= this._options.length) {

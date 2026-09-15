@@ -1,9 +1,8 @@
 import { system, term } from '../system/sys.js';
 import { CmdBase } from './CmdBase.js';
-import { Dialog } from '../dialog/Dialog.js';
 import { ConfirmDialog } from '../dialog/ConfirmDialog.js';
+import { VerticalSelectDialog } from '../dialog/VerticalSelectDialog.js';
 import { centeredDialogPos } from '../dialog/position.js';
-import { parseCSI } from '../system/TextInputModel.js';
 import { bold, yellow, cyan, gray, CURSOR_HIDE, makeCell } from '../util/sgr.js';
 import { VirtualBuffer } from '../util/VirtualBuffer.js';
 import { bufWidth } from '../util/display-width.js';
@@ -58,56 +57,27 @@ function _centerContent(content, width) {
     return ' '.repeat(Math.floor(pad / 2)) + content + ' '.repeat(Math.ceil(pad / 2));
 }
 
-class LevelSelectDialog extends Dialog {
+class LevelSelectDialog extends VerticalSelectDialog {
     constructor(term, opts) {
         const width = 40;
         const h = LEVELS.length + 6;
         const pos = centeredDialogPos(term, width, h);
-        super(term, { ...opts, width, title: '選擇關卡 Klotski', footer: '↑↓ 選關  ↩ 開始  ESC 離開' });
-        this.x = pos.x;
-        this.y = Math.max(0, pos.y);
-        this.h = h;
-        this._selected = 0;
-        this._onSelect = opts.onSelect || (() => {});
-        this._onCancel = opts.onCancel || (() => {});
-    }
-
-    _renderContent() {
-        for (let i = 0; i < LEVELS.length; i++) {
-            const lv = LEVELS[i];
-            const sel = i === this._selected;
-            const left = ' ' + String(i + 1).padStart(2) + '  ' + lv.name;
-            const right = String(lv.mini) + '步 ';
-            const pad = Math.max(0, this.width - 2 - this._bufWidth(left) - this._bufWidth(right));
-            let s = '│';
-            if (sel) s += '\x1B[7m\x1B[1m';
-            s += left + ' '.repeat(pad) + right;
-            if (sel) s += '\x1B[0m';
-            s += '│';
-            this._t(3 + i, s);
-        }
-    }
-
-    _onKey(data) {
-        const code = data.charCodeAt(0);
-        if (code === 0x1B) {
-            const csi = parseCSI(data);
-            if (!csi) { this._onCancel(); return 'close'; }
-            const { final } = csi;
-            if (final === 'A') {
-                this._selected = (this._selected - 1 + LEVELS.length) % LEVELS.length;
-                this.refreshContent();
-            } else if (final === 'B') {
-                this._selected = (this._selected + 1) % LEVELS.length;
-                this.refreshContent();
-            }
-            return;
-        }
-        if (code === 0x03) { this._onCancel(); return 'close'; }
-        if (code === 0x0D || code === 0x0A) {
-            this._onSelect(this._selected);
-            return 'close';
-        }
+        super(term, {
+            ...opts,
+            width,
+            title: '選擇關卡 Klotski',
+            footer: '↑↓ 選關  ↩ 開始  ESC 離開',
+            options: LEVELS,
+            cols: 1,
+            wrap: true,
+            y: pos.y,
+            renderOption: (idx, opt) => {
+                const left = ' ' + String(idx + 1).padStart(2) + '  ' + opt.name;
+                const right = String(opt.mini) + '步 ';
+                const pad = Math.max(0, width - 2 - bufWidth(left) - bufWidth(right));
+                return left + ' '.repeat(pad) + right;
+            },
+        });
     }
 }
 
