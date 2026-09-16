@@ -20,16 +20,19 @@ export class Typewriter {
         const tokens = this._tokenize(text);
 
         const expanded = [];
+        let big = false;
         for (const t of tokens) {
-            if (t.type === 'nl') {
-                expanded.push({ type: 'char', ch: '\n', wide: false });
-            } else if (t.type === 'text') {
+            if (t.type === 'seq') {
+                const d = this._sgrBig(t.text);
+                if (d === true || d === false) big = d;
+                expanded.push(t);
+            } else if (t.type === 'nl') {
+                expanded.push({ type: 'char', ch: '\n', wide: false, big: false });
+            } else {
                 for (const ch of t.text) {
                     const wide = this.term.isWide(ch);
-                    expanded.push({ type: 'char', ch, wide });
+                    expanded.push({ type: 'char', ch, wide, big });
                 }
-            } else {
-                expanded.push(t);
             }
         }
 
@@ -104,6 +107,19 @@ export class Typewriter {
         return tokens;
     }
 
+    _sgrBig(text) {
+        const m = /^\x1B\[([0-9;]*)m$/.exec(text);
+        if (!m) return null;
+        const params = m[1] === '' ? ['0'] : m[1].split(';');
+        let out;
+        for (const p of params) {
+            if (p === '0') out = false;
+            else if (p === '500') out = true;
+            else if (p === '501') out = false;
+        }
+        return out === undefined ? undefined : out;
+    }
+
     _start() {
         if (this._active || this._queue.length === 0) return;
         this._active = true;
@@ -122,7 +138,8 @@ export class Typewriter {
         while (this._head < this._queue.length) {
             const item = this._queue[this._head];
             const delay = item.type === 'seq' ? 0
-                : (item.wide ? this._speed.wide : this._speed.half);
+                : (item.wide ? this._speed.wide : this._speed.half)
+                    * (item.big ? 4 : 1);
 
             if (delay > this._accumulator) break;
 
