@@ -15,7 +15,7 @@ const REVEAL_MS = 800;
 
 function _pool() {
     const out = [];
-    for (let cp = 0x2600; cp <= 0x26FF; cp++) {
+    for (let cp = 0x2600; cp <= 0x27BF; cp++) {
         if (isWide(cp)) out.push(String.fromCodePoint(cp));
     }
     return out;
