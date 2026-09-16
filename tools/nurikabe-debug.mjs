@@ -3,7 +3,7 @@
  * nurikabe-debug — Show every formation step of a Nurikabe puzzle from its seed.
  *
  * Usage:
- *   node tools/nurikabe-debug.mjs <seed> [size] [--noretry] [--ptt] [--clueonly] [--clues]
+ *   node tools/nurikabe-debug.mjs <seed> [size] [--noretry] [--ptt] [--puzzle] [--clues]
  *
  * Examples:
  *   node tools/nurikabe-debug.mjs 123456
@@ -33,8 +33,9 @@
  * chars are fullwidth (one cell each): sea becomes a single █ and the border
  * dash count halves, so each row stays exactly `size` cells.
  *
- * Pass --clueonly to render the sea as fullwidth space (　) as well, hiding the
- * solution the same way as the puzzle (see nurikabe-solve).
+ * Pass --puzzle to append, after all stages, an extra board showing only the
+ * puzzle: sea is rendered as fullwidth space (　) as well, hiding the solution
+ * the same way as the puzzle (see nurikabe-solve).
  *
  * Pass --clues to append a final line holding the final board as
  * `<R> <C> "r,c,v r,c,v ..."` (1-indexed clue triplets), ready to feed
@@ -49,11 +50,11 @@ const positional = args.filter((a) => !a.startsWith('--'));
 
 const ptt = flags.includes('--ptt');
 const noRetry = flags.includes('--noretry');
-const clueOnly = flags.includes('--clueonly');
+const emitPuzzle = flags.includes('--puzzle');
 const emitClues = flags.includes('--clues');
 
 const SP = '\u3000';        // fullwidth space (width 2)
-const SEA = clueOnly ? SP : (ptt ? '█' : '██'); // clueonly → blank sea, else one fullwidth block (PTT) or two halfwidth
+const SEA = ptt ? '█' : '██'; // one fullwidth block (PTT) or two halfwidth
 const DASH = ptt ? '─' : '─'.repeat(2); // border unit: fullwidth dash vs halfwidth pair
 const HL_OUT = '\x1B[41;31m'; // solid red — island cell that can change shape (become sea)
 const HL_IN = '\x1B[42m';   // green bg — sea cell that can change shape (become island)
@@ -69,7 +70,9 @@ const W_ISL = 0;   // internal white (island)
 // mark "not yet meaningful at this stage" and render as blank.
 // `flex` is a Set of flexible cell indices (RETRY): island cells → red,
 // sea cells → green, matching nurikabe-dupcheck's HL_OUT/HL_IN.
-function render(R, C, board, clues = null, flex = null) {
+// `sea` is the token used for solid sea cells (SEA by default; pass SP for the
+// clue-only / puzzle view).
+function render(R, C, board, clues = null, flex = null, sea = SEA) {
     const lines = [];
     const inner = DASH.repeat(C);
     lines.push('┌' + inner + '┐');
@@ -84,7 +87,7 @@ function render(R, C, board, clues = null, flex = null) {
                 // Flexible sea cells render as a blank green cell (as in
                 // nurikabe-dupcheck), not the solid SEA block, so the green
                 // background stays visible.
-                row += (flex && flex[i] === FLEX_IN) ? HL_IN + SP + HL_RESET : SEA;
+                row += (flex && flex[i] === FLEX_IN) ? HL_IN + SP + HL_RESET : sea;
             } else if (flex && flex[i] === FLEX_OUT) {
                 // Flexible island cell that can become sea — solid red.
                 row += HL_OUT + SP + HL_RESET;
@@ -129,7 +132,7 @@ const seed = parseInt(positional[0], 10);
 const size = parseInt(positional[1] || '12', 10);
 
 if (Number.isNaN(seed) || seed <= 0) {
-    process.stderr.write('Usage: node tools/nurikabe-debug.mjs <seed> [size] [--noretry] [--ptt] [--clueonly] [--clues]\n');
+    process.stderr.write('Usage: node tools/nurikabe-debug.mjs <seed> [size] [--noretry] [--ptt] [--puzzle] [--clues]\n');
     process.exit(1);
 }
 
@@ -177,6 +180,8 @@ const g = geom(size, size);
 const pinned = pinIslandShapes(state, cluesFlat, size, size, g);
 
 const chunks = [];
+let finalBoard = null;   // shipped board cells, set when a puzzle actually ships
+let finalClues = null;   // shipped clue grid
 const headerSeed = noRetry ? seed : shippedSeed;
 chunks.push(`Nurikabe seed ${seed} ships as ${headerSeed}  size ${size}  (island count ${d.islands})`);
 chunks.push('');
@@ -222,6 +227,8 @@ if (pinned) {
         for (let i = 0; i < size * size; i++) if (swapState0[i] !== state[i]) { shape = true; break; }
         const swapBoard = new Int8Array(size * size);
         for (let i = 0; i < size * size; i++) swapBoard[i] = state[i] === BLACK ? B_SEA : W_ISL;
+        finalBoard = swapBoard;
+        finalClues = cluesFlat;
         let note;
         if (shape && swapMoved.length) {
             note = `  [2-swap remedy: shape adopted, clues moved: ${swapMoved.join(', ')}]`;
@@ -283,6 +290,11 @@ if (emitClues) {
         }
     }
     chunks.push(`${size} ${size} "${tri.join(' ')}"`);
+}
+
+if (emitPuzzle && finalBoard) {
+    chunks.push('Puzzle (clues only):');
+    chunks.push(render(size, size, finalBoard, finalClues, null, SP));
 }
 
 process.stdout.write(chunks.join('\n') + '\n');

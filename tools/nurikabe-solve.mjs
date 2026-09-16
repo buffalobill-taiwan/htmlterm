@@ -3,7 +3,7 @@
  * nurikabe-solve — Reproduce a Nurikabe puzzle from its seed.
  *
  * Usage:
- *   node tools/nurikabe-solve.mjs <seed> [size] [--noretry] [--ptt] [--clueonly]
+ *   node tools/nurikabe-solve.mjs <seed> [size] [--noretry] [--ptt] [--puzzle]
  *
  * Examples:
  *   node tools/nurikabe-solve.mjs 123456
@@ -25,9 +25,9 @@
  * chars are fullwidth (one cell each): sea becomes a single █ and the border
  * dash count halves, so each row stays exactly `size` cells.
  *
- * Pass --clueonly to show only the puzzle: sea is rendered as fullwidth space
- * (　) just like the empty island cells, so only the clue numbers stand out and
- * the solution is not revealed.
+ * Pass --puzzle to append, after the solved board, an extra board showing only
+ * the puzzle: sea is rendered as fullwidth space (　) just like the empty island
+ * cells, so only the clue numbers stand out and the solution is not revealed.
  */
 
 import { generatePuzzle, formatClue, BLACK } from '../js/util/nurikabe-engine.js';
@@ -38,13 +38,13 @@ const positional = args.filter((a) => !a.startsWith('--'));
 
 const ptt = flags.includes('--ptt');
 const noRetry = flags.includes('--noretry');
-const clueOnly = flags.includes('--clueonly');
+const emitPuzzle = flags.includes('--puzzle');
 
 const SP = '\u3000';        // fullwidth space (width 2)
-const SEA = clueOnly ? SP : (ptt ? '█' : '██'); // clueonly → blank sea, else one fullwidth block (PTT) or two halfwidth
+const SEA = ptt ? '█' : '██'; // one fullwidth block (PTT) or two halfwidth
 const DASH = ptt ? '─' : '─'.repeat(2); // border unit: fullwidth dash vs halfwidth pair
 
-function formatSolution(puzzle) {
+function formatBoard(puzzle, sea) {
     const { R, C, clues, solution } = puzzle;
     const lines = [];
     const inner = DASH.repeat(C);
@@ -53,7 +53,7 @@ function formatSolution(puzzle) {
         let row = '│';
         for (let c = 0; c < C; c++) {
             if (solution[r][c] === BLACK) {
-                row += SEA;
+                row += sea;
             } else if (clues[r][c] > 0) {
                 row += formatClue(clues[r][c]);
             } else {
@@ -66,11 +66,19 @@ function formatSolution(puzzle) {
     return lines.join('\n');
 }
 
+function formatSolution(puzzle) {
+    return formatBoard(puzzle, SEA);
+}
+
+function formatClueOnly(puzzle) {
+    return formatBoard(puzzle, SP);
+}
+
 const seed = parseInt(positional[0], 10);
 const size = parseInt(positional[1] || '12', 10);
 
 if (Number.isNaN(seed) || seed <= 0) {
-    process.stderr.write('Usage: node tools/nurikabe-solve.mjs <seed> [size] [--noretry] [--ptt] [--clueonly]\n');
+    process.stderr.write('Usage: node tools/nurikabe-solve.mjs <seed> [size] [--noretry] [--ptt] [--puzzle]\n');
     process.exit(1);
 }
 
@@ -90,3 +98,7 @@ if (!puzzle) {
 
 process.stdout.write(`Nurikabe seed ${seed} ships as ${shippedSeed}  size ${size}\n\n`);
 process.stdout.write(formatSolution(puzzle) + '\n');
+if (emitPuzzle) {
+    process.stdout.write('\nPuzzle (clues only):\n');
+    process.stdout.write(formatClueOnly(puzzle) + '\n');
+}
