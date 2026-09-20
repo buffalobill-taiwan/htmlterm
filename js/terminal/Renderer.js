@@ -63,8 +63,6 @@ export class Renderer {
             }
             this.cellEls.push(cellRow);
         }
-
-        this._updateContainerDimensions();
     }
 
     startRenderLoop() {
@@ -351,23 +349,8 @@ export class Renderer {
 
         this.cursorEl.className = 'b' + next.fg + ' q' + next.bg;
         this.cursorEl.textContent = next.ch;
-        this.cursorEl.style.left = (next.x * next.w) + 'px';
-        this.cursorEl.style.top = (next.y * next.h) + 'px';
-    }
-
-    _updateContainerDimensions() {
-        const screen = this.screen;
-        const w = screen.cols * this.charWidth;
-        const h = screen.rows * this.charHeight;
-
-        this.container.style.width = w + 'px';
-        this.container.style.height = h + 'px';
-
-        const wrapper = this.container.parentElement;
-        if (wrapper) {
-            wrapper.style.width = w + 'px';
-            wrapper.style.height = h + 'px';
-        }
+        this.cursorEl.style.setProperty('--cur-col', next.x);
+        this.cursorEl.style.setProperty('--cur-row', next.y);
     }
 
     fitToViewport() {
@@ -386,7 +369,7 @@ export class Renderer {
         this._scale = scale;
         const wrapper = this.container.parentElement;
         if (wrapper) {
-            wrapper.style.transform = `scale(${scale})`;
+            wrapper.style.setProperty('--term-scale', scale);
         }
     }
 
@@ -422,7 +405,6 @@ export class Renderer {
                 rowEl.removeChild(cellRow.pop());
             }
         }
-        this._updateContainerDimensions();
         this.fitToViewport();
     }
 }

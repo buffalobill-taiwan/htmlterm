@@ -89,7 +89,7 @@ Renderer._blendOverlays(rowIdx):
          for each cell in overlay row:
            if overlay.getCell(relY, relC) != null:
              base[col] = cell  (overwrites)
-  3. span.textContent, span.className, span.style.cssText updated per cell
+  3. span.textContent, span.className updated per cell (no per-cell inline styles)
 ```
 
 | Layer | Z Level | Owner | Buffer | Blending | Write Method |
@@ -103,12 +103,13 @@ Renderer._blendOverlays(rowIdx):
 
 ### Per-Cell DOM Grid
 
-`Renderer` pre-creates 80×25 `<span>` elements at init. Each render cycle **updates only dirty rows**, modifying `.textContent`, `.className`, and `.style.cssText` per cell:
+`Renderer` pre-creates 80×25 `<span>` elements at init. Each render cycle **updates only dirty rows**, modifying `.textContent` and `.className` per cell:
 
-- No `innerHTML` string building
+- No `innerHTML` string building (except clip cells, which set a single inner `<span>` via `.innerHTML`)
 - No node create/destroy per frame
 - Dirty-row tracking avoids redundant updates
-- **Clip CSS** for wide-char pairs covered by overlays: `display:inline-block; width:8px; overflow:hidden; text-indent:±8px`
+- **Clip CSS** for wide-char pairs covered by overlays: `clip-right` / `clip-left` / `clip-cell` classes sized by `var(--char-w)` / `var(--char-h)`, offset via `.clip-cell[data-ox]` / `[data-oy]` rules
+- Cursor position and viewport scale are CSS custom properties: `--cur-col` / `--cur-row` / `--term-scale`; geometry is computed in `style.css` via `calc()`
 
 ### Shell System: Frame Stack & Execution Model
 
@@ -268,7 +269,7 @@ this.readLine((line) => {
 `.q0`–`.q255` and `.b0`–`.b255` in `style.css` are **hand-maintained and intentionally static**. They are independent from the `colToHex()` algorithmic palette in `Renderer.js`:
 
 - `.q16`–`.q255` are for ANSI 256-color palette rendering
-- Per-cell rendering uses these classes for indexed colors and inline `style` for truecolor
+- Per-cell rendering uses these classes for indexed colors and the `qhi`/`bhi` classes for truecolor
 - **Do NOT propose generating these classes at runtime** — the design explicitly avoids this.
 
 ### Native UTF-8 Strings

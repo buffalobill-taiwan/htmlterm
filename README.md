@@ -38,21 +38,21 @@ dialogs, and TSR-style widgets.
 
 ## Architecture
 
-> **Note on 256-color CSS classes:** The 480 `.q16`–`.q255`/`.b16`–`.b255` CSS rules in `style.css` are hand-maintained and intentionally kept static. Per-cell rendering in `Renderer.js` uses these classes for indexed colors and inline styles for truecolor. This avoids generating 80×25 inline style strings per frame and keeps the render hot path simple.
+> **Note on 256-color CSS classes:** The 480 `.q16`–`.q255`/`.b16`–`.b255` CSS rules in `style.css` are hand-maintained and intentionally kept static. Per-cell rendering in `Renderer.js` uses these classes for indexed colors and the `qhi`/`bhi` classes for truecolor — no per-cell inline styles. This avoids generating 80×25 inline style strings per frame and keeps the render hot path simple.
 
 | Component | Approach |
 |-----------|----------|
 | **Core split** | `Screen.js` (buffer) · `Parser.js` (VT100 state machine) · `Renderer.js` (DOM grid) · `terminal.js` (coordinator) |
-| **Rendering** | Pre-created 80×25 `<span>` grid; dirty-row updates via `.textContent` / `.className` / `.style.cssText`; clip cells use CSS classes (`clip-right`/`clip-left`/`clip-cell`) + `.innerHTML` |
+| **Rendering** | Pre-created 80×25 `<span>` grid; in-place dirty-row updates via `.textContent` / `.className` (no per-cell inline styles); clip cells use CSS classes (`clip-right`/`clip-left`/`clip-cell`) sized by `var(--char-w)`/`var(--char-h)` with `data-ox`/`data-oy` + `.innerHTML` |
 | **Buffer** | 2D cell array (`{ch, fg, bg, bold, italic, …, width}`) + scrollback; CJK uses `width: 2` + continuation cell |
 | **Overlays** | Widgets (z=10), dialogs (z=100), and flash (z=200) own separate buffers; `Renderer._blendOverlays` composites at render time |
 | **Shell** | `SystemManager` (singleton) + `sys.js` (Proxy exports for cmd code) + `ShellCmd` (persistent CmdBase subclass, REPL) |
 | **Dialogs** | VirtualBuffer-based layout in `js/dialog/`; `DialogFrame` saves/restores cursor on open/close |
 | **Input** | `keydown` on `document` (always captured) + hidden `<textarea>` for IME |
 | **Focus** | Automatic refocus on `keyup` (ptt.cc pattern) |
-| **Cursor** | Absolutely-positioned `<div>` with CSS `blink` animation |
+| **Cursor** | Absolutely-positioned `<div>`, positioned via `--cur-col`/`--cur-row` CSS variables with CSS `blink` animation |
 | **Render loop** | `requestAnimationFrame` with dirty-row tracking |
-| **Scaling** | `fitToViewport()` on init and debounced resize |
+| **Scaling** | `fitToViewport()` writes `--term-scale` on init and debounced resize; layout math lives in CSS (`calc(var(--cols) * var(--char-w))`) |
 
 For implementation guidance, start with [AGENTS.md](AGENTS.md). Detailed references are split by topic:
 [architecture](docs/architecture.md), [command authoring](docs/command-authoring.md),

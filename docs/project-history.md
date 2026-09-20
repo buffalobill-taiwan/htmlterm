@@ -251,3 +251,14 @@ out to sea, green = cell in); `tools/nurikabe-cluepin.mjs` re-checks shipped
 boards (RIGID/FAIL) and reports RETRY when a seed's single attempt found no
 rigid board; seeds 1–300 all validate (solved, one clue per island equal to
 its size).
+
+Renderer CSS-variable layout (Sep 2026): grid geometry is fixed (80×25,
+8×16 cells), so all inline styles were removed from `Renderer.js`. Cursor
+positioning (`style.left`/`style.top`) and viewport scale
+(`transform: scale()`) now write CSS custom properties `--cur-col`/`--cur-row`
+and `--term-scale`; `style.css` owns the layout math via
+`calc(var(--cols) * var(--char-w))` with `--cols`/`--rows`/`--char-w`/
+`--char-h` defined in `:root`. Per-cell/clip char-metric literals
+(8px/16px/32px/−8px/−16px/−24px) were replaced with `var()`/`calc()`.
+`_updateContainerDimensions` deleted (container size is pure CSS now); JS
+writes only logical coordinates and the scale factor.
