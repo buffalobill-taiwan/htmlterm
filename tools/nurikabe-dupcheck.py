@@ -11,10 +11,10 @@ Usage:
   python3 tools/nurikabe-dupcheck.py <R> <C> "r,c,v r,c,v ..." [--timeout N] [--ptt]
 
 Example:
-  python3 tools/nurikabe-dupcheck.py 8 8 "1,3,3 3,3,1 3,5,1 4,7,8 6,1,6 6,4,8 6,7,6 7,5,1 8,1,1"
-  python3 tools/nurikabe-dupcheck.py --ptt 8 8 "1,3,3 3,3,1 3,5,1 4,7,8 6,1,6 6,4,8 6,7,6 7,5,1 8,1,1"
+  python3 tools/nurikabe-dupcheck.py 8 8 "0,2,3 2,2,1 2,4,1 3,6,8 5,0,6 5,3,8 5,6,6 6,4,1 7,0,1"
+  python3 tools/nurikabe-dupcheck.py --ptt 8 8 "0,2,3 2,2,1 2,4,1 3,6,8 5,0,6 5,3,8 5,6,6 6,4,1 7,0,1"
 
-Each clue is row,column,value, 1-indexed exactly like the printed grid.
+Each clue is row,column,value, using 0-indexed row and column coordinates.
 
 Behaviour:
   - Solves once and prints the first solution board, then forbids that exact
@@ -233,13 +233,13 @@ def main():
         except ValueError:
             sys.stderr.write(f'Bad clue token: {token!r} (expected r,c,v)\n')
             sys.exit(2)
-        if not (1 <= r <= R and 1 <= c <= C):
+        if not (0 <= r < R and 0 <= c < C):
             sys.stderr.write(f'Clue {token} is out of bounds\n')
             sys.exit(2)
         if v < 1:
             sys.stderr.write(f'Clue {token} must be positive\n')
             sys.exit(2)
-        cell = (r - 1, c - 1)
+        cell = (r, c)
         if cell in seen_cells:
             sys.stderr.write(f'Duplicate clue cell ({r},{c})\n')
             sys.exit(2)

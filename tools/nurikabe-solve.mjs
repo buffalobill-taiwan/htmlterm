@@ -44,7 +44,7 @@
  * cells, so only the clue numbers stand out and the solution is not revealed.
  *
  * Pass --clues to append a final line holding the final board as
- * `<R> <C> "r,c,v r,c,v ..."` (1-indexed clue triplets), ready to feed
+ * `<R> <C> "r,c,v r,c,v ..."` (0-indexed clue triplets), ready to feed
  * tools/nurikabe-dupcheck.py. When --noretry fails and --debug is on, the clue
  * grid of the discarded board is emitted as-is (pre-pin on a pin failure,
  * pre-remedy on a remedy failure).
@@ -335,7 +335,7 @@ if (emitClues && (puzzle || finalClues)) {
             // finalClues (flat) wins when set by the --debug audit, including on
             // a --noretry discard; otherwise fall back to the shipped puzzle.
             const v = finalClues ? finalClues[r * size + c] : puzzle.clues[r][c];
-            if (v > 0) tri.push(`${r + 1},${c + 1},${v}`);
+            if (v > 0) tri.push(`${r},${c},${v}`);
         }
     }
     out.push(`${size} ${size} "${tri.join(' ')}"`);
