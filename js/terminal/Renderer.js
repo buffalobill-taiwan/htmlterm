@@ -10,6 +10,8 @@ export class Renderer {
         this.charHeight = this._baseCharHeight;
         this._scale = 1;
         this._loopRunning = false;
+        this._rafId = null;
+        this._disposed = false;
 
         this.rowEls = [];
         this.cellEls = [];
@@ -66,17 +68,36 @@ export class Renderer {
     }
 
     startRenderLoop() {
+        if (this._disposed || this._loopRunning) return;
         this._loopRunning = true;
         const loop = () => {
+            this._rafId = null;
             if (!this._loopRunning) return;
             this._render();
-            requestAnimationFrame(loop);
+            this._rafId = requestAnimationFrame(loop);
         };
-        requestAnimationFrame(loop);
+        this._rafId = requestAnimationFrame(loop);
     }
 
     stopRenderLoop() {
         this._loopRunning = false;
+        if (this._rafId !== null) {
+            cancelAnimationFrame(this._rafId);
+            this._rafId = null;
+        }
+    }
+
+    dispose() {
+        if (this._disposed) return;
+        this._disposed = true;
+        this.stopRenderLoop();
+        if (this.cursorEl) this.cursorEl.remove();
+        for (const rowEl of this.rowEls) rowEl.remove();
+        if (this._scrollIndicatorEl) this._scrollIndicatorEl.remove();
+        this.rowEls = [];
+        this.cellEls = [];
+        this.cursorEl = null;
+        this._scrollIndicatorEl = null;
     }
 
     _render() {

@@ -45,7 +45,7 @@ dialogs, and TSR-style widgets.
 | **Core split** | `Screen.js` (buffer) · `Parser.js` (VT100 state machine) · `Renderer.js` (DOM grid) · `terminal.js` (coordinator) |
 | **Rendering** | Pre-created 80×25 `<span>` grid; in-place dirty-row updates via `.textContent` / `.className` (no per-cell inline styles); clip cells use CSS classes (`clip-right`/`clip-left`/`clip-cell`) sized by `var(--char-w)`/`var(--char-h)` with `data-ox`/`data-oy` + `.innerHTML` |
 | **Buffer** | 2D cell array (`{ch, fg, bg, bold, italic, …, width}`) + scrollback; CJK uses `width: 2` + continuation cell |
-| **Overlays** | Widgets (z=10), dialogs (z=100), and flash (z=200) own separate buffers; `Renderer._blendOverlays` composites at render time |
+| **Overlays** | Command overlays, dialogs, and widgets own separate buffers; fixed render order is command → dialog → widget, with later registration winning within a group |
 | **Shell** | `SystemManager` (singleton) + `sys.js` (Proxy exports for cmd code) + `ShellCmd` (persistent CmdBase subclass, REPL) |
 | **Dialogs** | VirtualBuffer-based layout in `js/dialog/`; `DialogFrame` saves/restores cursor on open/close |
 | **Input** | `keydown` on `document` (always captured) + hidden `<textarea>` for IME |
@@ -73,6 +73,17 @@ Uses [Unifont](https://unifoundry.com/unifont/) bitmap font, subsetted into five
 Open `index.html` in a modern browser, or visit the live demo:
 
 <https://buffalobill-taiwan.github.io/htmlterm/>
+
+When embedding the terminal, tear it down in this order:
+
+```js
+system.dispose();
+term.dispose();
+```
+
+`SystemManager.dispose()` must run first so active commands, dialogs, widgets,
+and overlays can release their resources. Both dispose methods are safe to call
+more than once.
 
 ### Commands
 

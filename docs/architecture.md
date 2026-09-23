@@ -56,6 +56,14 @@ topmost, its pending-activation flag is set, and Typewriter, busy state, and
 readLine state are all clear. Do not add ad-hoc prompt writes to completion
 paths.
 
+## Lifecycle
+
+`SystemManager.dispose()` stops input and async command activity, closes active
+dialogs, destroys widgets, removes remaining overlays, clears frame hooks, and
+releases the singleton. Call it before `Terminal.dispose()` when tearing down
+the application. `Terminal.dispose()` is idempotent and removes event
+listeners, pending resize/render RAF callbacks, and renderer-owned DOM nodes.
+
 ## Input and output
 
 Input is routed, in order, to the top frame handler, active `readLine`, a

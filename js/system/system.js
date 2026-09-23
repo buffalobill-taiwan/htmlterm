@@ -4,7 +4,7 @@ import { tokenize } from '../util/tokenize.js';
 import { ShellCmd } from '../cmd/ShellCmd.js';
 import { ShellFrame, SyncCmdFrame, DialogFrame } from './CmdFrame.js';
 import { system } from './sys.js';
-import { bold, green, yellow, gray, warn } from '../util/sgr.js';
+import { bold, green, yellow, gray, warn, CURSOR_SHOW } from '../util/sgr.js';
 import { MenuDialog } from '../dialog/MenuDialog.js';
 
 export class SystemManager {
@@ -13,6 +13,7 @@ export class SystemManager {
     constructor(term, cmdModule) {
         SystemManager.instance = this;
         this.term = term;
+        this._disposed = false;
 
         this.cmdStack = [];
         this._tickQueued = false;
@@ -88,18 +89,21 @@ export class SystemManager {
     holdBusy() { this._busy = true; }
     releaseBusy() {
         this._busy = false;
-        this.tick();
+        if (!this._disposed) this.tick();
     }
 
     print(text) {
+        if (this._disposed) return;
         this.typewriter.enqueue(text);
     }
 
     tick() {
+        if (this._disposed) return;
         if (this._tickQueued) return;
         this._tickQueued = true;
         Promise.resolve().then(() => {
             this._tickQueued = false;
+            if (this._disposed) return;
             this._processStack();
         });
     }
@@ -155,6 +159,7 @@ export class SystemManager {
     }
 
     execCmd(line) {
+        if (this._disposed) return;
         const trimmed = line.trim();
         const tokens = tokenize(trimmed);
         const cmd = tokens[0] ? tokens[0].toLowerCase() : '';
@@ -177,6 +182,7 @@ export class SystemManager {
     }
 
     readLine(callback) {
+        if (this._disposed) return;
         if (this.readLineState) {
             warn('readLine called while another readLine is pending — overwriting');
         }
@@ -227,7 +233,7 @@ export class SystemManager {
     }
 
     handleInput(data) {
-        if (!this.running) return;
+        if (!this.running || this._disposed) return;
 
         const top = this.cmdStack[this.cmdStack.length - 1];
 
@@ -261,6 +267,10 @@ export class SystemManager {
     }
 
     pushDialogFrame(dlg) {
+        if (this._disposed) {
+            dlg.close();
+            return;
+        }
         const frame = new DialogFrame(dlg);
         frame._saveCursor();
         dlg.open();
@@ -291,6 +301,7 @@ export class SystemManager {
     }
 
     handleMouse(type, info) {
+        if (this._disposed) return false;
         if (type === 'mousedown') {
             const ovs = this.term.overlays;
             for (let i = ovs.length - 1; i >= 0; i--) {
@@ -324,6 +335,7 @@ export class SystemManager {
     }
 
     handleKeyUp(key) {
+        if (this._disposed) return;
         const top = this.cmdStack[this.cmdStack.length - 1];
         if (top && top.cmd && typeof top.cmd.handleKeyUp === 'function') {
             top.cmd.handleKeyUp(key);
@@ -331,6 +343,7 @@ export class SystemManager {
     }
 
     createDialog(DialogClass, key, opts, ...ctorArgs) {
+        if (this._disposed) return null;
         const pos = this._dialogPositions[key] || {};
         const dlg = new DialogClass(this.term, ...ctorArgs, {
             ...opts,
@@ -362,6 +375,45 @@ export class SystemManager {
             onCancel: () => {}
         }, this.menuItems);
         this.menuDialog = menuDlg;
+    }
+
+    dispose() {
+        if (this._disposed) return;
+        this._disposed = true;
+        this.running = false;
+        this._abortEpoch++;
+        this._busy = false;
+        this._queuedInput = [];
+        this.readLineState = null;
+        this._dragTarget = null;
+
+        // Give active commands a chance to release their timers and overlays.
+        for (const frame of this.cmdStack) {
+            const cmd = frame.cmd;
+            if (cmd && !cmd.closed && typeof cmd.onCancel === 'function') {
+                cmd.onCancel();
+            }
+        }
+
+        // Close dialogs before finishing frames so their overlays are removed.
+        for (const frame of this.cmdStack) {
+            if (frame.dialog && !frame.dialog.closed) frame.dialog.close();
+            if (!frame.done && typeof frame.finish === 'function') frame.finish();
+        }
+
+        this.typewriter.dispose();
+        this.term.cursorHidden = false;
+        this.term.write(CURSOR_SHOW);
+        this.widgetManager.destroy();
+        for (const overlay of this.term.overlays.slice()) {
+            this.term.removeOverlay(overlay);
+        }
+        this.cmdStack = [];
+        this._framePopHooks = [];
+        this.dialogRestoreHooks = [];
+        this.menuDialog = null;
+
+        if (SystemManager.instance === this) SystemManager.instance = null;
     }
 
 }

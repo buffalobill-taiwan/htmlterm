@@ -8,6 +8,7 @@ export class Typewriter {
         this._rafId = null;
         this._drainCallbacks = [];
         this._active = false;
+        this._disposed = false;
         this._speed = { wide: 2, half: 1 };
         this._lastFrameTime = 0;
         this._accumulator = 0;
@@ -16,7 +17,7 @@ export class Typewriter {
     isActive() { return this._active; }
 
     enqueue(text) {
-        if (!text) return;
+        if (this._disposed || !text) return;
         const tokens = this._tokenize(text);
 
         const expanded = [];
@@ -41,7 +42,8 @@ export class Typewriter {
     }
 
     abort() {
-        if (this._rafId) {
+        if (this._disposed) return;
+        if (this._rafId !== null) {
             cancelAnimationFrame(this._rafId);
             this._rafId = null;
         }
@@ -59,6 +61,7 @@ export class Typewriter {
     }
 
     onDrain(callback) {
+        if (this._disposed) return;
         this._drainCallbacks.push(callback);
     }
 
@@ -68,10 +71,13 @@ export class Typewriter {
     }
 
     dispose() {
-        if (this._rafId) cancelAnimationFrame(this._rafId);
+        if (this._rafId !== null) cancelAnimationFrame(this._rafId);
+        this._rafId = null;
         this._queue = [];
         this._head = 0;
         this._active = false;
+        this._drainCallbacks = [];
+        this._disposed = true;
     }
 
     _tokenize(text) {
@@ -130,6 +136,10 @@ export class Typewriter {
     }
 
     _tick(timestamp) {
+        if (this._disposed) {
+            this._rafId = null;
+            return;
+        }
         const elapsed = timestamp - this._lastFrameTime;
         this._lastFrameTime = timestamp;
         this._accumulator += elapsed;

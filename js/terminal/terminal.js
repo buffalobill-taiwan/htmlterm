@@ -8,6 +8,7 @@ export class Terminal {
     constructor(container, opts = {}) {
         this.onData = null;
         this.onResize = null;
+        this._disposed = false;
 
         this.screen = new Screen(opts.cols || DEFAULT_COLS, opts.rows || DEFAULT_ROWS);
         this.parser = new Parser(this.screen, {
@@ -75,6 +76,8 @@ export class Terminal {
     }
 
     dispose() {
+        if (this._disposed) return;
+        this._disposed = true;
         document.removeEventListener('keydown', this._keydownHandler);
         this.textarea.removeEventListener('beforeinput', this._beforeInputHandler);
         document.removeEventListener('keyup', this._keyupHandler);
@@ -87,7 +90,15 @@ export class Terminal {
         document.removeEventListener('mousemove', this._mouseMoveHandler);
         this.container.removeEventListener('contextmenu', this._contextHandler);
         if (this._resizeHandler) window.removeEventListener('resize', this._resizeHandler);
-        this.renderer.stopRenderLoop();
+        if (this._resizeRafId !== null) {
+            cancelAnimationFrame(this._resizeRafId);
+            this._resizeRafId = null;
+        }
+        this.renderer.dispose();
+        this.onData = null;
+        this.onResize = null;
+        this.onMouse = null;
+        this.onKeyUp = null;
     }
 
     _send(data) {
@@ -306,8 +317,11 @@ export class Terminal {
     _initResizeListener() {
         this._resizeRafId = null;
         this._resizeHandler = () => {
-            cancelAnimationFrame(this._resizeRafId);
-            this._resizeRafId = requestAnimationFrame(() => this.renderer.fitToViewport());
+            if (this._resizeRafId !== null) cancelAnimationFrame(this._resizeRafId);
+            this._resizeRafId = requestAnimationFrame(() => {
+                this._resizeRafId = null;
+                this.renderer.fitToViewport();
+            });
         };
         window.addEventListener('resize', this._resizeHandler);
     }
