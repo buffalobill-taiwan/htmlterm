@@ -3,6 +3,7 @@ import { CmdBase } from '../CmdBase.js';
 import { CURSOR_HIDE, CURSOR_SHOW, makeCell } from '../../util/sgr.js';
 import { SettingsDialog } from '../../dialog/SettingsDialog.js';
 import { ConfirmDialog } from '../../dialog/ConfirmDialog.js';
+import { InfoDialog } from '../../dialog/InfoDialog.js';
 import { VirtualBuffer } from '../../util/VirtualBuffer.js';
 import { Game } from './game.js';
 import { palettesMixin } from './palettes.js';
@@ -39,7 +40,8 @@ export class JpmjCmd extends CmdBase {
         this._playerVB = new VirtualBuffer(40, 3);
         this._discardVB = new VirtualBuffer(34, 15);
         this._infoVB = new VirtualBuffer(36, 21);
-        this._resultVB = new VirtualBuffer(36, 16);
+        this._resultVB = new VirtualBuffer(34, 15);
+        this._resultDialog = null;
         this._game = null;
         this._phase = 'settings';
         this._settingsValues = null;
@@ -183,8 +185,40 @@ export class JpmjCmd extends CmdBase {
         system.createDialog(ConfirmDialog, 'jpmj-confirm', {
             title: '確認',
             message: '確定要離開嗎？',
-            onConfirm: () => this.close(),
+            onConfirm: () => {
+                if (this._resultDialog && !this._resultDialog.closed) {
+                    this._resultDialog.close();
+                }
+                this.close();
+            },
         });
+    }
+
+    _showResultDialog() {
+        if (this._resultDialog && !this._resultDialog.closed) return;
+        this._resultDialog = system.createDialog(InfoDialog, null, {
+            buffer: this._resultVB,
+            x: 4,
+            y: 2,
+            onExit: () => this._advanceResult(),
+            onCancel: () => this.close(),
+            onQuit: () => this._showQuitConfirm(),
+        });
+    }
+
+    _advanceResult() {
+        this._game.commitRoundEnd();
+        if (this._game.gameOver) {
+            this._phase = 'gameOver';
+            this._render();
+        } else {
+            this._game.startNewRound();
+            this._phase = 'playing';
+            this._handCursor = 0;
+            this._actionCursor = 0;
+            this._cursorMode = 'hand';
+            this._continueGame();
+        }
     }
 
     close() {

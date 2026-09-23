@@ -58,10 +58,8 @@ export const renderMixin = {
                 this._renderDiscards(this._discardVB);
                 if (this._phase === 'result') {
                     this._renderResultOverlay(this._resultVB);
-                    this._slotResult.active = true;
-                } else {
-                    this._slotResult.active = false;
                 }
+                this._slotResult.active = false;
                 if (this._game.waitingHuman && this._phase === 'playing') {
                     this._actionItems = this._buildActionItems();
                 }
@@ -583,14 +581,7 @@ export const renderMixin = {
         const r = g.roundResult;
         if (!r) return;
 
-        const ow = 36, oh = 16;
-
-        vb.writeStr(0, 0, '┌' + '─'.repeat(ow - 2) + '┐');
-        vb.writeStr(oh - 1, 0, '└' + '─'.repeat(ow - 2) + '┘');
-        for (let rr = 1; rr < oh - 1; rr++) {
-            vb.writeStr(rr, 0, '│');
-            vb.writeStr(rr, ow - 1, '│');
-        }
+        const oh = 15;
 
         if (r.winner >= 0) {
             const winner = g.players[r.winner];

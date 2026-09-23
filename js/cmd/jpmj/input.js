@@ -104,25 +104,6 @@ export const inputMixin = {
         }
 
         if (this._phase === 'result') {
-            if (code === 0x0D || code === 0x0A) {
-                this._game.commitRoundEnd();
-                if (this._game.gameOver) {
-                    this._phase = 'gameOver';
-                    this._render();
-                } else {
-                    this._game.startNewRound();
-                    this._phase = 'playing';
-                    this._handCursor = 0;
-                    this._actionCursor = 0;
-                    this._cursorMode = 'hand';
-                    this._continueGame();
-                }
-                return;
-            }
-            if (code === 0x71 || code === 0x51) {
-                this._showQuitConfirm();
-                return;
-            }
             if (code === 0x03) {
                 this.close();
                 return;
