@@ -8,7 +8,9 @@ const COLS = 10;
 const ROWS = 20;
 const LOCK_DELAY = 500;
 const MAX_LOCK_RESETS = 15;
-const SCORE_PER_SPEED_LEVEL = 1000;
+const BASE_GRAVITY_INTERVAL = 800;
+const GRAVITY_DECAY = 0.9;
+const MIN_GRAVITY_INTERVAL = 40;
 
 const BOARD_W = 22;
 const BOARD_H = 22;
@@ -649,16 +651,10 @@ export class TetrisCmd extends CmdBase {
 
         this._score += this._calcScore(fullRows.length, tspin, tspinMini, b2b);
         this._lines += fullRows.length;
-        const newLevel = Math.floor(this._lines / 10);
+        const newLevel = DIFFICULTY[this._difficulty].level + Math.floor(this._lines / 10);
         if (newLevel > this._level) {
             this._level = newLevel;
-        }
-        const newSpeedLevel = Math.max(
-            DIFFICULTY[this._difficulty].level,
-            Math.floor(this._score / SCORE_PER_SPEED_LEVEL)
-        );
-        if (newSpeedLevel > this._speedLevel) {
-            this._speedLevel = newSpeedLevel;
+            this._speedLevel = newLevel;
             if (!this._paused && !this._completed) this._startGravity();
         }
 
@@ -760,8 +756,11 @@ export class TetrisCmd extends CmdBase {
 
     _startGravity() {
         if (this._gravityInterval) clearInterval(this._gravityInterval);
-        this._gravityInterval = setInterval(() => this._tick(),
-            Math.max(40, 800 - this._speedLevel * 70));
+        const interval = Math.max(
+            MIN_GRAVITY_INTERVAL,
+            Math.round(BASE_GRAVITY_INTERVAL * Math.pow(GRAVITY_DECAY, this._speedLevel))
+        );
+        this._gravityInterval = setInterval(() => this._tick(), interval);
     }
 
     _stopTimers() {
