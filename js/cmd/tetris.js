@@ -349,7 +349,7 @@ export class TetrisCmd extends CmdBase {
         term.write('\x1B[2J\x1B[1;1H');
         term.write(CURSOR_HIDE);
         const opts = ['Easy', 'Medium', 'Hard'];
-        const dialog = new SelectDialog(term, {
+        this._difficultyDialog = this.openDialog(SelectDialog, 'tetris-diff', {
             title: 'Tetris',
             message: yellow('Select difficulty'),
             options: opts,
@@ -363,8 +363,6 @@ export class TetrisCmd extends CmdBase {
                 this._quit();
             },
         });
-        dialog.open();
-        this._difficultyDialog = dialog;
     }
 
     _startGame(diff) {
@@ -792,10 +790,6 @@ export class TetrisCmd extends CmdBase {
     }
 
     _onKey(data) {
-        if (this._difficultyDialog) {
-            this._difficultyDialog.handleKey(data);
-            return;
-        }
 
         const code = typeof data === 'string' ? data.charCodeAt(0) : data;
 

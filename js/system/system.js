@@ -342,15 +342,25 @@ export class SystemManager {
         }
     }
 
+    /**
+     * Construct a dialog and push it on the DialogFrame stack.
+     * Prefer this (or CmdBase.openDialog) over calling dialog.open() directly so
+     * input routing and overlay teardown stay with DialogFrame.
+     * @param {Function} DialogClass
+     * @param {string|null} key - Position-persistence key, or null to skip
+     * @param {object} opts - Dialog options (merged last before saved x/y)
+     * @param {...any} ctorArgs - Extra constructor args before opts
+     */
     createDialog(DialogClass, key, opts, ...ctorArgs) {
         if (this._disposed) return null;
-        const pos = this._dialogPositions[key] || {};
-        const dlg = new DialogClass(this.term, ...ctorArgs, {
-            ...opts,
-            x: pos.x,
-            y: pos.y,
-            savePos: (x, y) => { this._dialogPositions[key] = { x, y }; },
-        });
+        const dlgOpts = { ...(opts || {}) };
+        if (key != null) {
+            const pos = this._dialogPositions[key] || {};
+            if (pos.x != null) dlgOpts.x = pos.x;
+            if (pos.y != null) dlgOpts.y = pos.y;
+            dlgOpts.savePos = (x, y) => { this._dialogPositions[key] = { x, y }; };
+        }
+        const dlg = new DialogClass(this.term, ...ctorArgs, dlgOpts);
         this.pushDialogFrame(dlg);
         return dlg;
     }

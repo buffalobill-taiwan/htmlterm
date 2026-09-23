@@ -88,6 +88,14 @@ Dialogs render to `this._vb`, flatten it with `render()`, and expose the result
 as an overlay. Inline SGR is parsed into cell attributes by `js/dialog/write.js`.
 `DialogFrame` saves cursor state when opening and restores it when finishing.
 
+Open dialogs only through `system.createDialog()` or `CmdBase.openDialog()`.
+Those helpers construct the dialog, call `pushDialogFrame()` (which owns
+`dialog.open()`), and route keyboard input through `DialogFrame`. Do not call
+`dialog.open()` from command or nested-dialog code, and do not forward keys to a
+dialog from `_onKey()` / `handleKey()`. Nested dialogs (for example a settings
+submenu) push another `DialogFrame` on top of the parent; when the child closes,
+the parent frame becomes topmost again.
+
 `VirtualBuffer` has low-level `writeStr`, `setCell`, `blit`, and `render` APIs,
 plus layout helpers such as `centerRow`, `hline`, and `embed`. For repeatedly
 rendered composition, use preallocated `addChildSlot()` entries rather than

@@ -3,6 +3,7 @@ import { SelectDialog } from './SelectDialog.js';
 import { VerticalSelectDialog } from './VerticalSelectDialog.js';
 import { centeredDialogPos } from './position.js';
 import { parseCSI } from '../system/TextInputModel.js';
+import { system } from '../system/sys.js';
 import { makeCell, defaultAttr } from '../util/sgr.js';
 
 const _borderL = makeCell('│', defaultAttr(), 1);
@@ -22,28 +23,9 @@ export class SettingsDialog extends Dialog {
         this.h = h;
         this.x = opts.x != null ? opts.x : pos.x;
         this.y = opts.y != null ? opts.y : Math.max(0, pos.y - 1);
-        this._childDialog = null;
         this._onStart = opts.onStart || (() => {});
         this._onCancel = opts.onCancel || (() => {});
         this._selected = 0;
-    }
-
-    open() {
-        super.open();
-    }
-
-    handleKey(data) {
-        if (this.closed) return;
-        if (this._childDialog) {
-            this._childDialog.handleKey(data);
-            if (!this._childDialog || this._childDialog.closed) {
-                this._childDialog = null;
-                this.refreshContent();
-            }
-            return;
-        }
-        const result = this._onKey(data);
-        if (result === 'close') this.close();
     }
 
     _renderContent() {
@@ -117,43 +99,34 @@ export class SettingsDialog extends Dialog {
     _openSubmenu(settingIdx) {
         const s = this._settings[settingIdx];
         const opts = s.options;
-        const currentIdx = opts.indexOf(s.value);
 
         if (opts.length <= 5) {
-            const dialog = new SelectDialog(this.term, {
+            system.createDialog(SelectDialog, null, {
                 title: s.label,
                 options: opts,
                 footer: '← → Move  ↩ Confirm  ESC Cancel',
                 onSelect: (idx) => {
                     s.value = opts[idx];
-                    this._childDialog = null;
                     this.refreshContent();
                 },
                 onCancel: () => {
-                    this._childDialog = null;
                     this.refreshContent();
                 },
             });
-            dialog.open();
-            this._childDialog = dialog;
         } else {
-            const dialog = new VerticalSelectDialog(this.term, {
+            system.createDialog(VerticalSelectDialog, null, {
                 title: s.label,
                 options: opts,
                 cols: 3,
                 footer: '↑↓←→ Move  ↩ Confirm  ESC Cancel',
                 onSelect: (idx) => {
                     s.value = opts[idx];
-                    this._childDialog = null;
                     this.refreshContent();
                 },
                 onCancel: () => {
-                    this._childDialog = null;
                     this.refreshContent();
                 },
             });
-            dialog.open();
-            this._childDialog = dialog;
         }
     }
 }

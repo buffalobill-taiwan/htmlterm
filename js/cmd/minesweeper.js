@@ -223,7 +223,7 @@ export class MinesweeperCmd extends CmdBase {
         term.write(CURSOR_HIDE);
 
         const opts = ['Easy', 'Medium', 'Hard'];
-        const dialog = new SelectDialog(term, {
+        this._difficultyDialog = this.openDialog(SelectDialog, 'minesweeper-diff', {
             title: 'Minesweeper',
             message: yellow('Select difficulty'),
             options: opts,
@@ -237,8 +237,6 @@ export class MinesweeperCmd extends CmdBase {
                 this._quit();
             },
         });
-        dialog.open();
-        this._difficultyDialog = dialog;
     }
 
     _startGame(diff) {
@@ -451,10 +449,6 @@ export class MinesweeperCmd extends CmdBase {
     }
 
     _onKey(data) {
-        if (this._difficultyDialog) {
-            this._difficultyDialog.handleKey(data);
-            return;
-        }
 
         if (this._completed) {
             const code = typeof data === 'string' ? data.charCodeAt(0) : data;

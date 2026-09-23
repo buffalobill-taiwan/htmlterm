@@ -527,7 +527,7 @@ export class SudokuCmd extends CmdBase {
         this._initVBs();
         this._render();
         const opts = ['Easy', 'Medium', 'Hard'];
-        const dialog = new SelectDialog(term, {
+        this._difficultyDialog = this.openDialog(SelectDialog, 'sudoku-diff', {
             title: 'Sudoku',
             message: yellow('Select difficulty'),
             options: opts,
@@ -541,8 +541,6 @@ export class SudokuCmd extends CmdBase {
                 this._quit();
             },
         });
-        dialog.open();
-        this._difficultyDialog = dialog;
     }
 
 
@@ -730,10 +728,6 @@ export class SudokuCmd extends CmdBase {
     }
 
     _onKey(data) {
-        if (this._difficultyDialog) {
-            this._difficultyDialog.handleKey(data);
-            return;
-        }
 
         if (this._completed) {
             const code = typeof data === 'string' ? data.charCodeAt(0) : data;

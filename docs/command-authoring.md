@@ -44,10 +44,37 @@ as quit:
 
 ## Dialog and widget rules
 
+Open every dialog with `this.openDialog(DialogClass, key, opts, ...ctorArgs)`
+(or `system.createDialog` when not inside a command). Pass a string `key` to
+persist drag position across opens, or `null` to skip. Never call
+`dialog.open()` yourself and never forward keys to a dialog from the command
+`_onKey()` — `DialogFrame` owns input while the dialog is open.
+
+```js
+this._diffDialog = this.openDialog(SelectDialog, 'mycmd-diff', {
+    title: 'MyCmd',
+    message: yellow('Select difficulty'),
+    options: ['Easy', 'Medium', 'Hard'],
+    footer: '← → Move  ↩ Confirm  ESC Quit',
+    onSelect: (idx) => {
+        this._diffDialog = null;
+        this._startGame(idx);
+    },
+    onCancel: () => {
+        this._diffDialog = null;
+        this._quit();
+    },
+});
+```
+
+On quit/abort, still `close()` any held dialog reference before nulling it:
+`DialogFrame` removes the overlay, but a command-owned reference must not outlive
+a closed dialog. Null-check child-dialog references after callbacks that clear
+them.
+
 Dialog subclasses must compute constructor values locally, call `super()`, then
 set their own `this.h`: the base constructor initializes height to zero and
-does not consume `opts.h`. Close a dialog before clearing its reference, and
-null-check child-dialog references after their callbacks can clear them.
+does not consume `opts.h`.
 
 Dialog strings have silent clipping. Use `bufWidth()` for visible CJK-aware
 width (not `bufWidth` on SGR-prefixed input) and use `setCell()` for fixed

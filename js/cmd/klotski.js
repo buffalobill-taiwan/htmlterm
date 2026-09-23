@@ -102,7 +102,7 @@ export class KlotskiCmd extends CmdBase {
         this._history = [];
         term.write('\x1B[2J\x1B[1;1H');
         term.write(CURSOR_HIDE);
-        const dlg = new LevelSelectDialog(term, {
+        this._levelDialog = this.openDialog(LevelSelectDialog, 'klotski-level', {
             onSelect: (idx) => {
                 this._levelDialog = null;
                 this._startGame(idx);
@@ -112,8 +112,6 @@ export class KlotskiCmd extends CmdBase {
                 this._quit();
             },
         });
-        dlg.open();
-        this._levelDialog = dlg;
     }
 
     _startGame(idx) {
@@ -653,10 +651,6 @@ export class KlotskiCmd extends CmdBase {
     }
 
     _onKey(data) {
-        if (this._levelDialog) {
-            this._levelDialog.handleKey(data);
-            return;
-        }
         if (this._finishing && !this._completed) return;
 
         const code = typeof data === 'string' ? data.charCodeAt(0) : data;

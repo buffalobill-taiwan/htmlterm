@@ -57,6 +57,8 @@ Read the document that matches the work being done before changing that area.
   PageUp/PageDown otherwise accidentally fall through to quit.
 - Check all terminal layout arithmetic with `isWide()` / `bufWidth()`. Box
   drawing is single-width; CJK and full-width glyphs are double-width.
+- Open dialogs only via `openDialog` / `createDialog` (DialogFrame). Never call
+  `dialog.open()` from commands or forward dialog keys from `_onKey()`.
 - A dialog reference becoming `null` does not remove its overlay: call
   `dialog.close()` first. Parent handlers must null-check child dialogs after
   callbacks.

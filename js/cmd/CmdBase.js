@@ -249,25 +249,35 @@ export class CmdBase {
 
     // === Quick dialog helpers ===
 
+    /**
+     * Open a dialog via DialogFrame. Do not call dialog.open() yourself.
+     * @param {Function} DialogClass
+     * @param {string|null} key - Position-persistence key, or null to skip
+     * @param {object} opts
+     * @param {...any} ctorArgs - Extra constructor args before opts
+     * @returns {object|null} Dialog instance
+     */
+    openDialog(DialogClass, key, opts, ...ctorArgs) {
+        return system.createDialog(DialogClass, key, opts, ...ctorArgs);
+    }
+
     showMessage(msg) {
         return new Promise(resolve => {
-            const dlg = new ShowDialog(term, {
+            this.openDialog(ShowDialog, null, {
                 message: msg,
                 onExit: resolve,
             });
-            system.pushDialogFrame(dlg);
         });
     }
 
     ask(question) {
         return new Promise(resolve => {
-            const dlg = new InputDialog(term, {
+            this.openDialog(InputDialog, null, {
                 title: 'Input',
                 prompt: question,
                 onConfirm: val => resolve(val),
                 onCancel: () => resolve(null),
             });
-            system.pushDialogFrame(dlg);
         });
     }
 
