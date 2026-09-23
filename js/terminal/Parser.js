@@ -21,6 +21,7 @@ export class Parser {
         this._buf = '';
         this._privateMarker = '';
         this._oscString = '';
+        this._stringEscape = false;
     }
 
     /**
@@ -46,7 +47,7 @@ export class Parser {
                 continue;
             }
             if (this._state === 'osc' || this._state === 'dcs' || this._state === 'sos' || this._state === 'pm' || this._state === 'apc') {
-                this._feedStringMode(data, i);
+                this._feedStringMode(ch);
                 continue;
             }
             this._feedGround(ch);
@@ -72,13 +73,23 @@ export class Parser {
         screen.writeChar(ch);
     }
 
-    _feedStringMode(data, i) {
-        const ch = data[i];
-        const terminated = ch === '\x07' || (ch === '\x1B' && data[i + 1] === '\\');
-        if (terminated) {
-            if (ch === '\x1B') i++;
+    _feedStringMode(ch) {
+        // ST may be split across two Parser.write() calls. Keep the ESC
+        // pending until the following character confirms ESC + backslash.
+        if (this._stringEscape) {
+            this._stringEscape = false;
+            if (ch === '\\') {
+                if (this._state === 'osc') this._oscString = '';
+                this._state = 'ground';
+                return;
+            }
+        }
+
+        if (ch === '\x07') {
             if (this._state === 'osc') this._oscString = '';
             this._state = 'ground';
+        } else if (ch === '\x1B') {
+            this._stringEscape = true;
         } else if (this._state === 'osc') {
             this._oscString += ch;
         }
@@ -88,11 +99,11 @@ export class Parser {
         const screen = this.screen;
         const code = ch.charCodeAt ? ch.charCodeAt(0) : ch;
         if (code === CSI_INTRODUCER) { this._state = 'csi'; this._retained = ''; return; }
-        if (code === ESC_OSC) { this._state = 'osc'; this._oscString = ''; return; }
-        if (code === ESC_DCS) { this._state = 'dcs'; return; }
-        if (code === ESC_SOS) { this._state = 'sos'; return; }
-        if (code === ESC_PM) { this._state = 'pm'; return; }
-        if (code === ESC_APC) { this._state = 'apc'; return; }
+        if (code === ESC_OSC) { this._state = 'osc'; this._oscString = ''; this._stringEscape = false; return; }
+        if (code === ESC_DCS) { this._state = 'dcs'; this._stringEscape = false; return; }
+        if (code === ESC_SOS) { this._state = 'sos'; this._stringEscape = false; return; }
+        if (code === ESC_PM) { this._state = 'pm'; this._stringEscape = false; return; }
+        if (code === ESC_APC) { this._state = 'apc'; this._stringEscape = false; return; }
         if (code === ESC_SS2 || code === ESC_SS3) { this._state = 'ground'; return; }
         if (code === ESC_IND) { screen.lineFeedEdge(); this._state = 'ground'; return; }
         if (code === ESC_NEL) { screen.lineFeedEdge(); screen.carriageReturn(); this._state = 'ground'; return; }
