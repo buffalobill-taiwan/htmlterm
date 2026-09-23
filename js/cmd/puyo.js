@@ -910,7 +910,7 @@ export class PuyoCmd extends CmdBase {
             this._difficultyDialog = null;
         }
         this._stopTimers();
-        term.write('\x1B[' + (BOARD_Y + BOARD_H + 1) + ';1H');
+        this.placeShellCursor(BOARD_Y + BOARD_H);
         this.close();
     }
 

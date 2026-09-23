@@ -428,7 +428,7 @@ export class WordleCmd extends CmdBase {
             this._revealState = null;
             this.releaseBusy();
         }
-        term.write(`\x1B[${KEYBOARD_Y + KEYBOARD_H + 1};1H`);
+        this.placeShellCursor(KEYBOARD_Y + KEYBOARD_H);
         super.close();
     }
 

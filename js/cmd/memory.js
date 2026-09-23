@@ -421,7 +421,7 @@ export class MemoryCmd extends CmdBase {
             clearInterval(this._revealTimer);
             this._revealTimer = null;
         }
-        term.write('\x1B[' + (this._footerRow() + 1) + ';1H');
+        this.placeShellCursor(this._footerRow());
         this.close();
     }
 

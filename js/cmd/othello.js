@@ -708,7 +708,7 @@ export class OthelloCmd extends CmdBase {
             this._difficultyDialog = null;
         }
         this._clearTimers();
-        term.write('\x1B[' + CLEAR_ROW + ';1H');
+        this.placeShellCursor(CLEAR_ROW - 1);
         this.close();
     }
 

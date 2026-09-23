@@ -191,6 +191,7 @@ export class JpmjCmd extends CmdBase {
         this._stopTimer();
         this._removeOverlays();
         term.write('\x1B[2J\x1B[23;1H');
+        this.placeShellCursor(22);
         super.close();
     }
 
@@ -198,6 +199,7 @@ export class JpmjCmd extends CmdBase {
         this._stopTimer();
         this._removeOverlays();
         term.write('\x1B[2J\x1B[23;1H');
+        this.placeShellCursor(22);
         super.onCancel();
     }
 

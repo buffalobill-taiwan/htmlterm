@@ -105,6 +105,17 @@ export class CmdBase {
         system.tick();
     }
 
+    /**
+     * Position the cursor where ShellFrame should write the next prompt.
+     * Command layout coordinates are zero-based; the parser receives ANSI
+     * one-based cursor coordinates.
+     */
+    placeShellCursor(row, col = 0) {
+        const y = Math.max(0, Math.min(term.rows - 1, row));
+        const x = Math.max(0, Math.min(term.cols - 1, col));
+        term.write(`\x1B[${y + 1};${x + 1}H`);
+    }
+
     // Opens the command for interactive input (paired with close()).
     // Sets cmd.closed=false so SyncCmdFrame routes key events to handleKey().
     open() {

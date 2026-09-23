@@ -643,6 +643,7 @@ export class KlotskiCmd extends CmdBase {
         this._completed = false;
         this._paused = false;
         term.write('\x1B[2J\x1B[1;1H');
+        this.placeShellCursor(BOARD_Y + BOARD_H + 1);
         this.close();
     }
 

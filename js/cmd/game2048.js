@@ -699,7 +699,7 @@ export class Game2048Cmd extends CmdBase {
     }
 
     _quit() {
-        term.write('\x1B[' + (BOARD_Y + BOARD_H + 2) + ';1H');
+        this.placeShellCursor(BOARD_Y + BOARD_H + 1);
         this.close();
     }
 

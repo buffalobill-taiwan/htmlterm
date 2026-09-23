@@ -550,7 +550,7 @@ export class MinesweeperCmd extends CmdBase {
         }
         if (this._rootVB && this._rows) {
             // Place the shell prompt on the line immediately after the footer.
-            term.write('\x1B[' + (this._footerRow() + 1) + ';1H');
+            this.placeShellCursor(this._footerRow());
         }
         this.close();
     }

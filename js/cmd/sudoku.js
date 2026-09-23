@@ -858,7 +858,7 @@ export class SudokuCmd extends CmdBase {
             this._timerInterval = null;
         }
         const row = this._completed ? 23 : 21;
-        term.write('\x1B[' + row + ';1H');
+        this.placeShellCursor(row - 1);
         this.close();
     }
 
