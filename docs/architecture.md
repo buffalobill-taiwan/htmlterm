@@ -101,6 +101,27 @@ plus layout helpers such as `centerRow`, `hline`, and `embed`. For repeatedly
 rendered composition, use preallocated `addChildSlot()` entries rather than
 calling `embed()` every frame.
 
+Commands with a persistent screen layout (games, grids, and animated boards)
+should normally render through a root `VirtualBuffer` and child buffers:
+
+```
+command state → child VirtualBuffers → root VirtualBuffer → term.writeVB()
+```
+
+Use child slots to position boards, sidebars, and temporary command panels.
+`term.writeVB()` is for permanent command content and blits cells into the main
+screen; it does not move the terminal cursor or create a Terminal overlay.
+Keep layout positions on the child slots so moving a complete board does not
+require changing every draw operation. Direct `term.write()` remains suitable
+for control sequences, shell prompts, and deliberately immediate output.
+
+When an interactive command finishes, the command must position the cursor
+before calling `close()`. `ShellFrame` writes the next prompt only after the
+command frame is popped. Command layout coordinates are zero-based; use
+`CmdBase.placeShellCursor(row, col)` to convert them to ANSI coordinates and
+clamp them to the viewport. The helper positions the cursor only—the shell
+still owns writing the prompt.
+
 ## Relevant helpers
 
 - `BusyAsyncHelper.js`: abort-safe timeout and RAF guards.

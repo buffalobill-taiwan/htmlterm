@@ -38,6 +38,13 @@ clear `_children` and call `embed()` in an animation frame.
 An overlay `getCell` should return the direct backing-buffer reference. Never
 call `map`, `slice`, or make a copied overlay buffer per frame.
 
+For a command-owned screen layout, keep a root `VirtualBuffer` and blit it
+with `term.writeVB()`. Reuse the root and child buffers between frames, clear
+only rows or regions that will be replaced, and keep board/sidebar positions in
+child slots. `writeVB()` marks the destination rows dirty but does not update
+the terminal cursor; prompt placement belongs to the command lifecycle and
+should use `CmdBase.placeShellCursor()` when the command exits.
+
 ## Animation lifecycle
 
 Use `RAFAnimationHelper` or `BusyAsyncHelper` with the command abort epoch.

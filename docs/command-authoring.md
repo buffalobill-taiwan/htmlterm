@@ -42,6 +42,45 @@ as quit:
 | PageUp / PageDown | `\x1B[5~`, `\x1B[6~` |
 | Backspace / Ctrl+C | `0x08` or `0x7F`; `0x03` |
 
+## Command screen buffers and shell return
+
+For a command with a multi-row or animated layout, use a root `VirtualBuffer`
+and child buffers for independently positioned regions such as the board,
+sidebar, and status panels. Compose them with `addChildSlot()` and send the
+root buffer with `term.writeVB()`:
+
+```js
+this._rootVB = new VirtualBuffer(term.cols, term.rows);
+this._boardVB = new VirtualBuffer(BOARD_W, BOARD_H);
+this._boardSlot = this._rootVB.addChildSlot();
+this._boardSlot.vb = this._boardVB;
+this._boardSlot.x = BOARD_X;
+this._boardSlot.y = BOARD_Y;
+this._boardSlot.active = true;
+```
+
+Keep positions in the slot or layout constants. Do not rebuild the whole
+screen with cursor-positioned `term.write()` calls when the content is a
+persistent command view. `term.writeVB()` blits the buffer but does not move
+the terminal cursor.
+
+Before an interactive command calls `close()`, place the shell cursor on the
+line where the next prompt should appear:
+
+```js
+_quit() {
+    this.stopTimers();
+    this.placeShellCursor(this.shellPromptRow);
+    this.close();
+}
+```
+
+`placeShellCursor(row, col)` accepts zero-based viewport coordinates, converts
+them to ANSI coordinates, and clamps them to the terminal. Do not write the
+shell prompt from the command; `ShellFrame` owns prompt output after the
+command frame has been removed. Keep the cursor-row calculation beside the
+command layout so moving the board also moves the return position.
+
 ## Dialog and widget rules
 
 Open every dialog with `this.openDialog(DialogClass, key, opts, ...ctorArgs)`
