@@ -2,6 +2,7 @@ import { term } from '../system/sys.js';
 import { CmdBase } from './CmdBase.js';
 import { SelectDialog } from '../dialog/SelectDialog.js';
 import { bold, red, green, yellow, cyan, gray, CURSOR_HIDE } from '../util/sgr.js';
+import { VirtualBuffer } from '../util/VirtualBuffer.js';
 
 const DIFFICULTY = {
     easy:   { cols: 8,  rows: 8,  mines: 10, label: 'Easy' },
@@ -260,6 +261,8 @@ export class MinesweeperCmd extends CmdBase {
         this.open();
         term.write('\x1B[2J\x1B[1;1H');
         term.write(CURSOR_HIDE);
+        this._initVBs();
+        this._clearRootBuffer();
         this._render();
 
         if (this._timerInterval) clearInterval(this._timerInterval);
@@ -267,7 +270,41 @@ export class MinesweeperCmd extends CmdBase {
             if (this._completed || this._firstClick) return;
             this._timer++;
             this._drawHeader();
+            this._flush();
         }, 1000);
+    }
+
+    _initVBs() {
+        if (!this._rootVB) {
+            this._rootVB = new VirtualBuffer(term.cols, term.rows);
+            this._rootSlotBoard = this._rootVB.addChildSlot();
+            this._rootSlotBoard.x = 0;
+            this._rootSlotBoard.y = 2;
+            this._rootSlotBoard.active = true;
+        }
+
+        const boardW = 1 + this._cols * 2 + 1;
+        const boardH = this._rows + 2;
+        if (!this._boardVB || this._boardVB.width !== boardW || this._boardVB.height !== boardH) {
+            this._boardVB = new VirtualBuffer(boardW, boardH);
+            this._rootSlotBoard.vb = this._boardVB;
+        }
+    }
+
+    _clearRootBuffer() {
+        const blank = '\x1B[0m' + ' '.repeat(this._rootVB.width);
+        for (let r = 0; r < this._rootVB.height; r++)
+            this._rootVB.writeStr(r, 0, blank);
+    }
+
+    _clearRootRow(row) {
+        this._rootVB.writeStr(row, 0, '\x1B[0m' + ' '.repeat(this._rootVB.width));
+    }
+
+    _flush() {
+        term.writeVB(this._rootVB);
+        term.curX = this._cursorCol * 2 + 2;
+        term.curY = this._cursorRow + 3;
     }
 
     _generateMines(safeR, safeC) {
@@ -304,7 +341,8 @@ export class MinesweeperCmd extends CmdBase {
         const mines = this._completed ? 0 : this._mineCount - this._flagsPlaced;
         const t = _formatTime(this._timer);
         const pad = Math.max(0, 48 - cfg.label.length);
-        term.write('\x1B[1;1H' + bold(cyan('  Minesweeper [' + cfg.label + ']')) +
+        this._clearRootRow(0);
+        this._rootVB.writeStr(0, 0, bold(cyan('  Minesweeper [' + cfg.label + ']')) +
             ' '.repeat(Math.max(0, pad)) +
             bold(red(String(mines).padStart(3))) + ' mines  ' +
             yellow(t));
@@ -315,35 +353,31 @@ export class MinesweeperCmd extends CmdBase {
     }
 
     _drawFooter() {
-        term.write('\x1B[2;1H\x1B[2K' + gray('  ←↑↓→ Move   Enter Reveal   Space Flag   [n]ew [q]uit'));
+        this._clearRootRow(1);
+        this._rootVB.writeStr(1, 0, gray('  ←↑↓→ Move   Enter Reveal   Space Flag   [n]ew [q]uit'));
     }
 
     _drawBoard() {
         const { _cols: cols, _rows: rows } = this;
-        const boardY = 3;
         const lineW = 1 + cols * 2 + 1;
-        let s = '\x1B[' + boardY + ';1H';
-        s += '╔' + '═'.repeat(lineW - 2) + '╗';
+        this._boardVB.writeStr(0, 0, '╔' + '═'.repeat(lineW - 2) + '╗');
         for (let r = 0; r < rows; r++) {
-            s += '\x1B[' + (boardY + 1 + r) + ';1H';
-            s += '║';
+            let s = '║';
             for (let c = 0; c < cols; c++)
                 s += this._cellStr(r, c);
             s += '║';
+            this._boardVB.writeStr(r + 1, 0, s);
         }
-        s += '\x1B[' + (boardY + 1 + rows) + ';1H';
-        s += '╚' + '═'.repeat(lineW - 2) + '╝';
-        term.write(s);
+        this._boardVB.writeStr(rows + 1, 0, '╚' + '═'.repeat(lineW - 2) + '╝');
     }
 
     _drawRow(r) {
-        const boardY = 3;
         const { _cols: cols } = this;
-        let s = '\x1B[' + (boardY + 1 + r) + ';1H║';
+        let s = '║';
         for (let c = 0; c < cols; c++)
             s += this._cellStr(r, c);
         s += '║';
-        term.write(s);
+        this._boardVB.writeStr(r + 1, 0, s);
     }
 
     _cellStr(r, c) {
@@ -395,6 +429,7 @@ export class MinesweeperCmd extends CmdBase {
                 }
         }
         this._drawBoard();
+        this._flush();
         if (this._checkWin()) this._gameOver(true);
     }
 
@@ -422,8 +457,11 @@ export class MinesweeperCmd extends CmdBase {
         const msg = won
             ? bold(green('  Congratulations!')) + '  ' + yellow('Time: ' + timeStr)
             : bold(red('  Boom! Game Over')) + '  ' + yellow('Time: ' + timeStr);
-        term.write('\x1B[' + (fRow - 1) + ';1H' + msg);
-        term.write('\x1B[' + fRow + ';1H' + gray('  Press [n]ew game or [q]uit'));
+        this._clearRootRow(fRow - 2);
+        this._rootVB.writeStr(fRow - 2, 0, msg);
+        this._clearRootRow(fRow - 1);
+        this._rootVB.writeStr(fRow - 1, 0, gray('  Press [n]ew game or [q]uit'));
+        this._flush();
     }
 
     _move(dr, dc) {
@@ -436,6 +474,7 @@ export class MinesweeperCmd extends CmdBase {
         this._cursorCol = nc;
         this._drawRow(oldR);
         this._drawRow(nr);
+        this._flush();
     }
 
     _toggleFlag() {
@@ -446,6 +485,7 @@ export class MinesweeperCmd extends CmdBase {
         this._flagsPlaced += this._flags[r][c] ? 1 : -1;
         this._drawRow(r);
         this._drawHeader();
+        this._flush();
     }
 
     _onKey(data) {
@@ -496,7 +536,7 @@ export class MinesweeperCmd extends CmdBase {
         this._drawHeader();
         this._drawBoard();
         this._drawFooter();
-        term.write('\x1B[' + (this._cursorRow + 4) + ';' + (this._cursorCol * 2 + 3) + 'H');
+        this._flush();
     }
 
     _quit() {
@@ -508,7 +548,10 @@ export class MinesweeperCmd extends CmdBase {
             clearInterval(this._timerInterval);
             this._timerInterval = null;
         }
-        term.write('\x1B[' + (this._footerRow() + 1) + ';1H');
+        if (this._rootVB && this._rows) {
+            // Place the shell prompt on the line immediately after the footer.
+            term.write('\x1B[' + (this._footerRow() + 1) + ';1H');
+        }
         this.close();
     }
 
