@@ -25,7 +25,7 @@ const DIFFICULTY = {
     hard:   { startSpeed: 130, speedUpEvery: 3,  label: 'Hard' },
 };
 
-const SPEED_LEVELS = [200, 180, 160, 140, 120, 100, 80, 65];
+const SPEED_LEVELS = [200, 180, 160, 140, 120, 100, 80, 65, 50, 40];
 
 
 
@@ -75,11 +75,9 @@ export class SnakeCmd extends CmdBase {
         const cfg = DIFFICULTY[diff];
         this._difficulty = diff;
         this._score = 0;
-        this._foodEaten = 0;
         this._speedLevel = this._speedForInterval(cfg.startSpeed);
         this._startSpeedLevel = this._speedLevel;
         this._currentInterval = cfg.startSpeed;
-        this._speedUpEvery = cfg.speedUpEvery;
         this._completed = false;
         this._paused = false;
         this._difficultyDialog = null;
@@ -299,7 +297,6 @@ export class SnakeCmd extends CmdBase {
 
         if (ate) {
             this._score += 10;
-            this._foodEaten++;
             this._checkSpeedUp();
             this._spawnFood();
         } else {
@@ -314,7 +311,9 @@ export class SnakeCmd extends CmdBase {
         const cfg = DIFFICULTY[this._difficulty];
         const newLevel = Math.min(
             SPEED_LEVELS.length,
-            this._startSpeedLevel + Math.floor(this._foodEaten / cfg.speedUpEvery)
+            this._startSpeedLevel + Math.floor(
+                this._score / (10 * cfg.speedUpEvery)
+            )
         );
         if (newLevel !== this._speedLevel) {
             this._speedLevel = newLevel;

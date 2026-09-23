@@ -8,6 +8,7 @@ const COLS = 10;
 const ROWS = 20;
 const LOCK_DELAY = 500;
 const MAX_LOCK_RESETS = 15;
+const SCORE_PER_SPEED_LEVEL = 1000;
 
 const BOARD_W = 22;
 const BOARD_H = 22;
@@ -372,6 +373,7 @@ export class TetrisCmd extends CmdBase {
         this._board = _createBoard();
         this._score = 0;
         this._level = cfg.level;
+        this._speedLevel = cfg.level;
         this._lines = 0;
         this._combo = -1;
         this._backToBack = false;
@@ -652,6 +654,13 @@ export class TetrisCmd extends CmdBase {
         const newLevel = Math.floor(this._lines / 10);
         if (newLevel > this._level) {
             this._level = newLevel;
+        }
+        const newSpeedLevel = Math.max(
+            DIFFICULTY[this._difficulty].level,
+            Math.floor(this._score / SCORE_PER_SPEED_LEVEL)
+        );
+        if (newSpeedLevel > this._speedLevel) {
+            this._speedLevel = newSpeedLevel;
             if (!this._paused && !this._completed) this._startGravity();
         }
 
@@ -754,7 +763,7 @@ export class TetrisCmd extends CmdBase {
     _startGravity() {
         if (this._gravityInterval) clearInterval(this._gravityInterval);
         this._gravityInterval = setInterval(() => this._tick(),
-            Math.max(80, 800 - this._level * 70));
+            Math.max(40, 800 - this._speedLevel * 70));
     }
 
     _stopTimers() {
