@@ -1,5 +1,5 @@
 import { term } from '../../system/sys.js';
-import { makeCell, makeOverlayGetCell, OverlayZ } from '../../util/sgr.js';
+import { makeCell, makeOverlayGetCell } from '../../util/sgr.js';
 import { checkTenpai } from './yaku.js';
 
 export const loopMixin = {
@@ -162,7 +162,7 @@ export const loopMixin = {
         if (!pos) { this._gameTimer = setTimeout(() => this._continueGame(), 100); return; }
         const buf = this._buildCallEffectBuffer(text);
         this._callEffectOverlay = {
-            x: pos.x, y: pos.y, w: 10, h: 4, z: OverlayZ.CALL_EFFECT || 5,
+            x: pos.x, y: pos.y, w: 10, h: 4,
             owner: this,
             getCell: makeOverlayGetCell(buf, 10, 4),
         };

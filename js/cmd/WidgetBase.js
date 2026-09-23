@@ -1,5 +1,5 @@
 import { term } from '../system/sys.js';
-import { makeCell, defaultAttr, OverlayZ, createEmptyBuffer, makeOverlayGetCell } from '../util/sgr.js';
+import { makeCell, defaultAttr, createEmptyBuffer, makeOverlayGetCell } from '../util/sgr.js';
 import { addDragMethods, markDirtyRows } from '../util/drag.js';
 
 export class WidgetBase {
@@ -26,11 +26,10 @@ export class WidgetBase {
             x: this._x,
             h: this._h,
             w: this._w,
-            z: OverlayZ.WIDGET,
             owner: this,
             getCell: makeOverlayGetCell(() => this._buffer, this._w, this._h),
         };
-        term.addOverlay(this._overlay);
+        term.addOverlay(this._overlay, 'widget');
     }
 
     stop() {

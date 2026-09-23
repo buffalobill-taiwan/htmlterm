@@ -1,6 +1,6 @@
 // RAF-based animation helper with overlay management
 
-import { CURSOR_SHOW, CURSOR_HIDE, OverlayZ } from '../util/sgr.js';
+import { CURSOR_SHOW, CURSOR_HIDE } from '../util/sgr.js';
 import { term } from './sys.js';
 
 /**
@@ -15,7 +15,6 @@ export class RAFAnimationManager {
         this.abortEpoch = cmd.abortEpoch;
 
         this.options = {
-            z: options.z || OverlayZ.FLASH,
             y: options.y !== undefined ? options.y : 1,
             x: options.x !== undefined ? options.x : 0,
             w: options.w || term.cols,
@@ -36,7 +35,6 @@ export class RAFAnimationManager {
             x: this.options.x,
             h: this.options.h,
             w: this.options.w,
-            z: this.options.z,
             owner: null,
             getCell,
         };
@@ -132,7 +130,7 @@ export class RAFAnimationManager {
  * @param {CmdBase} cmd - Command instance
  * @param {Function} getCell - Overlay getCell function
  * @param {Function} updateFn - Function(ts, frameIndex) -> shouldStop
- * @param {Object} options - Animation options (z, y, x, w, h, hideCursor, holdBusy)
+ * @param {Object} options - Animation options (y, x, w, h, hideCursor, holdBusy)
  */
 export function startBufferAnimation(cmd, getCell, updateFn, options = {}) {
     const manager = new RAFAnimationManager(cmd, options);

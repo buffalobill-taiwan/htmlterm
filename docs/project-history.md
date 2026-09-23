@@ -62,7 +62,7 @@ tools/compress-anime.js offline script compresses frame 0 → RLE (492 vs 1800),
 frames 1–123 → frame differencing (21376 vs 221400 raw entries).
 Source size 523KB → 86KB (6.1×), gzip 18.5KB → 29KB.
 flash refactored from CSS DOM overlay to buffer overlay
-compositing (`OverlayZ.FLASH = 200`); `ARTWORKS` exported from `art.js` for reuse;
+compositing; `ARTWORKS` exported from `art.js` for reuse;
 `flash --art` renders random artwork inline via same overlay pipeline.
 `terminal.js` gained `markAllDirty()` proxy.
 Frame stack moved from `DemoShell` to `SystemManager` (Jun 2026).

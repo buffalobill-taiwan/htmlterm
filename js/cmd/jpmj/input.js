@@ -709,7 +709,6 @@ export const inputMixin = {
         if (!this._pauseOverlay) {
             this._pauseOverlay = {
                 x: 4, y: 2, w: ow, h: oh,
-                z: 5,
                 owner: this,
                 getCell: makeOverlayGetCell(() => this._pauseVBBuffer, ow, oh),
             };

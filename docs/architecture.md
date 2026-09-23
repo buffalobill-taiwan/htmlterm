@@ -18,21 +18,22 @@ changes; it uses clip CSS classes for partial wide-cell overlay coverage.
 
 ## Overlay compositing
 
-The main buffer is layer 0. Overlays are independent transparent cell buffers
-and are blended by registration order within a z-layer; a non-null later cell
-wins.
+The main buffer is rendered first. Overlays are independent transparent cell
+buffers and are blended by fixed group order; a non-null later cell wins.
 
-| Layer | Z | Owner |
-|---|---:|---|
-| Main screen | 0 | Screen / Parser / shell |
-| Widget | 10 | `WidgetBase._buffer` |
-| Dialog | 100 | Dialog VirtualBuffer flattened buffer |
-| Flash | 200 | `flash-helper.js` |
+| Render order | Owner |
+|---|---|
+| Main screen | Screen / Parser / shell |
+| Command overlays | Commands and command-owned animations |
+| Dialog overlays | Dialog VirtualBuffer flattened buffer |
+| Widget overlays | `WidgetBase._buffer` |
 
-Never use `saveArea`/`restoreArea` or modify base cells to implement an
-overlay. Widget buffers are passive; dialogs own keyboard input through their
-frame. `term.writeVB(vb, x, y)` blits a VirtualBuffer into the main buffer only
-when permanent screen content is intended.
+Overlays are rendered in the fixed order command → dialog → widget. Within a
+group, later registration renders over earlier registration. Never use
+`saveArea`/`restoreArea` or modify base cells to implement an overlay. Widget
+buffers are passive; dialogs own keyboard input through their frame.
+`term.writeVB(vb, x, y)` blits a VirtualBuffer into the main buffer only when
+permanent screen content is intended.
 
 ## Shell and frames
 

@@ -1,4 +1,4 @@
-import { makeCell, defaultAttr, OverlayZ } from './sgr.js';
+import { makeCell, defaultAttr } from './sgr.js';
 import { scheduleWithAbort, createAbortGuard } from '../system/BusyAsyncHelper.js';
 
 const FLASH_WHITE = makeCell(' ', (() => {
@@ -10,7 +10,6 @@ const FLASH_WHITE = makeCell(' ', (() => {
 function _createOverlay(term, getCell) {
     return {
         y: 0, x: 0, h: term.rows, w: term.cols,
-        z: OverlayZ.FLASH,
         owner: null,
         getCell,
     };
@@ -82,7 +81,6 @@ export function artSequence(cmd, term, artworks) {
         const attr = defaultAttr();
         ov = {
             y: oy, x: ox, h: cellRows, w: cols,
-            z: OverlayZ.FLASH,
             owner: null,
             getCell: (relY, relX) => {
                 const py = relY * 2;

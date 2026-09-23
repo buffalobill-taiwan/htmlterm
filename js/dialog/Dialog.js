@@ -1,6 +1,6 @@
 import { bufWidth } from '../util/display-width.js';
 import { addDragMethods, markDirtyRows } from '../util/drag.js';
-import { OverlayZ, makeOverlayGetCell } from '../util/sgr.js';
+import { makeOverlayGetCell } from '../util/sgr.js';
 import { DEFAULT_DIALOG_WIDTH } from '../util/constants.js';
 import { VirtualBuffer } from '../util/VirtualBuffer.js';
 
@@ -35,11 +35,10 @@ export class Dialog {
             x: this.x,
             h: this.h,
             w: this.width,
-            z: OverlayZ.DIALOG,
             owner: this,
             getCell: makeOverlayGetCell(() => this._buffer, this.width, this.h),
         };
-        this.term.addOverlay(this._overlay);
+        this.term.addOverlay(this._overlay, 'dialog');
 
         this._drawFrame();
         this.refreshContent();

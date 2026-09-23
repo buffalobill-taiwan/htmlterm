@@ -55,7 +55,13 @@ export class Screen {
         if (rowIdx >= 0 && rowIdx < this.rows) this.dirtyRows.add(rowIdx);
     }
 
-    addOverlay(ov) { this.overlays.push(ov); }
+    addOverlay(ov, group = 'command') {
+        const rank = group === 'dialog' ? 1 : group === 'widget' ? 2 : 0;
+        let i = this.overlays.length;
+        while (i > 0 && this.overlays[i - 1]._overlayRank > rank) i--;
+        this.overlays.splice(i, 0, ov);
+        ov._overlayRank = rank;
+    }
     removeOverlay(ov) {
         const i = this.overlays.indexOf(ov);
         if (i >= 0) this.overlays.splice(i, 1);
@@ -64,7 +70,7 @@ export class Screen {
     getCellAt(col, row) {
         if (col < 0 || col >= this.cols || row < 0 || row >= this.rows) return null;
         const ovs = this.overlays;
-        for (let i = 0; i < ovs.length; i++) {
+        for (let i = ovs.length - 1; i >= 0; i--) {
             const ov = ovs[i];
             if (row >= ov.y && row < ov.y + ov.h && col >= ov.x && col < ov.x + ov.w) {
                 const c = ov.getCell(row - ov.y, col - ov.x);

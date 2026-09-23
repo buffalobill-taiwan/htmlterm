@@ -99,12 +99,6 @@ export function sgr(...params) { return _sgrStyle(params); }
 export const CURSOR_HIDE = '\x1B[?25l';
 export const CURSOR_SHOW = '\x1B[?25h';
 
-export const OverlayZ = {
-    WIDGET: 10,
-    DIALOG: 100,
-    FLASH: 200,
-};
-
 export function formatTime(date) {
     return String(date.getHours()).padStart(2, '0') + ':' +
            String(date.getMinutes()).padStart(2, '0') + ':' +

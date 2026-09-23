@@ -40,7 +40,7 @@ export class Terminal {
     get viewOffset() { return this.screen.viewOffset; }
     set viewOffset(v) { this.screen.viewOffset = v; }
     get overlays() { return this.screen.overlays; }
-    addOverlay(ov) { this.screen.addOverlay(ov); }
+    addOverlay(ov, group) { this.screen.addOverlay(ov, group); }
     removeOverlay(ov) { this.screen.removeOverlay(ov); }
     get charWidth() { return this.renderer.charWidth; }
     get charHeight() { return this.renderer.charHeight; }
