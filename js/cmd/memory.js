@@ -12,6 +12,10 @@ const DIFFICULTY = {
 };
 
 const REVEAL_MS = 800;
+const FLIP_STEP_MS = 40;
+// A wide front glyph occupies four terminal cells in --big form.
+// The half-width back glyph uses two 2x2 blocks to fill the same area.
+const FLIP_COLUMNS = 4;
 
 function _pool() {
     const out = [];
@@ -90,6 +94,7 @@ export class MemoryCmd extends CmdBase {
             this._difficultyDialog = null;
         }
         if (this._flipTimer) { clearTimeout(this._flipTimer); this._flipTimer = null; }
+        if (this._flipAnimTimer) { clearInterval(this._flipAnimTimer); this._flipAnimTimer = null; }
         if (this._revealTimer) { clearTimeout(this._revealTimer); this._revealTimer = null; }
 
         const cfg = DIFFICULTY[diff];
@@ -122,13 +127,16 @@ export class MemoryCmd extends CmdBase {
 
         this._cellSym = [];
         this._revealed = [];
+        this._flipProgress = [];
         let k = 0;
         for (let r = 0; r < this._rows; r++) {
             this._cellSym[r] = [];
             this._revealed[r] = [];
+            this._flipProgress[r] = [];
             for (let c = 0; c < this._cols; c++) {
                 this._cellSym[r][c] = POOL[deck[k++]];
                 this._revealed[r][c] = false;
+                this._flipProgress[r][c] = 0;
             }
         }
 
@@ -148,6 +156,9 @@ export class MemoryCmd extends CmdBase {
                 for (let r = 0; r < this._rows; r++)
                     for (let c = 0; c < this._cols; c++)
                         this._revealed[r][c] = false;
+                for (let r = 0; r < this._rows; r++)
+                    for (let c = 0; c < this._cols; c++)
+                        this._flipProgress[r][c] = 0;
                 this._pending = false;
                 this._render();
                 return;
@@ -165,6 +176,9 @@ export class MemoryCmd extends CmdBase {
         for (let r = 0; r < this._rows; r++)
             for (let c = 0; c < this._cols; c++)
                 this._revealed[r][c] = true;
+        for (let r = 0; r < this._rows; r++)
+            for (let c = 0; c < this._cols; c++)
+                this._flipProgress[r][c] = FLIP_COLUMNS;
     }
 
     _footerRow() {
@@ -252,29 +266,15 @@ export class MemoryCmd extends CmdBase {
         const matched = this._matchedSet.has(this._cellSym[r][c]) && open;
         const bg = isCur ? 104 : 0;
         const rows = [[null, null, null, null], [null, null, null, null]];
-        if (!open) {
-            const ch = '▒';
-            for (const sub of [0, 1]) {
-                const xOff = sub * 2;
-                for (let rr = 0; rr < 2; rr++) {
-                    for (let cc = 0; cc < 2; cc++) {
-                        const cell = makeCell(ch, { fg: 7, bg }, 1);
-                        cell.clip = true;
-                        cell.clipOffX = -cc;
-                        cell.clipOffY = -rr;
-                        rows[rr][xOff + cc] = cell;
-                    }
-                }
-            }
-            return rows;
-        }
+        const progress = this._flipProgress[r][c];
         const sym = this._cellSym[r][c];
         const fg = matched ? 2 : 7;
         for (let rr = 0; rr < 2; rr++) {
-            for (let cc = 0; cc < 4; cc++) {
-                const cell = makeCell(sym, { fg, bg }, 1);
+            for (let cc = 0; cc < FLIP_COLUMNS; cc++) {
+                const visible = open && cc < progress;
+                const cell = makeCell(visible ? sym : '▒', { fg: visible ? fg : 7, bg }, 1);
                 cell.clip = true;
-                cell.clipOffX = -cc;
+                cell.clipOffX = visible ? -cc : -(cc % 2);
                 cell.clipOffY = -rr;
                 rows[rr][cc] = cell;
             }
@@ -302,57 +302,96 @@ export class MemoryCmd extends CmdBase {
 
         this._flipped.push({ r, c });
         this._revealed[r][c] = true;
-
-        if (this._flipped.length === 1) {
-            this._drawHeader(this._rootVB);
-            this._renderRow(r);
-            return;
-        }
-
-        this._moves++;
-        const [a, b] = this._flipped;
-        const same = this._cellSym[a.r][a.c] === this._cellSym[b.r][b.c];
-
-        if (same) {
-            this._resolveFlip(a, b, same);
-            return;
-        }
+        this._flipProgress[r][c] = 0;
 
         this._pending = true;
         term.write(CURSOR_HIDE);
         this._drawHeader(this._rootVB);
         this._renderRow(r);
-        this._flipTimer = setTimeout(() => {
-            this._flipTimer = null;
-            this._resolveFlip(a, b, same);
-        }, REVEAL_MS);
+        this._animateFlip(r, c, () => {
+            if (this._flipped.length === 1) {
+                this._pending = false;
+                this._drawHeader(this._rootVB);
+                this._renderRow(r);
+                return;
+            }
+
+            this._moves++;
+            const [a, b] = this._flipped;
+            const same = this._cellSym[a.r][a.c] === this._cellSym[b.r][b.c];
+            if (same) {
+                this._resolveFlip(a, b, same);
+                return;
+            }
+
+            this._flipTimer = setTimeout(() => {
+                this._flipTimer = null;
+                this._resolveFlip(a, b, same);
+            }, REVEAL_MS);
+        });
+    }
+
+    _animateFlip(r, c, done) {
+        let progress = 0;
+        this._flipAnimTimer = setInterval(() => {
+            progress++;
+            this._flipProgress[r][c] = progress;
+            this._renderRow(r);
+            if (progress < FLIP_COLUMNS) return;
+            clearInterval(this._flipAnimTimer);
+            this._flipAnimTimer = null;
+            done();
+        }, FLIP_STEP_MS);
     }
 
     _resolveFlip(a, b, same) {
-        this._flipped = [];
         if (!same) {
             this._failCount++;
-            this._revealed[a.r][a.c] = false;
-            this._revealed[b.r][b.c] = false;
-        } else {
-            this._matchedSet.add(this._cellSym[a.r][a.c]);
-            this._pairsLeft--;
+            this._animateClose(a, b, () => {
+                this._revealed[a.r][a.c] = false;
+                this._revealed[b.r][b.c] = false;
+                this._flipped = [];
+                this._pending = false;
+                this._drawHeader(this._rootVB);
+                this._renderRow(a.r);
+                this._renderRow(b.r);
+                if (this._failCount >= this._maxFails) this._gameOver(false);
+            });
+            return;
         }
+
+        this._flipped = [];
+        this._matchedSet.add(this._cellSym[a.r][a.c]);
+        this._pairsLeft--;
         this._pending = false;
         this._drawHeader(this._rootVB);
         this._renderRow(a.r);
         this._renderRow(b.r);
-        if (same && this._pairsLeft === 0) {
+        if (this._pairsLeft === 0) {
             this._gameOver(true);
-        } else if (!same && this._failCount >= this._maxFails) {
-            this._gameOver(false);
         }
+    }
+
+    _animateClose(a, b, done) {
+        let progress = FLIP_COLUMNS;
+        this._flipAnimTimer = setInterval(() => {
+            progress--;
+            this._flipProgress[a.r][a.c] = progress;
+            this._flipProgress[b.r][b.c] = progress;
+            this._renderRow(a.r);
+            this._renderRow(b.r);
+            if (progress > 0) return;
+            clearInterval(this._flipAnimTimer);
+            this._flipAnimTimer = null;
+            done();
+        }, FLIP_STEP_MS);
     }
 
     _gameOver(won) {
         this._completed = true;
         this._won = won;
         if (this._flipTimer) { clearTimeout(this._flipTimer); this._flipTimer = null; }
+        if (this._flipAnimTimer) { clearInterval(this._flipAnimTimer); this._flipAnimTimer = null; }
         this._flipped = [];
         this._revealAll();
         term.write(CURSOR_HIDE);
