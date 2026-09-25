@@ -47,8 +47,8 @@ export const loopMixin = {
         if (needHuman) {
             const p = this._game.players[0];
             const hasDraw = p.lastDraw && p.hand.includes(p.lastDraw);
-            const hasKanOptions = this._game.availableActions.some(a => typeof a === 'object');
-            if (this._game.phase === 'call_pending' || hasKanOptions) {
+            this._actionItems = this._buildActionItems();
+            if (this._actionItems.length > 0) {
                 this._cursorMode = 'action';
                 this._actionCursor = 0;
             } else if (hasDraw) {
@@ -143,8 +143,7 @@ export const loopMixin = {
                 return;
             }
             if (g.availableActions.includes('tsumo-no-yaku') || g.availableActions.includes('pass')) {
-                g.availableActions = [];
-                g.phase = 'discard';
+                if (!g.passDraw()) return;
                 this._gameTimer = setTimeout(() => this._continueGame(), 100);
                 return;
             }

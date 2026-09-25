@@ -43,11 +43,7 @@ export const gameTurnMethods = {
       this.turnCount++;
 
       const tsumoInfo = this.checkTsumo(this.currentPlayer);
-      if (tsumoInfo.canWin) {
-        if (this.players[this.currentPlayer].isHuman) {
-          this.availableActions = tsumoInfo.hasYaku ? ['tsumo', 'pass'] : ['tsumo-no-yaku', 'pass'];
-          return true;
-        }
+      if (tsumoInfo.canWin && !p.isHuman) {
         if (tsumoInfo.hasYaku && this.players[this.currentPlayer].ai.decideTsumo(this, this.currentPlayer)) {
           this.executeWin(this.currentPlayer, 'tsumo', tile);
           return true;
@@ -58,11 +54,14 @@ export const gameTurnMethods = {
         return false;
       }
 
-      if (this.players[this.currentPlayer].isHuman) {
+      if (p.isHuman) {
         const kanOptions = this.getHumanKanOptions(this.currentPlayer);
-        if (kanOptions.length > 0) {
-          this.availableActions = kanOptions;
-          this.availableActions.push('pass');
+        if (tsumoInfo.canWin || kanOptions.length > 0) {
+          this.availableActions = [
+            ...(tsumoInfo.canWin ? [tsumoInfo.hasYaku ? 'tsumo' : 'tsumo-no-yaku'] : []),
+            ...kanOptions,
+            'pass',
+          ];
           return true;
         }
       }
@@ -156,6 +155,15 @@ export const gameTurnMethods = {
     if (!this.players[this.currentPlayer].isHuman) return;
     if (this.phase !== 'dealer_first_discard' && this.phase !== 'discard') return;
     this.executeDiscard(this.currentPlayer, tileIdx);
+  },
+
+  passDraw() {
+    if (this.phase !== 'draw' && this.phase !== 'rinshan') return false;
+    const p = this.players[this.currentPlayer];
+    if (!p.isHuman || !p.lastDraw || !this.availableActions.includes('pass')) return false;
+    this.phase = 'discard';
+    this.availableActions = ['discard'];
+    return true;
   },
 
   executeDiscard(playerIdx, tileIdx, isRiichi = false) {

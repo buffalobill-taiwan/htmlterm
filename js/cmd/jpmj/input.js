@@ -13,7 +13,6 @@ export const inputMixin = {
         const kakans = [];
         for (const a of actions) {
             if (a === 'discard' || a === 'pass' || a === 'tsumo-no-yaku' || a === 'ron-no-yaku' || a === 'ron-furiten') continue;
-            if (a === 'pass') { items.push({ label: '過', action: 'pass' }); continue; }
             if (a === 'tsumo') { items.push({ label: 'ツモ', action: 'tsumo' }); continue; }
             if (a === 'ron') { items.push({ label: 'ロン', action: 'ron' }); continue; }
             if (a === 'kyuushu') { items.push({ label: '九種', action: 'kyuushu' }); continue; }
@@ -297,10 +296,7 @@ export const inputMixin = {
 
     _handleHandKey(data) {
         const code = typeof data === 'string' ? data.charCodeAt(0) : data;
-        const g = this._game;
-        const p = g.players[0];
-        const hand = p.hand;
-        const hasDraw = !!p.lastDraw;
+        const hand = this._game.players[0].hand;
 
         if (code === 0x1B) {
             const s = typeof data === 'string' ? data : '';
@@ -331,21 +327,6 @@ export const inputMixin = {
         }
 
         if (code === 0x0D || code === 0x0A) {
-            const hasKanOptions = g.availableActions.some(a => typeof a === 'object');
-            if (hasKanOptions) {
-                this._cursorMode = 'action';
-                this._actionCursor = 0;
-                this._render();
-                return;
-            }
-            if (this._actionItems.length > 0 && this._actionItems.length === 1 && this._actionItems[0].action === 'discard') {
-                this._doDiscard(this._handCursor);
-                return;
-            }
-            if (g.availableActions.includes('discard') && this._actionItems.length === 0) {
-                this._doDiscard(this._handCursor);
-                return;
-            }
             this._doDiscard(this._handCursor);
             return;
         }
@@ -411,8 +392,8 @@ export const inputMixin = {
         const stackDepth = system.cmdStack.length;
 
         if (action === 'pass') {
-            if (g.phase === 'draw') {
-                g.phase = 'discard';
+            if (g.phase === 'draw' || g.phase === 'rinshan') {
+                if (!g.passDraw()) return;
             } else {
                 g.humanCall({ type: 'pass' });
             }
@@ -599,6 +580,10 @@ export const inputMixin = {
     _doDiscard(visualPos) {
         const g = this._game;
         const p = g.players[0];
+        if (g.phase === 'draw' || g.phase === 'rinshan') {
+            if (!g.passDraw()) return;
+        }
+        if (!this._getDiscardableIndices().includes(visualPos)) return;
         const tileIdx = this._visualToHandIdx(visualPos);
         if (tileIdx < 0 || tileIdx >= p.hand.length) return;
 
