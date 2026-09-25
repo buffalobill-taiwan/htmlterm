@@ -46,3 +46,35 @@ indicator positions (`346fd75`), special-hand exclusions (`0e3d600`), and the
    Manually verify affected browser interactions, including round confirmation,
    next-round progression, cancellation, and result inspection where relevant.
 5. Update this baseline and record any intentionally unported upstream changes.
+
+## Parallel engine refactor (2026-09-25)
+
+Both working trees now split the engine using the same filenames and method
+groups. This structural change is subsequent to the upstream baseline above;
+compare corresponding modules once both repositories have this refactor.
+
+| File | Responsibility |
+|---|---|
+| `game.js` | Game state, getters, initialization, dealing, and logging |
+| `game-turns.js` | Turn progression, drawing, discarding, and riichi |
+| `game-calls.js` | Available calls, human/AI decisions, priority, chi/pon/open kan |
+| `game-kans.js` | Concealed/added kans and chankan paths |
+| `game-scoring.js` | Win eligibility, furiten, yaku context, and win payments |
+| `game-rounds.js` | Abortive/exhaustive draws, settlement, progression, standings |
+
+These are method groups installed on `Game.prototype`, not separate state
+owners. All callers retain the same `Game` API and all mutable state stays on
+the Game instance. Method descriptors remain non-enumerable, as with the
+original class. Modules call other Game methods through `this`; they do not
+import one another or import `Game`, avoiding dependency cycles.
+
+The terminal entry imports the groups as ES modules with explicit tile/yaku
+dependencies. The web entry keeps classic scripts: `index.html` loads the five
+method groups before `game.js`, then `main.js`. Web method files use strict mode
+to preserve the semantics of the original class methods.
+
+Methods were moved without changing their bodies. In particular, the terminal
+version still applies pending score deltas through `commitRoundEnd()` and its UI
+starts the next round; the web version applies payments immediately and
+`endRound()` starts the next round automatically. These differences now live in
+`game-scoring.js` and `game-rounds.js` and must survive subsequent imports.
