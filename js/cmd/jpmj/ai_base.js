@@ -283,7 +283,7 @@ export class MahjongAI {
         const counts = getCounts(hand);
         const targets = {};
         const shanten = this.estimateShanten(hand, melds);
-        const isMenzen = melds.length === 0;
+        const isMenzen = !melds.some(m => m.open);
 
         let nonTanyaoCount = 0;
         for (const t of hand) if (t.isTerminal || t.isHonor) nonTanyaoCount++;

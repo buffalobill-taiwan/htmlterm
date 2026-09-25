@@ -18,7 +18,6 @@ export const loopMixin = {
             this._actionItems = [];
             this._phase = 'result';
             this._render();
-            this._showResultDialog();
             return;
         }
         const needHuman = this._game.advance();
@@ -43,7 +42,6 @@ export const loopMixin = {
         if (this._game.roundOver) {
             this._phase = 'result';
             this._render();
-            this._showResultDialog();
             return;
         }
         if (needHuman) {

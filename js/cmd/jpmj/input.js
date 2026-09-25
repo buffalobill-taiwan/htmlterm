@@ -80,6 +80,12 @@ export const inputMixin = {
         return indices.sort((a, b) => a - b);
     },
 
+    handleKeyUp(key) {
+        if (key !== 'Tab' || !this._resultPeekHeld) return;
+        this._resultPeekHeld = false;
+        if (!this.closed && this._phase === 'result') this._render();
+    },
+
     _onKey(data) {
         const code = typeof data === 'string' ? data.charCodeAt(0) : data;
 
@@ -104,6 +110,37 @@ export const inputMixin = {
         }
 
         if (this._phase === 'result') {
+            if (code === 0x09) {
+                if (!this._resultPeekHeld) {
+                    this._resultPeekHeld = true;
+                    this._render();
+                }
+                return;
+            }
+            // Restore before another action can open a dialog and take keyup focus.
+            if (this._resultPeekHeld) {
+                this._resultPeekHeld = false;
+                this._render();
+            }
+            if (code === 0x0D || code === 0x0A) {
+                this._game.commitRoundEnd();
+                if (this._game.gameOver) {
+                    this._phase = 'gameOver';
+                    this._render();
+                } else {
+                    this._game.startNewRound();
+                    this._phase = 'playing';
+                    this._handCursor = 0;
+                    this._actionCursor = 0;
+                    this._cursorMode = 'hand';
+                    this._continueGame();
+                }
+                return;
+            }
+            if (code === 0x71 || code === 0x51) {
+                this._showQuitConfirm();
+                return;
+            }
             if (code === 0x03) {
                 this.close();
                 return;
