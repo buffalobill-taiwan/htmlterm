@@ -23,7 +23,7 @@ export class Calc extends CmdBase {
     static get usage() { return 'calc <expression>'; }
 
     static openMenuDialog() {
-        system.createDialog(InputDialog, 'calc', {
+        const dialog = system.createDialog(InputDialog, 'calc', {
             title: '請輸入算式',
             prompt: '算式：',
             footer: 'Enter Confirm  ESC Back',
@@ -32,9 +32,7 @@ export class Calc extends CmdBase {
                 let msg;
                 try { msg = String(safeEval(expr)); }
                 catch (e) { msg = red('Error:') + ' ' + (e.message || 'invalid expression'); }
-                setTimeout(() => {
-                    system.createDialog(ShowDialog, 'show', { message: msg, onExit: () => {} });
-                }, 0);
+                system.replaceDialog(dialog, ShowDialog, 'show', { message: msg, onExit: () => {} });
             },
             onCancel: () => {},
         });

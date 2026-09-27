@@ -259,10 +259,25 @@ export class Game2048Cmd extends CmdBase {
     execute(args) {
         const p = this.parseArgs(args);
         if (p.hasHelp) return this.showHelp();
+        this.addCleanup(() => this._cancelAnimation());
         this._startGame();
     }
 
+    _cancelAnimation() {
+        clearTimeout(this._animationTimer);
+        this._animationTimer = null;
+        this._animating = false;
+    }
+
+    _scheduleAnimation(callback, delay) {
+        this._animationTimer = setTimeout(() => {
+            this._animationTimer = null;
+            callback();
+        }, delay);
+    }
+
     _startGame() {
+        this._cancelAnimation();
         this._board = _emptyBoard();
         this._score = 0;
         this._best = 0;
@@ -345,7 +360,7 @@ export class Game2048Cmd extends CmdBase {
                 if (s === '\x1B[F') return;
                 if (s === '\x1B[5~') return;
                 if (s === '\x1B[6~') return;
-                this._quit();
+                if (s === '\x1B' || data === 0x1B) this._quit();
                 return;
             }
             return;
@@ -365,7 +380,7 @@ export class Game2048Cmd extends CmdBase {
             if (s === '\x1B[F') return;
             if (s === '\x1B[5~') return;
             if (s === '\x1B[6~') return;
-            this._quit();
+            if (s === '\x1B' || data === 0x1B) this._quit();
             return;
         }
 
@@ -413,14 +428,14 @@ export class Game2048Cmd extends CmdBase {
             const hasMerge = mergeCells.length > 0;
             const moveDelay = hasMerge ? 30 : 60;
 
-            setTimeout(() => {
+            this._scheduleAnimation(() => {
                 this._board = slideBoard;
                 this._render();
 
                 if (hasMerge) {
-                    setTimeout(() => {
+                    this._scheduleAnimation(() => {
                         this._renderMergeOverlay(mergeCells);
-                        setTimeout(finishMerge, 80);
+                        this._scheduleAnimation(finishMerge, 80);
                     }, 30);
                 } else {
                     finishMerge();
@@ -430,9 +445,9 @@ export class Game2048Cmd extends CmdBase {
             this._board = slideBoard;
             this._render();
 
-            setTimeout(() => {
+            this._scheduleAnimation(() => {
                 this._renderMergeOverlay(mergeCells);
-                setTimeout(finishMerge, 80);
+                this._scheduleAnimation(finishMerge, 80);
             }, 30);
         } else {
             finishMerge();
@@ -699,6 +714,7 @@ export class Game2048Cmd extends CmdBase {
     }
 
     _quit() {
+        this._cancelAnimation();
         this.placeShellCursor(BOARD_Y + BOARD_H + 1);
         this.close();
     }

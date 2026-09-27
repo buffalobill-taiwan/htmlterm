@@ -5,6 +5,7 @@ import { screenFlash, borderFlash, artSequence } from '../util/flash-helper.js';
 
 export class Flash extends CmdBase {
     async execute(args) {
+        const isActive = this.executionGuard();
         const p = this.parseArgs(args, {
             flags: { '--art': Boolean, '-a': Boolean, '--border': Boolean, '-b': Boolean },
         });
@@ -19,7 +20,9 @@ export class Flash extends CmdBase {
             const loaded = [];
             for (let i = 0; i < count; i++) {
                 const loader = ARTWORKS[Math.floor(Math.random() * ARTWORKS.length)];
-                loaded.push(await loader());
+                const artwork = await loader();
+                if (!isActive()) return;
+                loaded.push(artwork);
             }
             artSequence(this, term, loaded);
         } else if (border) {

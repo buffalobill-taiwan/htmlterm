@@ -509,7 +509,7 @@ export class MinesweeperCmd extends CmdBase {
             if (s === '\x1B[B') { this._move(1, 0); return; }
             if (s === '\x1B[D') { this._move(0, -1); return; }
             if (s === '\x1B[C') { this._move(0, 1); return; }
-            this._quit();
+            if (s === '\x1B' || data === 0x1B) this._quit();
             return;
         }
 

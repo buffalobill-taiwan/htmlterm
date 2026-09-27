@@ -667,7 +667,7 @@ export class OthelloCmd extends CmdBase {
             if (s === '\x1B[F' || s === '\x1B[4~') return;
             if (s === '\x1B[5~') return;
             if (s === '\x1B[6~') return;
-            this._quit();
+            if (s === '\x1B' || data === 0x1B) this._quit();
             return;
         }
 

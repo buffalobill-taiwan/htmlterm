@@ -715,7 +715,8 @@ export class KlotskiCmd extends CmdBase {
             if (s === '\x1B[F') return;
             if (s === '\x1B[5~') return;
             if (s === '\x1B[6~') return;
-            this._quit(); return;
+            if (s === '\x1B' || data === 0x1B) this._quit();
+            return;
         }
 
         if (code === 0x20 || code === 0x0D) { this._toggleSelect(); return; }

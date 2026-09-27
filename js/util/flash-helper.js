@@ -1,109 +1,89 @@
-import { makeCell, defaultAttr } from './sgr.js';
-import { scheduleWithAbort, createAbortGuard } from '../system/BusyAsyncHelper.js';
+import { makeCell } from './sgr.js';
+import { markDirtyRows } from './drag.js';
 
-const FLASH_WHITE = makeCell(' ', (() => {
-    const a = defaultAttr();
-    a.fg = 15; a.bg = 15;
-    return a;
-})(), 1);
+const FLASH_WHITE = makeCell(' ', 15, 15, false);
 
-function _createOverlay(term, getCell) {
-    return {
-        y: 0, x: 0, h: term.rows, w: term.cols,
-        owner: null,
-        getCell,
-    };
-}
-
-function _runFlashSequence(cmd, term, count, getCell) {
+// One timer and overlay belong to the calling frame, including the gaps.
+function runSequence(cmd, term, count, createOverlay, visibleMs, gapMs) {
     if (count < 1) return;
-    let remaining = count;
-    let ov = null;
+    let timer = null;
+    let overlay = null;
+    let index = 0;
+    let active = true;
 
-    function cleanup() {
-        if (ov) { term.removeOverlay(ov); term.markAllDirty(); ov = null; }
-    }
-
-    function cycle() {
-        if (remaining <= 0) { cleanup(); cmd.releaseBusy(); return; }
-
-        ov = _createOverlay(term, getCell);
-        term.addOverlay(ov);
-        term.markAllDirty();
-
-        const guard = createAbortGuard(() => cmd.abortEpoch);
-        setTimeout(() => {
-            if (!guard()) { cleanup(); cmd.releaseBusy(); return; }
-            cleanup();
-            remaining--;
-            if (remaining > 0) {
-                scheduleWithAbort(() => cmd.abortEpoch, cycle, 100);
+    const hide = () => {
+        if (!overlay) return;
+        term.removeOverlay(overlay);
+        markDirtyRows(term, overlay.y, overlay.h);
+        overlay = null;
+    };
+    const removeCleanup = cmd.addCleanup(() => {
+        active = false;
+        clearTimeout(timer);
+        hide();
+    });
+    const next = () => {
+        if (!active) return;
+        overlay = createOverlay(index++);
+        term.addOverlay(overlay);
+        markDirtyRows(term, overlay.y, overlay.h);
+        timer = setTimeout(() => {
+            if (!active) return;
+            hide();
+            if (index < count) {
+                timer = setTimeout(next, gapMs);
             } else {
+                active = false;
+                timer = null;
+                removeCleanup();
                 cmd.releaseBusy();
             }
-        }, 60);
-    }
-
+        }, visibleMs);
+    };
     cmd.holdBusy();
-    cycle();
+    next();
 }
 
 export function screenFlash(cmd, term, count) {
-    _runFlashSequence(cmd, term, count, () => FLASH_WHITE);
+    const overlay = {
+        y: 0, x: 0, h: term.rows, w: term.cols, owner: null,
+        getCell: () => FLASH_WHITE,
+    };
+    runSequence(cmd, term, count, () => overlay, 60, 100);
 }
 
 export function borderFlash(cmd, term, count) {
     const cols = term.cols;
     const rows = term.rows;
-    _runFlashSequence(cmd, term, count, (y, x) =>
-        (y === 0 || y === rows - 1 || x === 0 || x === cols - 1) ? FLASH_WHITE : null);
+    const overlay = {
+        y: 0, x: 0, h: rows, w: cols, owner: null,
+        getCell: (y, x) =>
+            (y === 0 || y === rows - 1 || x === 0 || x === cols - 1) ? FLASH_WHITE : null,
+    };
+    runSequence(cmd, term, count, () => overlay, 60, 100);
 }
 
 export function artSequence(cmd, term, artworks) {
-    if (!artworks || artworks.length === 0) return;
-    const queue = artworks.slice();
-    let ov = null;
-
-    function cleanup() {
-        if (ov) { term.removeOverlay(ov); term.markAllDirty(); ov = null; }
-    }
-
-    function next() {
-        if (queue.length === 0) { cleanup(); cmd.releaseBusy(); return; }
-
-        const mod = queue.shift();
+    if (!artworks?.length) return;
+    // Cache decoded backing cells once, including repeated artworks.
+    const cache = new Map();
+    const overlays = artworks.map(mod => {
+        if (cache.has(mod)) return cache.get(mod);
         const { cols, pixels } = mod.default;
         const artRows = Math.ceil(pixels.length / cols);
         const cellRows = Math.ceil(artRows / 2);
-        const ox = Math.floor((term.cols - cols) / 2);
-        const oy = Math.floor((term.rows - cellRows) / 2);
-
-        const attr = defaultAttr();
-        ov = {
-            y: oy, x: ox, h: cellRows, w: cols,
-            owner: null,
-            getCell: (relY, relX) => {
-                const py = relY * 2;
-                attr.fg = pixels[py * cols + relX];
-                attr.bg = py + 1 < artRows ? pixels[(py + 1) * cols + relX] : 0;
-                return makeCell('▀', attr, 1);
-            },
+        const cells = Array.from({ length: cellRows }, (_, y) =>
+            Array.from({ length: cols }, (_, x) => makeCell('▀',
+                pixels[y * 2 * cols + x],
+                y * 2 + 1 < artRows ? pixels[(y * 2 + 1) * cols + x] : 0, false)));
+        const overlay = {
+            y: Math.floor((term.rows - cellRows) / 2),
+            x: Math.floor((term.cols - cols) / 2),
+            h: cellRows, w: cols, owner: null,
+            getCell: (y, x) => cells[y][x],
         };
-        term.addOverlay(ov);
-        term.markAllDirty();
-
-        const guard = createAbortGuard(() => cmd.abortEpoch);
-        setTimeout(() => {
-            if (!guard()) { cleanup(); cmd.releaseBusy(); return; }
-            cleanup();
-            if (queue.length > 0) {
-                scheduleWithAbort(() => cmd.abortEpoch, next, 150);
-            } else {
-                cmd.releaseBusy();
-            }
-        }, 150);
-    }
-
-    cmd.holdBusy();
-    next();
+        cache.set(mod, overlay);
+        return overlay;
+    });
+    runSequence(cmd, term, overlays.length, i => overlays[i], 150, 150);
 }

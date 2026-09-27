@@ -19,8 +19,10 @@ export class Art extends CmdBase {
     static get usage() { return 'art'; }
 
     async execute(args) {
+        const isActive = this.executionGuard();
         const loader = ARTWORKS[Math.floor(Math.random() * ARTWORKS.length)];
         const module = await loader();
+        if (!isActive()) return;
         const { cols, pixels } = module.default;
         const ROWS = pixels.length / cols;
         let out = '';

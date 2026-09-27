@@ -3,7 +3,7 @@ import { CmdBase } from './CmdBase.js';
 import { SelectDialog } from '../dialog/SelectDialog.js';
 import { bold, red, green, yellow, cyan, gray, CURSOR_HIDE, makeCell } from '../util/sgr.js';
 import { isWide } from '../util/unicode-width.js';
-import { VirtualBuffer } from '../util/VirtualBuffer.js';
+import { VirtualBuffer, _blankCell } from '../util/VirtualBuffer.js';
 
 const DIFFICULTY = {
     easy:   { cols: 4, rows: 3, label: 'Easy',   maxFails: 3, revealMs: 800 },
@@ -16,6 +16,18 @@ const FLIP_STEP_MS = 40;
 // A wide front glyph occupies four terminal cells in --big form.
 // The half-width back glyph uses two 2x2 blocks to fill the same area.
 const FLIP_COLUMNS = 4;
+const DOT_CELL = makeCell('.', 7, 0, false);
+const BORDER_CELL = makeCell('║', 7, 0, false);
+
+function clipCells(ch, fg, bg, wide) {
+    return Array.from({ length: 8 }, (_, i) => {
+        const cell = makeCell(ch, fg, bg, false);
+        cell.clip = true;
+        cell.clipOffX = -(wide ? i % 4 : i % 2);
+        cell.clipOffY = -Math.floor(i / 4);
+        return cell;
+    });
+}
 
 function _pool() {
     const out = [];
@@ -164,7 +176,7 @@ export class MemoryCmd extends CmdBase {
                 return;
             }
             const lineW = this._boardW();
-            const blank = makeCell(' ', { fg: 7, bg: 0 }, 1);
+            const blank = _blankCell;
             this._rootVB.setCell(2, this._boardX - oldN, blank);
             this._rootVB.setCell(2, this._boardX + lineW + oldN - 1, blank);
             this._drawRevealDots(this._rootVB);
@@ -186,23 +198,33 @@ export class MemoryCmd extends CmdBase {
     }
 
     _initVBs() {
+        this._backCells = [clipCells('▒', 7, 0, false), clipCells('▒', 7, 104, false)];
+        this._faceCells = new Map();
+        for (const row of this._cellSym) {
+            for (const sym of row) {
+                if (this._faceCells.has(sym)) continue;
+                this._faceCells.set(sym, [
+                    clipCells(sym, 7, 0, true), clipCells(sym, 7, 104, true),
+                    clipCells(sym, 2, 0, true), clipCells(sym, 2, 104, true),
+                ]);
+            }
+        }
         this._boardX = Math.floor((term.cols - this._boardW()) / 2);
         this._boardVB = new VirtualBuffer(this._boardW(), this._boardH());
-        if (!this._rootVB)
+        if (!this._rootVB) {
             this._rootVB = new VirtualBuffer(term.cols, term.rows);
+            this._boardSlot = this._rootVB.addChildSlot();
+        }
+        Object.assign(this._boardSlot, { vb: this._boardVB, x: this._boardX, y: 2, active: true });
     }
 
     _render() {
-        this._boardVB.clear();
-        this._rootVB.clear();
-
-        for (let r = 0; r < this._rootVB.height; r++)
-            this._rootVB.writeStr(r, 0, ' '.repeat(this._rootVB.width));
+        for (const row of this._boardVB._buffer) row.fill(_blankCell);
+        for (const row of this._rootVB._buffer) row.fill(_blankCell);
 
         this._drawHeader(this._rootVB);
         this._drawFooter(this._rootVB);
         this._drawBoard(this._boardVB);
-        this._rootVB.embed(this._boardVB, this._boardX, 2);
         this._drawRevealDots(this._rootVB);
         term.writeVB(this._rootVB);
     }
@@ -212,9 +234,9 @@ export class MemoryCmd extends CmdBase {
         const lineW = this._boardW();
         const n = Math.min(this._revealTicksLeft, this._boardX - 1);
         for (let i = 1; i <= n; i++)
-            vb.setCell(2, this._boardX - i, makeCell('.', { fg: 7, bg: 0 }, 1));
+            vb.setCell(2, this._boardX - i, DOT_CELL);
         for (let i = 0; i < n; i++)
-            vb.setCell(2, this._boardX + lineW + i, makeCell('.', { fg: 7, bg: 0 }, 1));
+            vb.setCell(2, this._boardX + lineW + i, DOT_CELL);
     }
 
     _renderRow(r) {
@@ -241,8 +263,8 @@ export class MemoryCmd extends CmdBase {
         for (let r = 0; r < this._rows; r++)
             this._drawBoardRow(vb, r);
         for (let y = 1; y < this._rows * 2 + 1; y++) {
-            vb.setCell(y, 0, makeCell('║', { fg: 7, bg: 0 }, 1));
-            vb.setCell(y, lineW - 1, makeCell('║', { fg: 7, bg: 0 }, 1));
+            vb.setCell(y, 0, BORDER_CELL);
+            vb.setCell(y, lineW - 1, BORDER_CELL);
         }
         vb.writeStr(this._rows * 2 + 1, 0, '╚' + '═'.repeat(lineW - 2) + '╝');
     }
@@ -250,36 +272,20 @@ export class MemoryCmd extends CmdBase {
     _drawBoardRow(vb, r) {
         const baseY = r * 2 + 1;
         for (let c = 0; c < this._cols; c++) {
-            const slot = this._slot(r, c);
+            const isCur = r === this._highlightRow && c === this._highlightCol && !this._pending && !this._completed;
+            const open = this._revealed[r][c];
+            const sym = this._cellSym[r][c];
+            const matched = this._matchedSet.has(sym) && open;
+            const face = this._faceCells.get(sym)[(matched ? 2 : 0) + (isCur ? 1 : 0)];
+            const back = this._backCells[isCur ? 1 : 0];
+            const progress = this._flipProgress[r][c];
             for (let rr = 0; rr < 2; rr++) {
-                for (let cc = 0; cc < 4; cc++) {
-                    const cell = slot[rr][cc];
-                    if (cell) vb.setCell(baseY + rr, 1 + c * 5 + cc, cell);
+                for (let cc = 0; cc < FLIP_COLUMNS; cc++) {
+                    const cells = open && cc < progress ? face : back;
+                    vb.setCell(baseY + rr, 1 + c * 5 + cc, cells[rr * 4 + cc]);
                 }
             }
         }
-    }
-
-    _slot(r, c) {
-        const isCur = r === this._highlightRow && c === this._highlightCol && !this._pending && !this._completed;
-        const open = this._revealed[r][c];
-        const matched = this._matchedSet.has(this._cellSym[r][c]) && open;
-        const bg = isCur ? 104 : 0;
-        const rows = [[null, null, null, null], [null, null, null, null]];
-        const progress = this._flipProgress[r][c];
-        const sym = this._cellSym[r][c];
-        const fg = matched ? 2 : 7;
-        for (let rr = 0; rr < 2; rr++) {
-            for (let cc = 0; cc < FLIP_COLUMNS; cc++) {
-                const visible = open && cc < progress;
-                const cell = makeCell(visible ? sym : '▒', { fg: visible ? fg : 7, bg }, 1);
-                cell.clip = true;
-                cell.clipOffX = visible ? -cc : -(cc % 2);
-                cell.clipOffY = -rr;
-                rows[rr][cc] = cell;
-            }
-        }
-        return rows;
     }
 
     _move(dr, dc) {
@@ -429,7 +435,7 @@ export class MemoryCmd extends CmdBase {
             if (s === '\x1B[3~' || s === '\x1B[2~' ||
                 s === '\x1B[H'  || s === '\x1B[F'  ||
                 s === '\x1B[5~' || s === '\x1B[6~') return;
-            this._quit();
+            if (s === '\x1B' || data === 0x1B) this._quit();
             return;
         }
 

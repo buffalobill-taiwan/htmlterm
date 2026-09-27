@@ -26,7 +26,9 @@ export class AnimeCmd extends CmdBase {
     static get usage() { return 'anime'; }
 
     async execute(args) {
+        const isActive = this.executionGuard();
         const { default: data } = await import('./art/anime.js');
+        if (!isActive()) return;
         const { cols, rows, frames: numFrames, rle0, diffs } = data;
         const termRows = rows / 2;
         const overlayH = termRows + 1;
@@ -73,7 +75,7 @@ export class AnimeCmd extends CmdBase {
         let frameIdx = 0;
         let prevFrameCells = cellFrames[0];
 
-        const animation = startBufferAnimation(
+        startBufferAnimation(
             this,
             getCell,
             (ts, loopFrameIdx) => {
@@ -99,7 +101,7 @@ export class AnimeCmd extends CmdBase {
                 w: cols,
                 h: overlayH,
                 frameDuration: 1000 / 30,  // 30fps
-                onCleanup: () => { cellFrames = null; },
+                onCleanup: () => { cellFrames = curFrameCells = prevFrameCells = null; },
             }
         );
     }

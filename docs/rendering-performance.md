@@ -7,7 +7,8 @@ in `_renderRow`, `_blendOverlays`, span-class construction, and animation
 updates. Reuse instance scratch objects, arrays, cells, buffers, and palettes.
 
 - Cells are immutable after placement; place reusable references rather than
-  spreading attributes into newly allocated cells.
+  spreading attributes into newly allocated cells. Numeric game status rows use
+  `util/stat-row.js` to replace references from an immutable digit palette.
 - Iterate overlay arrays with indexed loops and dirty-row sets with `Set.forEach`.
 - Renderer value comparisons are the DOM-write skip mechanism; do not add a
   reference-only shortcut that misses visual changes.
@@ -49,7 +50,10 @@ should use `CmdBase.placeShellCursor()` when the command exits.
 
 ## Animation lifecycle
 
-Use `RAFAnimationHelper` or `BusyAsyncHelper` with the command abort epoch.
+Use `RAFAnimationHelper` for frame-owned RAF animations; it cancels its RAF and
+removes its overlay synchronously during frame cleanup. If using lower-level
+`BusyAsyncHelper` scheduling, register timer cleanup explicitly as well as checking
+cancellation. An abort check on a later tick does not provide immediate cleanup.
 For a large decoded frame/pixel structure captured by an rAF callback, set the
 captured variable to `null` from `onCleanup`; cancellation alone may retain the
 closure chain until a later GC. Predecode or cache reusable data outside the

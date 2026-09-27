@@ -1,3 +1,4 @@
+import { buildStatRow as _buildDynRow, writeStatRow as _writeDynRow } from '../util/stat-row.js';
 import { term } from '../system/sys.js';
 import { CmdBase } from './CmdBase.js';
 import { SelectDialog } from '../dialog/SelectDialog.js';
@@ -299,32 +300,6 @@ function _buildGameOverInner(cw, ch) {
     const hintX = Math.floor((cw - hintW) / 2);
     vb.writeStr(3, hintX, '\x1B[90m[n]ew [q]uit\x1B[0m');
     return vb._buffer.map(row => row.slice());
-}
-
-/**
- * Pre-build a mutable 16-cell row for a dynamic stat line (score/level/lines).
- * prefix = 8 static chars (e.g. ' Score  '), then 8 digit cells (bold yellow).
- * Callers update cells[8..15].ch in-place when the value changes — zero alloc.
- */
-function _buildDynRow(prefix) {
-    const cells = [];
-    // Static prefix (gray, no attrs)
-    for (let i = 0; i < 8; i++)
-        cells.push({ ch: prefix[i], fg: 7, bg: 0, bold: false, dim: false, italic: false, underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: 1 });
-    // Dynamic digits (bold yellow = fg 11)
-    for (let i = 0; i < 8; i++)
-        cells.push({ ch: ' ', fg: 11, bg: 0, bold: true, dim: false, italic: false, underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: 1 });
-    return cells;
-}
-
-/**
- * Write a numeric value into a pre-built dyn row (from _buildDynRow) and
- * copy the 16 cells into the target buffer row. Zero allocation.
- */
-function _writeDynRow(dstRow, cells, value) {
-    const s = String(value).padStart(8);
-    for (let i = 0; i < 8; i++) cells[8 + i].ch = s[i];
-    for (let i = 0; i < 16; i++) dstRow[i] = cells[i];
 }
 
 export class TetrisCmd extends CmdBase {
@@ -816,7 +791,8 @@ export class TetrisCmd extends CmdBase {
                 if (s === '\x1B[F') return;
                 if (s === '\x1B[5~') return;
                 if (s === '\x1B[6~') return;
-                this._quit(); return;
+                if (s === '\x1B' || data === 0x1B) this._quit();
+                return;
             }
             if (typeof data === 'string') {
                 const ch = data.toLowerCase();
@@ -837,7 +813,8 @@ export class TetrisCmd extends CmdBase {
             if (s === '\x1B[F') return;
             if (s === '\x1B[5~') return;
             if (s === '\x1B[6~') return;
-            this._quit(); return;
+            if (s === '\x1B' || data === 0x1B) this._quit();
+            return;
         }
 
         if (code === 0x20) { this._hardDrop(); return; }

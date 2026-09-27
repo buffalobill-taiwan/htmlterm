@@ -2,6 +2,7 @@
 
 import { CURSOR_SHOW, CURSOR_HIDE } from '../util/sgr.js';
 import { term } from './sys.js';
+import { markDirtyRows } from '../util/drag.js';
 
 /**
  * Manager for RAF-driven animations with overlay compositing.
@@ -12,7 +13,7 @@ export class RAFAnimationManager {
         this.overlay = null;
         this.rafId = null;
         this.isRunning = false;
-        this.abortEpoch = cmd.abortEpoch;
+        this._removeCleanup = null;
 
         this.options = {
             y: options.y !== undefined ? options.y : 1,
@@ -49,7 +50,7 @@ export class RAFAnimationManager {
     start(updateFn, cleanupFn) {
         if (this.isRunning) return;
 
-        this.abortEpoch = this.cmd.abortEpoch;
+        const isActive = this.cmd.executionGuard();
         this.isRunning = true;
 
         if (this.options.hideCursor) {
@@ -64,12 +65,16 @@ export class RAFAnimationManager {
             term.addOverlay(this.overlay);
         }
 
+        this._removeCleanup = this.cmd.addCleanup(() => this.stop(cleanupFn, false));
+        if (this.overlay) markDirtyRows(term, this.overlay.y, this.overlay.h);
+
         let frameIndex = 0;
         let lastFrameTime = 0;
         const frameDuration = this.options.frameDuration || 16;  // ~60fps
 
         const loop = (ts) => {
-            const isAborted = this.abortEpoch !== this.cmd.abortEpoch;
+            if (!this.isRunning) return;
+            const isAborted = !isActive();
 
             if (!isAborted && ts - lastFrameTime >= frameDuration) {
                 const shouldStop = updateFn(ts, frameIndex);
@@ -95,10 +100,12 @@ export class RAFAnimationManager {
     /**
      * Stop the animation loop.
      */
-    stop(cleanupFn) {
+    stop(cleanupFn, releaseBusy = true) {
         if (!this.isRunning) return;
 
         this.isRunning = false;
+        this._removeCleanup?.();
+        this._removeCleanup = null;
 
         if (this.rafId) {
             cancelAnimationFrame(this.rafId);
@@ -107,15 +114,14 @@ export class RAFAnimationManager {
 
         if (this.overlay) {
             term.removeOverlay(this.overlay);
+            markDirtyRows(term, this.overlay.y, this.overlay.h);
         }
-
-        term.markAllDirty();
 
         if (this.options.hideCursor) {
             term.write(CURSOR_SHOW);
         }
 
-        if (this.options.holdBusy) {
+        if (releaseBusy && this.options.holdBusy) {
             this.cmd.releaseBusy();
         }
 

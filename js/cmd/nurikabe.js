@@ -5,6 +5,8 @@ import {
     generatePuzzle, formatClue, geom, isSolved, WHITE, BLACK,
 } from '../util/nurikabe-engine.js';
 import { isWide } from '../util/unicode-width.js';
+import { VirtualBuffer, _blankCell } from '../util/VirtualBuffer.js';
+import { bufWidth } from '../util/display-width.js';
 import { bold, red, green, yellow, cyan, gray, white, CURSOR_HIDE } from '../util/sgr.js';
 
 const DIFFICULTY = {
@@ -205,7 +207,7 @@ export class NurikabeCmd extends CmdBase {
 
         if (seed !== null && (seed < 0 || seed > SEED_MAX)) return this._badArgs();
         if (size < MIN_SIZE || size > MAX_SIZE) return this._badArgs();
-        this._startGame(size, seed);
+        return this._startGame(size, seed);
     }
 
     _toInt(v) {
@@ -228,6 +230,7 @@ export class NurikabeCmd extends CmdBase {
     }
 
     _pickDifficulty() {
+        this._stopTimer();
         this._completed = false;
         this._timer = 0;
         this._generating = false;
@@ -258,6 +261,8 @@ export class NurikabeCmd extends CmdBase {
     }
 
     async _startGame(size, seed = null) {
+        this._cancelGeneration?.();
+        this._stopTimer();
         this._size = size;
         this._label = _sizeLabel(size);
         this._completed = false;
@@ -278,19 +283,38 @@ export class NurikabeCmd extends CmdBase {
         this.open();
         term.write('\x1B[2J\x1B[1;1H');
         term.write(CURSOR_HIDE);
+        this._initVBs();
         this._renderGenerating();
 
+        const generation = { active: true, timer: null, resume: null };
+        const cancel = () => {
+            generation.active = false;
+            clearTimeout(generation.timer);
+            generation.resume?.();
+            generation.resume = null;
+        };
+        this._cancelGeneration = cancel;
+        const removeCleanup = this.addCleanup(cancel);
         this.holdBusy();
-        const epoch = this.abortEpoch;
-        const gen = await this._generateAsync(size, epoch, seed);
+        let gen;
+        let failure = 'Failed to generate puzzle.';
+        try {
+            gen = await this._generateAsync(size, generation, seed);
+        } catch (err) {
+            failure = 'Generation failed: ' + (err.message || String(err));
+        } finally {
+            removeCleanup();
+        }
+        if (!generation.active) return;
+        this._cancelGeneration = null;
+        this._generating = false;
         this.releaseBusy();
 
-        if (this.closed || epoch !== this.abortEpoch) return;
-
-        this._generating = false;
         if (!gen) {
-            term.write('\x1B[2J\x1B[1;1H');
-            term.write(bold(red('  Failed to generate puzzle. Press [n] to retry or [q] to quit.\n')));
+            this._clearLayout();
+            this._rootVB.writeStr(0, 0, bold(red('  ' + failure)));
+            this._rootVB.writeStr(2, 0, gray('  Press [n] to retry or [q] to quit.'));
+            term.writeVB(this._rootVB);
             this._completed = true;
             return;
         }
@@ -307,22 +331,15 @@ export class NurikabeCmd extends CmdBase {
         };
         this._updateClueColors();
 
-        term.write('\x1B[2J\x1B[1;1H');
         this._render();
-
-        if (this._timerInterval) clearInterval(this._timerInterval);
-        this._timerInterval = setInterval(() => {
-            if (this._completed || this._generating) return;
-            this._timer++;
-            this._drawHeader();
-        }, 1000);
+        this._startTimer();
     }
 
-    async _generateAsync(size, epoch, seed = null) {
+    async _generateAsync(size, generation, seed = null) {
         const maxAttempts = size <= 8 ? 300 : size <= 12 ? 600 : 1200;
         const baseSeed = seed != null ? seed : (Date.now() & 0x7fffffff);
         for (let attempt = 0; attempt < maxAttempts; attempt++) {
-            if (epoch !== this.abortEpoch) return null;
+            if (!generation.active) return null;
             const puzzle = generatePuzzle(size, size, {
                 seed: baseSeed + attempt,
                 maxAttempts: 1,
@@ -330,22 +347,53 @@ export class NurikabeCmd extends CmdBase {
             if (puzzle) return { puzzle, seed: baseSeed + attempt };
             // Yield to the UI thread every attempt so the browser never freezes.
             // For large boards each attempt can take 10-100ms; batching would cause jank.
-            await new Promise((r) => setTimeout(r, 0));
+            await new Promise(resolve => {
+                generation.resume = resolve;
+                generation.timer = setTimeout(() => {
+                    generation.timer = null;
+                    generation.resume = null;
+                    resolve();
+                }, 0);
+            });
         }
         return null;
     }
 
-    _renderGenerating() {
-        term.write('\x1B[1;1H' + bold(cyan('  Nurikabe [' + this._label + ']')) +
-            '\n\n' + yellow('  Generating puzzle...'));
+    _initVBs() {
+        if (!this._rootVB) {
+            this._rootVB = new VirtualBuffer(term.cols, term.rows);
+            this._boardSlot = this._rootVB.addChildSlot();
+        }
+        const w = 2 * this._size + 2;
+        const h = this._size + 2;
+        if (!this._boardVB || this._boardVB.width !== w) {
+            this._boardVB = new VirtualBuffer(w, h);
+        }
+        Object.assign(this._boardSlot, { vb: this._boardVB, x: 0, y: 2, active: false });
+        this._clearLayout();
     }
 
-    _drawHeader() {
-        const t = _formatTime(this._timer);
-        const pad = Math.max(0, 48 - this._label.length);
-        term.write('\x1B[1;1H' + bold(cyan('  Nurikabe [' + this._label + ']')) +
-            ' '.repeat(Math.max(0, pad)) +
-            yellow(t));
+    _clearLayout() {
+        for (const row of this._rootVB._buffer) row.fill(_blankCell);
+        this._boardSlot.active = false;
+    }
+
+    _clearRow(row) {
+        this._rootVB._buffer[row]?.fill(_blankCell);
+    }
+
+    _renderGenerating() {
+        this._rootVB.writeStr(0, 0, bold(cyan('  Nurikabe [' + this._label + ']')));
+        this._rootVB.writeStr(2, 0, yellow('  Generating puzzle...'));
+        term.writeVB(this._rootVB);
+    }
+
+    _drawHeader(flush = true) {
+        const title = bold(cyan('  Nurikabe [' + this._label + ']'));
+        this._clearRow(0);
+        this._rootVB.writeStr(0, 0, title + ' '.repeat(Math.max(0, 61 - bufWidth(title))) +
+            yellow(_formatTime(this._timer)));
+        if (flush) term.writeVB(this._rootVB);
     }
 
     _footerRow() {
@@ -353,36 +401,25 @@ export class NurikabeCmd extends CmdBase {
     }
 
     _drawFooter() {
-        term.write('\x1B[2;1H\x1B[2K' +
+        this._clearRow(1);
+        this._rootVB.writeStr(1, 0,
             gray('  ←↑↓→ Move   Space Paint (hold)   [c]onnectivity (hold)   [n][r][q]'));
     }
 
-    _drawBoard() {
-        const size = this._size;
-        const boardY = 3;
-        const lineW = 1 + size * 2 + 1;
-        let s = '\x1B[' + boardY + ';1H';
-        s += '╔' + '═'.repeat(lineW - 2) + '╗';
-        for (let r = 0; r < size; r++) {
-            s += '\x1B[' + (boardY + 1 + r) + ';1H';
-            s += '║';
-            for (let c = 0; c < size; c++)
-                s += this._cellStr(r, c);
-            s += '║';
-        }
-        s += '\x1B[' + (boardY + 1 + size) + ';1H';
-        s += '╚' + '═'.repeat(lineW - 2) + '╝';
-        term.write(s);
+    _drawBoard(flush = true) {
+        const vb = this._boardVB;
+        vb.writeStr(0, 0, '╔' + '═'.repeat(this._size * 2) + '╗');
+        for (let r = 0; r < this._size; r++) this._drawRow(r, false);
+        vb.writeStr(this._size + 1, 0, '╚' + '═'.repeat(this._size * 2) + '╝');
+        this._boardSlot.active = true;
+        if (flush) term.writeVB(this._rootVB);
     }
 
-    _drawRow(r) {
-        const boardY = 3;
-        const size = this._size;
-        let s = '\x1B[' + (boardY + 1 + r) + ';1H║';
-        for (let c = 0; c < size; c++)
-            s += this._cellStr(r, c);
-        s += '║';
-        term.write(s);
+    _drawRow(r, flush = true) {
+        let row = '║';
+        for (let c = 0; c < this._size; c++) row += this._cellStr(r, c);
+        this._boardVB.writeStr(r + 1, 0, row + '║');
+        if (flush) term.writeVB(this._rootVB);
     }
 
     _cellStr(r, c) {
@@ -453,10 +490,7 @@ export class NurikabeCmd extends CmdBase {
         this._paintTarget = null;
         this._connectivityHeld = false;
         this._connectivityMask = null;
-        if (this._timerInterval) {
-            clearInterval(this._timerInterval);
-            this._timerInterval = null;
-        }
+        this._stopTimer();
         this._updateClueColors();
         this._drawHeader();
         this._drawBoard();
@@ -465,8 +499,11 @@ export class NurikabeCmd extends CmdBase {
         const msg = won
             ? bold(green('  Congratulations!')) + '  ' + yellow('Time: ' + timeStr)
             : bold(red('  Game Over')) + '  ' + yellow('Time: ' + timeStr);
-        term.write('\x1B[' + fRow + ';1H' + msg);
-        term.write('\x1B[' + (fRow + 1) + ';1H' + gray('  Press [n]ew game or [q]uit'));
+        this._clearRow(fRow - 1);
+        this._clearRow(fRow);
+        this._rootVB.writeStr(fRow - 1, 0, msg);
+        this._rootVB.writeStr(fRow, 0, gray('  Press [n]ew game or [q]uit'));
+        term.writeVB(this._rootVB);
     }
 
     _move(dr, dc) {
@@ -514,7 +551,7 @@ export class NurikabeCmd extends CmdBase {
     }
 
     _onKey(data) {
-
+        if (data === '\x1B' || data === 0x1B) { this._quit(); return; }
         if (this._generating) return;
 
         if (this._completed && !this._clues) {
@@ -553,7 +590,7 @@ export class NurikabeCmd extends CmdBase {
             if (s === '\x1B[F') return;
             if (s === '\x1B[5~') return;
             if (s === '\x1B[6~') return;
-            this._quit();
+            if (s === '\x1B' || data === 0x1B) this._quit();
             return;
         }
 
@@ -595,28 +632,48 @@ export class NurikabeCmd extends CmdBase {
         this._connectivityMask = null;
         this._updateClueColors();
         this._render();
-        if (this._timerInterval) clearInterval(this._timerInterval);
+        this._startTimer();
+    }
+
+    _startTimer() {
+        this._stopTimer();
         this._timerInterval = setInterval(() => {
             if (this._completed || this._generating) return;
             this._timer++;
             this._drawHeader();
         }, 1000);
+        this._removeTimerCleanup = this.addCleanup(() => this._stopTimer());
+    }
+
+    _stopTimer() {
+        clearInterval(this._timerInterval);
+        this._timerInterval = null;
+        this._removeTimerCleanup?.();
+        this._removeTimerCleanup = null;
     }
 
     _drawSeed() {
-        const row = this._size + 5;
-        term.write('\x1B[' + row + ';1H\x1B[2K' + gray('  seed: ' + this._seed));
+        const row = this._size + 4;
+        this._clearRow(row);
+        this._rootVB.writeStr(row, 0, gray('  seed: ' + this._seed));
     }
 
     _render() {
-        this._drawHeader();
-        this._drawBoard();
+        this._clearLayout();
+        this._drawHeader(false);
+        this._drawBoard(false);
         this._drawFooter();
         this._drawSeed();
-        term.write('\x1B[' + (this._cursorRow + 4) + ';' + (this._cursorCol * 2 + 3) + 'H');
+        term.writeVB(this._rootVB);
     }
 
     _quit() {
+        if (this._cancelGeneration) {
+            this._cancelGeneration();
+            this._cancelGeneration = null;
+            this._generating = false;
+            this.releaseBusy();
+        }
         if (this._difficultyDialog) {
             this._difficultyDialog.close();
             this._difficultyDialog = null;
@@ -625,12 +682,9 @@ export class NurikabeCmd extends CmdBase {
         this._paintTarget = null;
         this._connectivityHeld = false;
         this._connectivityMask = null;
-        if (this._timerInterval) {
-            clearInterval(this._timerInterval);
-            this._timerInterval = null;
-        }
+        this._stopTimer();
         if (this._size) {
-            term.write('\x1B[' + (this._footerRow() + 2) + ';1H');
+            this.placeShellCursor(this._footerRow() + 1);
         }
         this.close();
     }

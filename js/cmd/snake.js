@@ -1,3 +1,4 @@
+import { buildStatRow, writeStatRow } from '../util/stat-row.js';
 import { term } from '../system/sys.js';
 import { CmdBase } from './CmdBase.js';
 import { SelectDialog } from '../dialog/SelectDialog.js';
@@ -173,8 +174,8 @@ export class SnakeCmd extends CmdBase {
         }
 
         if (!this._dynScore) {
-            this._dynScore = this._buildDynRow(' Score  ');
-            this._dynSpeed = this._buildDynRow(' Speed  ');
+            this._dynScore = buildStatRow(' Score  ');
+            this._dynSpeed = buildStatRow(' Speed  ');
         }
     }
 
@@ -228,21 +229,6 @@ export class SnakeCmd extends CmdBase {
         const t2x = Math.floor((cw - t2.length) / 2);
         vb.writeStr(3, t2x, '\x1B[90m' + t2 + '\x1B[0m');
         return vb._buffer.map(row => row.slice());
-    }
-
-    _buildDynRow(prefix) {
-        const cells = [];
-        for (let i = 0; i < 8; i++)
-            cells.push(makeCell(prefix[i] || ' ', 7, 0, false));
-        for (let i = 0; i < 8; i++)
-            cells.push(makeCell(' ', 11, 0, true));
-        return cells;
-    }
-
-    _writeDynRow(dstRow, cells, value) {
-        const s = String(value).padStart(8);
-        for (let i = 0; i < 8; i++) cells[8 + i].ch = s[i];
-        for (let i = 0; i < 16; i++) dstRow[i] = cells[i];
     }
 
     _speedForInterval(interval) {
@@ -364,7 +350,8 @@ export class SnakeCmd extends CmdBase {
                 if (s === '\x1B[F') return;
                 if (s === '\x1B[5~') return;
                 if (s === '\x1B[6~') return;
-                this._quit(); return;
+                if (s === '\x1B' || data === 0x1B) this._quit();
+                return;
             }
             if (typeof data === 'string') {
                 const ch = data.toLowerCase();
@@ -386,7 +373,8 @@ export class SnakeCmd extends CmdBase {
             if (s === '\x1B[F') return;
             if (s === '\x1B[5~') return;
             if (s === '\x1B[6~') return;
-            this._quit(); return;
+            if (s === '\x1B' || data === 0x1B) this._quit();
+            return;
         }
 
         if (code === 0x08 || code === 0x7F) return;
@@ -453,8 +441,8 @@ export class SnakeCmd extends CmdBase {
 
         vb.writeStr(0, 0, bold(cyan('  Snake')) + gray(' [' + DIFFICULTY[this._difficulty].label + ']'));
 
-        this._writeDynRow(buf[2], this._dynScore, this._score);
-        this._writeDynRow(buf[3], this._dynSpeed, this._speedLevel);
+        writeStatRow(buf[2], this._dynScore, this._score);
+        writeStatRow(buf[3], this._dynSpeed, this._speedLevel);
 
         vb.writeStr(5, 0, gray('─'.repeat(16)));
         vb.writeStr(7, 0, gray(' ←↑↓→ Move'));

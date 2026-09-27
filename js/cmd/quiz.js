@@ -14,18 +14,20 @@ export class Quiz extends CmdBase {
         return { a, b, op, answer };
     }
 
-    execute(args) {
+    async execute(args) {
+        const isActive = this.executionGuard();
         const { a, b, op, answer } = Quiz._genQuestion();
         this.print(cyan(a + ' ' + op + ' ' + b + ' = ?') + '\n');
 
-        this.readLine((line) => {
-            const userAns = parseInt(line, 10);
-            if (userAns === answer) {
-                this.print(bold(green('✓ Correct!')) + '\n');
-            } else {
-                this.print(bold(red('✗ Wrong!')) + '  Answer: ' + bold(white(answer)) + '\n');
-            }
-        });
+        if (!await this.waitForPrint() || !isActive()) return;
+        const line = await this.readLineAsync();
+        if (line === null || !isActive()) return;
+        const userAns = parseInt(line, 10);
+        if (userAns === answer) {
+            this.print(bold(green('✓ Correct!')) + '\n');
+        } else {
+            this.print(bold(red('✗ Wrong!')) + '  Answer: ' + bold(white(answer)) + '\n');
+        }
     }
 
     static get commandName() { return 'quiz'; }
@@ -36,7 +38,7 @@ export class Quiz extends CmdBase {
     static openMenuDialog() {
         const { a, b, op, answer } = Quiz._genQuestion();
 
-        system.createDialog(InputDialog, 'quiz', {
+        const dialog = system.createDialog(InputDialog, 'quiz', {
             title: 'Quiz',
             prompt: `${a} ${op} ${b} = ?`,
             footer: 'Enter Answer  ESC Back',
@@ -49,9 +51,7 @@ export class Quiz extends CmdBase {
                 } else {
                     msg = bold(red('✗ Wrong!')) + '  Answer: ' + bold(white('' + answer));
                 }
-                setTimeout(() => {
-                    system.createDialog(ShowDialog, 'show', { message: msg, onExit: () => {} });
-                }, 0);
+                system.replaceDialog(dialog, ShowDialog, 'show', { message: msg, onExit: () => {} });
             },
             onCancel: () => {},
         });

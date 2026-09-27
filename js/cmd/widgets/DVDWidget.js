@@ -20,6 +20,7 @@ export class DVDWidget extends WidgetBase {
         this._dy = 1;
         this._color = 1;
         this._intervalId = null;
+        this._initPalette();
     }
 
     start() {
@@ -45,7 +46,10 @@ export class DVDWidget extends WidgetBase {
 
     restoreSaveState(state) {
         super.restoreSaveState(state);
-        this._text = state.text;
+        if (this._text !== state.text) {
+            this._text = state.text;
+            this._initPalette();
+        }
         this._dx = state.dx;
         this._dy = state.dy;
         this._color = state.color;
@@ -97,22 +101,28 @@ export class DVDWidget extends WidgetBase {
         this.draw();
     }
 
-    draw() {
-        let x = 0;
-        for (let i = 0; i < this._text.length; i++) {
-            const ch = this._text[i];
-            const nCols = isWide(ch) ? 4 : 2;
-            for (let r = 0; r < 2; r++) {
-                for (let c = 0; c < nCols; c++) {
-                    const cell = makeCell(ch, { fg: 7, bg: this._color }, 1);
-                    cell.clip = true;
-                    cell.clipOffX = -c;
-                    cell.clipOffY = -r;
-                    this._buffer[r][x + c] = cell;
+    _initPalette() {
+        this._frames = new Map();
+        for (const color of COLORS) {
+            const rows = [[], []];
+            for (const ch of this._text) {
+                const nCols = isWide(ch) ? 4 : 2;
+                for (let r = 0; r < 2; r++) {
+                    for (let c = 0; c < nCols; c++) {
+                        const cell = makeCell(ch, 7, color, false);
+                        cell.clip = true;
+                        cell.clipOffX = -c;
+                        cell.clipOffY = -r;
+                        rows[r].push(cell);
+                    }
                 }
             }
-            x += nCols;
+            this._frames.set(color, rows);
         }
+    }
+
+    draw() {
+        this._buffer = this._frames.get(this._color);
         for (let r = 0; r < this._h; r++) {
             term.markRowDirty(this._y + r);
         }

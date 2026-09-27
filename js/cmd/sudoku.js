@@ -455,6 +455,10 @@ export class SudokuCmd extends CmdBase {
         this._boardVB = new VirtualBuffer(BOARD_W, BOARD_H);
         this._sidebarVB = new VirtualBuffer(SIDEBAR_W, BOARD_H);
         this._rootVB = new VirtualBuffer(term.cols, term.rows);
+        const board = this._rootVB.addChildSlot();
+        Object.assign(board, { vb: this._boardVB, x: BOARD_X, y: GRID_Y, active: true });
+        const sidebar = this._rootVB.addChildSlot();
+        Object.assign(sidebar, { vb: this._sidebarVB, x: SIDEBAR_X, y: GRID_Y, active: true });
     }
 
     _drawHeader(vb) {
@@ -580,7 +584,7 @@ export class SudokuCmd extends CmdBase {
     _render() {
         this._boardVB.clear();
         this._sidebarVB.clear();
-        this._rootVB.clear();
+        this._rootVB.clearCells();
 
         for (let r = 0; r < this._rootVB.height; r++)
             this._rootVB.writeStr(r, 0, ' '.repeat(this._rootVB.width));
@@ -594,8 +598,6 @@ export class SudokuCmd extends CmdBase {
             this._drawSidebarRow(this._sidebarVB, r + 1);
         }
 
-        this._rootVB.embed(this._boardVB, BOARD_X, GRID_Y);
-        this._rootVB.embed(this._sidebarVB, SIDEBAR_X, GRID_Y);
         term.writeVB(this._rootVB);
     }
 
@@ -749,7 +751,7 @@ export class SudokuCmd extends CmdBase {
             if (s === '\x1B[D') { this._move(-1, 0); return; }
             if (s === '\x1B[C') { this._move(1, 0); return; }
             if (s === '\x1B[3~') { this._clearCell(); return; }
-            this._quit();
+            if (s === '\x1B' || data === 0x1B) this._quit();
             return;
         }
 

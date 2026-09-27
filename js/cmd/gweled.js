@@ -1,3 +1,4 @@
+import { buildStatRow as _buildDynRow, writeStatRow as _writeDynRow } from '../util/stat-row.js';
 import { term } from '../system/sys.js';
 import { CmdBase } from './CmdBase.js';
 import { SelectDialog } from '../dialog/SelectDialog.js';
@@ -211,23 +212,6 @@ function _buildOverlayInner(cw, ch, text) {
     const tx = Math.floor((cw - tw) / 2);
     vb.writeStr(1, tx, text);
     return vb._buffer.map(row => row.slice());
-}
-
-/** Pre-build a mutable 16-cell row for a dynamic stat line. */
-function _buildDynRow(prefix) {
-    const cells = [];
-    for (let i = 0; i < 8; i++)
-        cells.push(makeCell(prefix[i] || ' ', 7, 0, false));
-    for (let i = 0; i < 8; i++)
-        cells.push(makeCell(' ', 11, 0, true));
-    return cells;
-}
-
-/** Write a numeric value into a pre-built dyn row and copy into a buffer row. */
-function _writeDynRow(dstRow, cells, value) {
-    const s = String(value).padStart(8);
-    for (let i = 0; i < 8; i++) cells[8 + i].ch = s[i];
-    for (let i = 0; i < 16; i++) dstRow[i] = cells[i];
 }
 
 export class GweledCmd extends CmdBase {
@@ -622,7 +606,8 @@ export class GweledCmd extends CmdBase {
                 if (s === '\x1B[F') return;
                 if (s === '\x1B[5~') return;
                 if (s === '\x1B[6~') return;
-                this._quit(); return;
+                if (s === '\x1B' || data === 0x1B) this._quit();
+                return;
             }
             if (typeof data === 'string') {
                 const ch = data.toLowerCase();
@@ -667,7 +652,8 @@ export class GweledCmd extends CmdBase {
             if (s === '\x1B[F') return;
             if (s === '\x1B[5~') return;
             if (s === '\x1B[6~') return;
-            this._quit(); return;
+            if (s === '\x1B' || data === 0x1B) this._quit();
+            return;
         }
 
         if (code === 0x20) {

@@ -26,6 +26,12 @@ export class CmdBase {
     readLine(callback) { system.readLine(callback); }
     addCleanup(fn) { return system.addCommandCleanup(this, fn); }
 
+    // Capture the owning frame, not the reusable command or the live system proxy.
+    executionGuard() {
+        const frame = system.getCommandFrame(this);
+        return () => !!frame && !frame.done;
+    }
+
     // Override _onKey(data) for interactive key handling inside select()/prompt() flows.
     // Only override handleKey() directly if you must bypass all infrastructure
     // (Ctrl+C, typewriter guard, select intercept) — ShellCmd is the sole example.

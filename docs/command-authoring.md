@@ -18,6 +18,7 @@ from `../system/sys.js` when needed.
 | `open()` / `close()` | Custom interactive lifecycle |
 | `holdBusy()` / `releaseBusy()` | Command-controlled blocking work |
 | `addCleanup(fn)` | Release a timer, hook, or other execution-owned resource on frame exit |
+| `executionGuard()` | Capture a predicate that becomes false when the owning frame finishes or is cancelled |
 | `abortEpoch` | Detect Ctrl+C across delayed/async re-entry |
 
 Supply `commandName`, `help`, `usage`, and `menu` static getters (`menu: null`
@@ -29,7 +30,9 @@ so frame completion correctly waits for Typewriter drain.
 Use `select()` or `selectAsync()` for grid selection. Default movement does not
 wrap: Up/Down preserves the nearest valid column and Left/Right remain in the
 current row. Use `readLine(callback)` for free text; its buffer is independent
-of `this.line` and `system.editor.line`, so only use the callback value.
+of `this.line` and `system.editor.line`, so only use the callback value. Prefer
+`async execute()` with `await this.readLineAsync()` when completion must wait
+for the answer. A callback alone does not keep a closed command frame alive.
 
 For custom key handlers, call `open()` before rendering and `close()` on exit.
 Match every sequence that your handler may receive before treating bare Escape
@@ -260,6 +263,20 @@ dialog and need not abort the entire parent flow.
 For animations, use `startBufferAnimation`, pass the command for abort handling,
 prebuild reusable cells/buffers, and mark only changed overlay rows dirty. Follow
 [manual validation](development.md#manual-validation) for browser-facing changes.
+
+### Async loading and dialog replacement
+
+Before starting an async load, capture `const isActive = this.executionGuard()`.
+Check `isActive()` after each `await` and before printing, changing busy state,
+or starting an animation. The predicate captures the original frame and remains
+safe after disposal or reuse of the command instance. It does not replace
+`addCleanup()` for timers, overlays, or other resources that need immediate
+cancellation.
+
+An input-dialog confirmation can use
+`system.replaceDialog(dialog, ShowDialog, key, opts)` to close and finish its
+current dialog frame before opening a result dialog. Do not defer this transition
+with an unowned `setTimeout()`.
 
 ## Command-specific source map
 

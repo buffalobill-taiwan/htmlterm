@@ -165,6 +165,7 @@ function colorCode(code) {
 
 export class WordleCmd extends CmdBase {
     execute(args) {
+        this.addCleanup(() => this._cancelReveal());
         this._answer = WORDS[Math.floor(Math.random() * WORDS.length)];
         this._guesses = [];
         this._currentGuess = '';
@@ -299,17 +300,19 @@ export class WordleCmd extends CmdBase {
         }
     }
 
+    _cancelReveal() {
+        clearTimeout(this._revealTimer);
+        this._revealTimer = null;
+        this._revealState = null;
+    }
+
     _startReveal(guess, result) {
         this._revealState = { guess, result, pos: 0, rowIdx: this._guesses.length };
         this.holdBusy();
         this._render();
 
         const tick = () => {
-            if (this.closed) {
-                if (this._revealState) this._revealState = null;
-                this.releaseBusy();
-                return;
-            }
+            this._revealTimer = null;
 
             this._revealState.pos++;
             this._render();
@@ -338,10 +341,10 @@ export class WordleCmd extends CmdBase {
                 return;
             }
 
-            setTimeout(tick, 100);
+            this._revealTimer = setTimeout(tick, 100);
         };
 
-        setTimeout(tick, 100);
+        this._revealTimer = setTimeout(tick, 100);
     }
 
     _onKey(data) {
@@ -354,7 +357,7 @@ export class WordleCmd extends CmdBase {
             if (s === '\x1B[3~' || s === '\x1B[2~') return;
             if (s === '\x1B[H' || s === '\x1B[F') return;
             if (s === '\x1B[5~' || s === '\x1B[6~') return;
-            this.close();
+            if (s === '\x1B' || data === 0x1B) this.close();
             return;
         }
 
@@ -423,11 +426,9 @@ export class WordleCmd extends CmdBase {
 
     close() {
         if (this.closed) return;
-        this.closed = true;
-        if (this._revealState) {
-            this._revealState = null;
-            this.releaseBusy();
-        }
+        const revealing = !!this._revealState;
+        this._cancelReveal();
+        if (revealing) this.releaseBusy();
         this.placeShellCursor(KEYBOARD_Y + KEYBOARD_H);
         super.close();
     }

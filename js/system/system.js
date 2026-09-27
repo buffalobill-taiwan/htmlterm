@@ -275,6 +275,13 @@ export class SystemManager {
         this.editor.handleKey(data);
     }
 
+    replaceDialog(dialog, DialogClass, key, opts, ...ctorArgs) {
+        const frame = this.cmdStack.find(f => f.dialog === dialog);
+        if (!frame || frame.done || this._disposed) return null;
+        frame.finish();
+        return this.createDialog(DialogClass, key, opts, ...ctorArgs);
+    }
+
     pushDialogFrame(dlg) {
         if (this._disposed) {
             dlg.close();
