@@ -10,7 +10,8 @@ export class Sleep extends CmdBase {
         }
 
         this.holdBusy();
-        scheduleWithAbort(() => this.abortEpoch, () => this.releaseBusy(), seconds * 1000);
+        const timer = scheduleWithAbort(() => this.abortEpoch, () => this.releaseBusy(), seconds * 1000);
+        this.addCleanup(() => clearTimeout(timer));
     }
 
     static get commandName() { return 'sleep'; }

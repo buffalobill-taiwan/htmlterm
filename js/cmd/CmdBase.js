@@ -24,6 +24,7 @@ export class CmdBase {
     execute(args) {}
     print(text) { system.print(text); }
     readLine(callback) { system.readLine(callback); }
+    addCleanup(fn) { return system.addCommandCleanup(this, fn); }
 
     // Override _onKey(data) for interactive key handling inside select()/prompt() flows.
     // Only override handleKey() directly if you must bypass all infrastructure
@@ -33,8 +34,11 @@ export class CmdBase {
     // Use _afterDrain() directly only when cmd.closed stays true (e.g. pure-output async cmds
     // like anime that hold busy and don't open interactive mode).
     _afterDrain(callback) {
-        const cb = () => { system.typewriter.removeOnDrain(cb); callback(); };
-        system.typewriter.onDrain(cb);
+        const writer = system.typewriter;
+        let remove = () => {};
+        const cb = () => { writer.removeOnDrain(cb); remove(); callback(); };
+        remove = this.addCleanup(() => writer.removeOnDrain(cb));
+        writer.onDrain(cb);
     }
     holdBusy() { system.holdBusy(); }
     releaseBusy() { system.releaseBusy(); }
@@ -101,6 +105,8 @@ export class CmdBase {
     close() {
         if (this.closed) return;
         this.closed = true;
+        this._awaitingTypewriterDrain = false;
+        this._printCallbackEpoch++;
         term.write(CURSOR_SHOW);
         system.tick();
     }
@@ -134,12 +140,16 @@ export class CmdBase {
         this._printCallbackEpoch++;
         const epoch = this._printCallbackEpoch;
         this.print(text);
+        const writer = system.typewriter;
+        let remove = () => {};
         const cb = () => {
-            system.typewriter.removeOnDrain(cb);
+            writer.removeOnDrain(cb);
+            remove();
             if (this.closed || epoch !== this._printCallbackEpoch) return;
             callback();
         };
-        system.typewriter.onDrain(cb);
+        remove = this.addCleanup(() => writer.removeOnDrain(cb));
+        writer.onDrain(cb);
     }
 
     handleKey(data) {
@@ -150,11 +160,7 @@ export class CmdBase {
     _handleKey(data) {
         const code = typeof data === 'string' ? data.charCodeAt(0) : data;
         if (code === 0x03) {
-            this._selectState = null;
-            if (system.typewriter.isActive()) {
-                system.typewriter.dispose();
-            }
-            this.onCancel();
+            system._abortAll();
             return;
         }
         if (this._awaitingTypewriterDrain) {
@@ -234,7 +240,10 @@ export class CmdBase {
     // === Promise-based APIs ===
 
     readLineAsync() {
-        return new Promise(resolve => this.readLine(resolve));
+        return new Promise(resolve => {
+            const remove = this.addCleanup(() => resolve(null));
+            this.readLine(value => { remove(); resolve(value); });
+        });
     }
 
     selectAsync(opts) {
@@ -255,7 +264,11 @@ export class CmdBase {
     }
 
     waitForPrint() {
-        return new Promise(resolve => this._afterDrain(resolve));
+        if (!system.typewriter.isActive()) return Promise.resolve(true);
+        return new Promise(resolve => {
+            const remove = this.addCleanup(() => resolve(false));
+            this._afterDrain(() => { remove(); resolve(true); });
+        });
     }
 
     // === Quick dialog helpers ===
@@ -274,20 +287,22 @@ export class CmdBase {
 
     showMessage(msg) {
         return new Promise(resolve => {
+            const remove = this.addCleanup(() => resolve(null));
             this.openDialog(ShowDialog, null, {
                 message: msg,
-                onExit: resolve,
+                onExit: () => { remove(); resolve(); },
             });
         });
     }
 
     ask(question) {
         return new Promise(resolve => {
+            const remove = this.addCleanup(() => resolve(null));
             this.openDialog(InputDialog, null, {
                 title: 'Input',
                 prompt: question,
-                onConfirm: val => resolve(val),
-                onCancel: () => resolve(null),
+                onConfirm: val => { remove(); resolve(val); },
+                onCancel: () => { remove(); resolve(null); },
             });
         });
     }

@@ -17,7 +17,8 @@ from `../system/sys.js` when needed.
 | `select()` / `selectAsync()` | Open a keyboard-driven selection flow |
 | `open()` / `close()` | Custom interactive lifecycle |
 | `holdBusy()` / `releaseBusy()` | Command-controlled blocking work |
-| `abortGeneration` | Detect Ctrl+C across delayed/async re-entry |
+| `addCleanup(fn)` | Release a timer, hook, or other execution-owned resource on frame exit |
+| `abortEpoch` | Detect Ctrl+C across delayed/async re-entry |
 
 Supply `commandName`, `help`, `usage`, and `menu` static getters (`menu: null`
 hides a command from the menu). Commands should call `print`, not `term.write`,
@@ -141,7 +142,19 @@ export class MyCmd extends CmdBase {
 ```
 
 Async work may use `async execute(args)`; frame management waits for the returned
-promise. Multi-step interaction should use `wrapInteractiveFlow(this, flow)` so
+promise and reports synchronous exceptions or rejected promises. Register resources
+immediately after creating them, for example:
+
+```js
+const timer = setTimeout(callback, delay);
+this.addCleanup(() => clearTimeout(timer));
+```
+
+Cleanup runs once on completion, cancellation, or failure. The returned function
+unregisters a cleanup that is no longer needed. `readLineAsync()` resolves to
+`null` when cancelled; `waitForPrint()` resolves to `false` on cancellation and
+`true` on drain. Check cancellation results before continuing an async flow.
+Multi-step interaction should use `wrapInteractiveFlow(this, flow)` so
 every exit path closes correctly. For an animation, use `startBufferAnimation`,
 pass the command for abort handling, prebuild reusable cells/buffers, and mark
 only the overlay rows dirty.

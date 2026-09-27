@@ -39,7 +39,11 @@ permanent screen content is intended.
 
 `SystemManager` is a singleton. Command code imports `system` or `term` from
 `js/system/sys.js`; the proxies resolve the current singleton and preserve
-method `this` binding.
+method `this` binding. Property assignments are forwarded to the live instance.
+The runtime binding in `sys.js` does not import SystemManager, avoiding a cycle
+through command modules.
+`CommandRegistry` owns command instances and registration metadata;
+`WidgetManager` owns widget lifecycle and receives its system explicitly.
 
 The frame stack always contains a persistent `ShellFrame`. Commands add a
 `SyncCmdFrame`; dialogs add a `DialogFrame` above it. A frame controls input
@@ -64,6 +68,18 @@ releases the singleton. Call it before `Terminal.dispose()` when tearing down
 the application. `Terminal.dispose()` is idempotent and removes event
 listeners, pending resize/render RAF callbacks, and renderer-owned DOM nodes.
 
+Frames own cleanup callbacks registered with `CmdBase.addCleanup(fn)`. Completion,
+cancellation, and failure run them once. Cancellation finishes frames from top to
+bottom; `_processStack()` still owns popping and prompt activation. Async command
+rejections and synchronous exceptions enter `failFrame()`, which cancels that
+frame and its descendants, reports the error, and resumes the stack. Late promise
+settlements from finished frames cannot wake a disposed system.
+
+`Typewriter.abort()` flushes queued output and drain callbacks; `cancel()` discards
+queued output without running callbacks; `dispose()` permanently disables output.
+Ctrl+C uses cancellation. Command-owned drain callbacks are removed by frame
+cleanup, while the system's drain listener remains registered.
+
 ## Input and output
 
 Input is routed, in order, to the top frame handler, active `readLine`, a
@@ -85,7 +101,7 @@ terminal writes bypass it.
 ## Dialogs and VirtualBuffer
 
 Dialogs render to `this._vb`, flatten it with `render()`, and expose the result
-as an overlay. Inline SGR is parsed into cell attributes by `js/dialog/write.js`.
+as an overlay. Inline SGR is parsed into cell attributes by `js/util/write.js`.
 `DialogFrame` saves cursor state when opening and restores it when finishing.
 
 Open dialogs only through `system.createDialog()` or `CmdBase.openDialog()`.
@@ -99,7 +115,9 @@ the parent frame becomes topmost again.
 `VirtualBuffer` has low-level `writeStr`, `setCell`, `blit`, and `render` APIs,
 plus layout helpers such as `centerRow`, `hline`, and `embed`. For repeatedly
 rendered composition, use preallocated `addChildSlot()` entries rather than
-calling `embed()` every frame.
+calling `embed()` every frame. `clearCells()` clears content while retaining child
+slots; `clearChildren()` removes children. `clear()` retains its original combined
+reset behavior for existing callers.
 
 Commands with a persistent screen layout (games, grids, and animated boards)
 should normally render through a root `VirtualBuffer` and child buffers:

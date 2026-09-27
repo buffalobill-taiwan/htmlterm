@@ -3,12 +3,16 @@ import { LineEditor } from './LineEditor.js';
 import { tokenize } from '../util/tokenize.js';
 import { ShellCmd } from '../cmd/ShellCmd.js';
 import { ShellFrame, SyncCmdFrame, DialogFrame } from './CmdFrame.js';
-import { system } from './sys.js';
+import { getSystem, setSystem } from './sys.js';
+import { CommandRegistry } from './CommandRegistry.js';
+import { WidgetManager } from './WidgetManager.js';
+export { WidgetManager } from './WidgetManager.js';
 import { bold, green, yellow, gray, warn, CURSOR_SHOW } from '../util/sgr.js';
 import { MenuDialog } from '../dialog/MenuDialog.js';
 
 export class SystemManager {
-    static instance = null;
+    static get instance() { return getSystem(); }
+    static set instance(value) { setSystem(value); }
 
     constructor(term, cmdModule) {
         SystemManager.instance = this;
@@ -35,42 +39,24 @@ export class SystemManager {
             },
         });
 
-        this.cmdList = [];
-        this.menuItems = [];
-        this.commands = {};
-        this._cmdInstances = {};
+        const registry = new CommandRegistry(cmdModule);
+        this.cmdList = registry.cmdList;
+        this.menuItems = registry.menuItems;
+        this.commands = registry.commands;
+        this._cmdInstances = registry.instances;
         this.prompt = '$ ';
         this.running = false;
 
         this.dialogRestoreHooks = [];
         this._dialogPositions = {};
 
-        this.widgetManager = new WidgetManager();
+        this.widgetManager = new WidgetManager(this);
         this._dragTarget = null;
         this.menuDialog = null;
 
-        this._registerCommands(cmdModule);
-        this.start();
-    }
-
-    _registerCommands(cmdModule) {
-        for (const Cls of Object.values(cmdModule)) {
-            if (typeof Cls !== 'function' || !Cls.commandName) continue;
-            if (Cls.commandName === 'shell') continue; // persistent shell, not a user command
-            const cmd = new Cls();
-            const name = Cls.commandName;
-            const help = Cls.help;
-            const menu = Cls.menu;
-            const usage = Cls.usage;
-            this._cmdInstances[name] = cmd;
-            this.commands[name] = cmd.execute.bind(cmd);
-            this.cmdList.push({ name, help, usage });
-            if (menu) this.menuItems.push({ name, desc: menu });
-        }
-        this.cmdList.sort((a, b) => a.name.localeCompare(b.name));
-        this.menuItems.sort((a, b) => a.name.localeCompare(b.name));
         this.editor.setCommands(Object.keys(this.commands));
         this.editor.setPrompt(this.prompt);
+        this.start();
     }
 
     start() {
@@ -193,11 +179,8 @@ export class SystemManager {
                 this.tick();
             },
             onShowPrompt: () => {
-                // Ctrl+C / Ctrl+D inside readLine — cancel
-                this.readLineState = null;
-                const top = this.cmdStack[this.cmdStack.length - 1];
-                if (top && top.persistent) top._pendingActivate = true;
-                this.tick();
+                // Cancel the owning command too, settling its pending input promise.
+                this._abortAll();
             },
         });
         editor.setPrompt('');
@@ -208,15 +191,41 @@ export class SystemManager {
         this.readLineState.editor.handleKey(data);
     }
 
-    _abortAll() {
+    getCommandFrame(cmd) {
+        return this.cmdStack.slice().reverse().find(f => f.cmd === cmd);
+    }
+
+    addCommandCleanup(cmd, fn) {
+        const frame = this.getCommandFrame(cmd);
+        if (!frame) throw new Error('No active command frame');
+        return frame.addCleanup(fn);
+    }
+
+    _cancelFrames(fromIndex) {
         this._abortEpoch++;
         this._busy = false;
         this._queuedInput = [];
         this.readLineState = null;
-        while (this.cmdStack.length > 1) this.cmdStack.pop();
-        this.typewriter.abort();
+        this._dragTarget = null;
+        this.typewriter.cancel();
+        for (let i = this.cmdStack.length - 1; i >= fromIndex; i--) {
+            try { this.cmdStack[i].cancel(); } catch (err) { console.error(err); }
+        }
+    }
+
+    failFrame(frame, err) {
+        const index = this.cmdStack.indexOf(frame);
+        if (index < 0 || frame.done || this._disposed) return;
+        this._cancelFrames(index);
+        this.print('\x1B[31mError: ' + String(err) + '\x1B[0m\n');
+        this.tick();
+    }
+
+    _abortAll() {
+        this._cancelFrames(1);
         this.term.write('^C\n');
-        this._pushFrame(new SyncCmdFrame('', [], null));
+        const shell = this.cmdStack[0];
+        if (shell) shell._pendingActivate = true;
         this.tick();
     }
 
@@ -397,19 +406,7 @@ export class SystemManager {
         this.readLineState = null;
         this._dragTarget = null;
 
-        // Give active commands a chance to release their timers and overlays.
-        for (const frame of this.cmdStack) {
-            const cmd = frame.cmd;
-            if (cmd && !cmd.closed && typeof cmd.onCancel === 'function') {
-                cmd.onCancel();
-            }
-        }
-
-        // Close dialogs before finishing frames so their overlays are removed.
-        for (const frame of this.cmdStack) {
-            if (frame.dialog && !frame.dialog.closed) frame.dialog.close();
-            if (!frame.done && typeof frame.finish === 'function') frame.finish();
-        }
+        this._cancelFrames(1);
 
         this.typewriter.dispose();
         this.term.cursorHidden = false;
@@ -426,43 +423,4 @@ export class SystemManager {
         if (SystemManager.instance === this) SystemManager.instance = null;
     }
 
-}
-
-export class WidgetManager {
-    constructor() {
-        this._widgets = [];
-        this._savedState = new Map();
-        this._hook = () => this.redrawAll();
-        system.addDialogRestoreHook(this._hook);
-    }
-
-    add(widget) {
-        const key = widget.constructor.name;
-        if (this._savedState.has(key)) {
-            widget.restoreSaveState(this._savedState.get(key));
-        }
-        widget.start();
-        this._widgets.push(widget);
-    }
-
-    remove(widget) {
-        const i = this._widgets.indexOf(widget);
-        if (i < 0) return;
-        this._savedState.set(widget.constructor.name, widget.getSaveState());
-        widget.stop();
-        this._widgets.splice(i, 1);
-        this.redrawAll();
-    }
-
-    redrawAll() {
-        for (const w of this._widgets) {
-            w.draw();
-        }
-    }
-
-    destroy() {
-        system.removeDialogRestoreHook(this._hook);
-        for (const w of this._widgets) w.stop();
-        this._widgets = [];
-    }
 }

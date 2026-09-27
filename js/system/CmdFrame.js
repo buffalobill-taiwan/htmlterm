@@ -5,6 +5,7 @@ export class CmdFrame {
     constructor() {
         this.done = false;
         this.started = false;
+        this._cleanups = new Set();
     }
 
     get label() { return this.constructor.name; }
@@ -16,9 +17,21 @@ export class CmdFrame {
     get blocked() { return false; }
     handleInput(data) { return false; }
 
+    addCleanup(fn) {
+        if (this.done) { fn(); return () => {}; }
+        this._cleanups.add(fn);
+        return () => this._cleanups.delete(fn);
+    }
+
+    cancel() { this.finish(); }
+
     finish() {
         if (this.done) return;
         this.done = true;
+        for (const fn of this._cleanups) {
+            try { fn(); } catch (err) { console.error(err); }
+        }
+        this._cleanups.clear();
     }
 }
 
@@ -34,28 +47,51 @@ export class SyncCmdFrame extends CmdFrame {
     get label() { return this.cmdName; }
 
     start() {
-        const handler = system.commands[this.cmdName];
-        if (handler) {
-            const result = handler(this.args);
-            if (result instanceof Promise) {
-                this._asyncPending = true;
-                result.then(() => {
-                    this._asyncPending = false;
-                    if (!this.done) system.tick();
-                });
-                return;
+        try {
+            const handler = system.commands[this.cmdName];
+            if (handler) {
+                const result = handler(this.args);
+                if (result && typeof result.then === 'function') {
+                    this._asyncPending = true;
+                    Promise.resolve(result).then(() => {
+                        this._asyncPending = false;
+                        if (!this.done) system.tick();
+                    }, err => {
+                        this._asyncPending = false;
+                        if (!this.done) system.failFrame(this, err);
+                    });
+                    return;
+                }
+            } else if (this.cmdName) {
+                system.print('\x1B[31mCommand not found: ' + this.cmdName + '\x1B[0m\n');
+                system.print('Try \x1B[33mhelp\x1B[0m.\n');
             }
-        } else if (this.cmdName) {
-            system.print('\x1B[31mCommand not found: ' + this.cmdName + '\x1B[0m\n');
-            system.print('Try \x1B[33mhelp\x1B[0m.\n');
+            if (!this.blocked) this.finish();
+        } catch (err) {
+            system.failFrame(this, err);
         }
-        if (!this.blocked) this.finish();
+    }
+
+    cancel() {
+        if (this.done) return;
+        this._asyncPending = false;
+        try {
+            if (this.cmd) this.cmd.onCancel();
+        } finally {
+            if (this.cmd) {
+                this.cmd.closed = true;
+                this.cmd._awaitingTypewriterDrain = false;
+                this.cmd._selectState = null;
+            }
+            this.finish();
+        }
     }
 
     handleInput(data) {
+        if (system.readLineState) return false;
         if (this.cmd && !this.cmd.closed && typeof this.cmd.handleKey === 'function') {
             this.cmd.handleKey(data);
-            if (this.cmd.closed) this.finish();
+            if (!this.blocked) this.finish();
             return true;
         }
         return false;
@@ -94,6 +130,7 @@ export class DialogFrame extends CmdFrame {
 
     finish() {
         if (this.done) return;
+        this.dialog.close();
         if (this._savedCursor) {
             const s = this._savedCursor;
             term.cursorHidden = s.cursorHidden;

@@ -27,7 +27,8 @@ an unavoidable exceptional allocation, not a pattern for regular drawing.
 
 ## VirtualBuffer and overlays
 
-`clear()` should null existing slots in place. `render()` uses shallow row copies
+`clearCells()` nulls existing cells in place and retains child slots. `clear()`
+also removes children; use it only when resetting the composition. `render()` uses shallow row copies
 because placed cells are immutable. `blit()` writes directly into its destination
 instead of creating an intermediate rendered buffer.
 

@@ -60,6 +60,17 @@ export class Typewriter {
         this._flushDrain();
     }
 
+    // Discard output without running completion callbacks or destroying the writer.
+    cancel() {
+        if (this._rafId !== null) cancelAnimationFrame(this._rafId);
+        this._rafId = null;
+        this._queue.length = 0;
+        this._head = 0;
+        this._active = false;
+        this._accumulator = 0;
+        this.term.write(CURSOR_SHOW);
+    }
+
     onDrain(callback) {
         if (this._disposed) return;
         this._drainCallbacks.push(callback);

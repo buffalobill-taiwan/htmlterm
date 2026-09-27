@@ -13,10 +13,12 @@ export class TimeCmd extends CmdBase {
         const startTime = performance.now();
         const stackDepth = system.cmdStack.length;
 
+        const owner = system.cmdStack[stackDepth - 1];
         system.execCmd(target);
 
         return new Promise(resolve => {
             const remove = system.addFramePopHook(() => {
+                if (owner.done) return;
                 if (system.cmdStack.length === stackDepth) {
                     remove();
                     const elapsed = performance.now() - startTime;
@@ -24,6 +26,7 @@ export class TimeCmd extends CmdBase {
                     resolve();
                 }
             });
+            owner.addCleanup(() => { remove(); resolve(); });
         });
     }
 

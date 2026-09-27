@@ -1,3 +1,5 @@
+import { system } from './sys.js';
+
 // Interactive command lifecycle management
 
 /**
@@ -8,19 +10,21 @@
  * @param {Object} options - { autoClose: boolean, onError?: Function }
  */
 export async function wrapInteractiveFlow(cmd, flowFn, options = {}) {
+    const frame = system.getCommandFrame(cmd);
     const autoClose = options.autoClose !== false;
 
     try {
         cmd.open();
         await flowFn(cmd);
     } catch (err) {
+        if (frame && frame.done) return;
         if (options.onError) {
             options.onError(err);
         } else {
             cmd.error(String(err));
         }
     } finally {
-        if (autoClose && !cmd.closed) {
+        if ((!frame || !frame.done) && autoClose && !cmd.closed) {
             cmd.close();
         }
     }

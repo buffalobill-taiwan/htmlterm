@@ -1,4 +1,4 @@
-import { _writeStr } from '../dialog/write.js';
+import { _writeStr } from './write.js';
 import { bufWidth } from './display-width.js';
 import { createEmptyBuffer } from './sgr.js';
 
@@ -27,10 +27,18 @@ export class VirtualBuffer {
     }
 
     clear() {
+        this.clearCells();
+        this.clearChildren();
+    }
+
+    clearCells() {
         for (let r = 0; r < this.height; r++) {
             const row = this._buffer[r];
             for (let c = 0; c < this.width; c++) row[c] = null;
         }
+    }
+
+    clearChildren() {
         this._children.length = 0;
     }
 
@@ -94,11 +102,13 @@ export class VirtualBuffer {
             const childCells = vb.render();
             for (let cy = 0; cy < childCells.length; cy++) {
                 const dy = oy + cy;
+                if (dy < 0) continue;
                 if (dy >= this.height) break;
                 const srcRow = childCells[cy];
                 const dstRow = result[dy];
                 for (let cx = 0; cx < srcRow.length; cx++) {
                     const dx = ox + cx;
+                    if (dx < 0) continue;
                     if (dx >= this.width) break;
                     if (srcRow[cx]) dstRow[dx] = srcRow[cx];
                 }
