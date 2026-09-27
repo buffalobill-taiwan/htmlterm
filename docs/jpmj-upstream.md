@@ -1,13 +1,14 @@
 # Japanese Mahjong upstream synchronization
 
 Upstream: <https://github.com/buffalobill-taiwan/jpmj>
-Local checkout: `/home/buffalobill/playground/jpmj`.
+Use a local clone of that repository for comparisons. The maintainer checkout
+`/home/buffalobill/playground/jpmj` is optional and is not a portable prerequisite.
 
 Reviewed on 2026-09-25 against upstream HEAD
 `575d60b8c0dcf2c3cc28d021ac074b2eba742e0f` (also verified against GitHub HEAD).
 This is a comparison baseline, not a claim that both implementations are identical.
 
-## Current differences
+## Differences at the reviewed baseline
 
 - `wall.js`: same implementation after module/formatting adaptation.
 - `yaku.js`: rule logic matches this baseline; terminal exports and
@@ -33,13 +34,18 @@ human riichi after concealed kan (`34618fb`, game portion), corrected ura-dora
 indicator positions (`346fd75`), special-hand exclusions (`0e3d600`), and the
 `断么九` label (`54ae35d`).
 
+The baseline records a past review; it is not a claim about current upstream HEAD.
+See [project history](project-history.md#verified-september-2026-changes) for later
+local changes.
+
 ## Updating from upstream
 
 1. Check upstream HEAD and compare its changes against the reviewed hash above.
    Inspect local working changes before updating either checkout.
 2. Port individual rule/AI changes into the corresponding ES modules. Preserve
    imports/exports and terminal display APIs; do not overwrite the directory.
-3. Adapt `game.js` changes around deferred settlement and human input timing.
+3. Compare the engine method groups listed below, preserving deferred settlement
+   and human input timing.
    Browser `main.js` changes require a separate review for relevant rule or UX
    behavior; its DOM code cannot be imported directly.
 4. Run syntax checks and focused rule scenarios for the imported changes.
@@ -49,9 +55,9 @@ indicator positions (`346fd75`), special-hand exclusions (`0e3d600`), and the
 
 ## Parallel engine refactor (2026-09-25)
 
-Both working trees now split the engine using the same filenames and method
-groups. This structural change is subsequent to the upstream baseline above;
-compare corresponding modules once both repositories have this refactor.
+The recorded refactor split both working trees into the filenames and method
+groups below. It followed the baseline above. Local commit `64748a8` contains the
+terminal refactor; verify the target upstream revision before comparing groups.
 
 | File | Responsibility |
 |---|---|

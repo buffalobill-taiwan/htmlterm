@@ -17,6 +17,8 @@ Read the document that matches the work being done before changing that area.
 | Terminal, renderer, overlay, shell, dialogs, or input routing | [Architecture](docs/architecture.md) |
 | Adding or changing a command, widget, dialog, or keyboard interaction | [Command authoring](docs/command-authoring.md) |
 | Render-loop, animation, VirtualBuffer, dirty-row, or font-metric work | [Rendering performance](docs/rendering-performance.md) |
+| Local setup, validation, or offline tools | [Development](docs/development.md) |
+| Japanese Mahjong rule/AI synchronization | [Upstream synchronization](docs/jpmj-upstream.md) |
 | Why a current design exists or past project milestones | [Project history](docs/project-history.md) |
 
 ## Non-negotiable constraints
@@ -70,10 +72,10 @@ Read the document that matches the work being done before changing that area.
 ## Repository map
 
 - `js/terminal/`: Screen, Parser, Renderer, and terminal coordinator.
-- `js/system/`: frame-stack shell, input editor, Typewriter, and helpers.
+- `js/system/`: command registry, frame-stack shell, input, Typewriter, widget manager, and helpers.
 - `js/dialog/`: buffered draggable dialog implementations.
-- `js/cmd/`: commands, games, widgets, and command registration.
-- `js/util/`: side-effect-free shared utilities, including SGR and VirtualBuffer.
+- `js/cmd/`: commands, games, widgets, and command exports.
+- `js/util/`: shared utilities, including SGR, VirtualBuffer, and animation helpers.
 - `tools/`: offline art/font processing scripts, never runtime features.
 
 ## Working conventions

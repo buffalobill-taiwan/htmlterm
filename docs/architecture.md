@@ -16,6 +16,29 @@ conceal, crossedOut, width }`. Wide glyphs occupy a `width: 2` cell plus a
 continuation cell. Renderer updates individual spans only when visual content
 changes; it uses clip CSS classes for partial wide-cell overlay coverage.
 
+## Terminal compatibility
+
+This is a demo terminal with selected ANSI/VT100 behavior, not full terminal
+protocol conformance. The source of truth is [Parser](../js/terminal/Parser.js),
+[Screen](../js/terminal/Screen.js), and [Renderer](../js/terminal/Renderer.js).
+
+| Area | Current behavior and limits |
+|---|---|
+| Indexed colors | 16 colors with bold brightening and 256-color `38;5;n` / `48;5;n` rendering |
+| RGB colors | Screen parses `38;2;r;g;b` / `48;2;r;g;b`, but Renderer maps them to fixed `.qhi` / `.bhi` fallback colors; arbitrary RGB is not rendered |
+| Text attributes | Common SGR rendering includes bold brightening, dim, italic, underline, inverse, strikeout, and blink; conceal is stored but not applied by Renderer. Project-specific SGR 500/501 controls enlarged text |
+| Cursor and editing | Common CSI cursor movement, positioning, erase, insert/delete, scrolling, scroll regions, save/restore, and status reports |
+| Private modes | Cursor visibility, alternate buffer 1049, application cursor keys, and mouse modes 1000/1002/1003/1006; these are selected implementations, not general DEC compatibility |
+| String controls | OSC/DCS/SOS/PM/APC strings are consumed without implementing their payloads |
+| Paste | Text paste is supported; the parser uses private mode 2000 for its bracketed-paste flag, rather than standard 2004, so standard bracketed-paste compatibility is not claimed |
+| Layout | Demo defaults to 80×25; scaling never drops below 1, so a viewport smaller than the base grid can overflow |
+| Line endings | LF also performs carriage return; cursor forward/back can wrap across rows, which is a project-specific behavior |
+
+The shared dialog text writer handles indexed-color SGR; parsing a sequence in
+the main terminal does not imply that every VirtualBuffer text path supports it.
+Use the [development checks](development.md#manual-validation) when changing
+protocol behavior. Update this table alongside any change to compatibility.
+
 ## Overlay compositing
 
 The main buffer is rendered first. Overlays are independent transparent cell
@@ -42,8 +65,10 @@ permanent screen content is intended.
 method `this` binding. Property assignments are forwarded to the live instance.
 The runtime binding in `sys.js` does not import SystemManager, avoiding a cycle
 through command modules.
-`CommandRegistry` owns command instances and registration metadata;
-`WidgetManager` owns widget lifecycle and receives its system explicitly.
+[CommandRegistry](../js/system/CommandRegistry.js) owns command instances and
+registration metadata; [WidgetManager](../js/system/WidgetManager.js) owns widget
+lifecycle and receives its system explicitly. Each registered command instance is
+reused across executions; initialize per-run state in `execute()` or its helpers.
 
 The frame stack always contains a persistent `ShellFrame`. Commands add a
 `SyncCmdFrame`; dialogs add a `DialogFrame` above it. A frame controls input

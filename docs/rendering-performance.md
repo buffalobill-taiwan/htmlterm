@@ -28,7 +28,8 @@ an unavoidable exceptional allocation, not a pattern for regular drawing.
 ## VirtualBuffer and overlays
 
 `clearCells()` nulls existing cells in place and retains child slots. `clear()`
-also removes children; use it only when resetting the composition. `render()` uses shallow row copies
+also removes children; use it only when resetting the composition.
+`render()` uses shallow row copies
 because placed cells are immutable. `blit()` writes directly into its destination
 instead of creating an intermediate rendered buffer.
 
@@ -56,11 +57,22 @@ frame update and update only rows whose cells changed.
 
 ## Layout and font metrics
 
-Use `isWide(ch)` for terminal-cell arithmetic and `bufWidth(str)` for visible
-strings containing SGR. Box drawing is single-width; CJK/full-width glyphs are
+Use `isWide(ch)` for individual glyphs, `displayWidth(str)` for plain text, and
+`bufWidth(str)` for visible width of text containing SGR. See the
+[width examples](command-authoring.md#text-width). Box drawing is single-width; CJK/full-width glyphs are
 double-width. Core font glyphs advance 8px at 16px; extended glyphs such as
 `⏎`, `✓`, and `✖` advance 16px. Arrow glyphs `↑` and `↓` are core-width.
 
 When composing a dialog frame of width `W`, content is at most `W - 2` visible
 cells. Place borders with `setCell` if content may be wide: concatenated strings
 can silently push the right border past the buffer limit.
+
+## Measuring changes
+
+Record the commit, browser/version, viewport and scale, workload (for example
+idle, `anime`, or `tetris --easy`), capture duration, and profiler settings.
+Compare the same workload before and after a change. Inspect frame timing,
+allocations/GC, and DOM updates; dirty-row tracking alone is not evidence that
+an entire frame is allocation-free. Historical counts in project-history.md are
+not current benchmarks. See [manual validation](development.md#manual-validation)
+for the functional checks to run alongside profiling.

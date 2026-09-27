@@ -12,23 +12,23 @@ dialogs, and TSR-style widgets.
 
 ### Terminal core
 
-- Full ANSI escape sequence support (SGR colors, cursor positioning, scroll regions, etc.)
+- Common ANSI/VT100 escape sequences (SGR colors, cursor positioning, scroll regions)
 - 16-color ANSI palette with bold brightening
-- 256-color and truecolor support
+- 256-color indexed rendering; RGB parsing has rendering limitations
 - Mouse tracking (normal, button-events, any-event, SGR 1006)
 - Scrollback buffer (2000 lines) with mouse wheel navigation
 - IME support for Chinese/Japanese input via hidden textarea
 - CJK double-width character handling (buffer + rendering + input/delete)
 - `\n` treated as CR+LF for proper newline behavior
 - Viewport auto-scaling (maintains 80×25 aspect ratio, adjustable on resize)
-- Bracketed paste mode
+- Paste input (see the [compatibility limits](docs/architecture.md#terminal-compatibility))
 - Cursor blink animation
 - CRT scanline overlay
 
 ### Demo shell
 
 - Frame-stack command runner with rAF-based Typewriter output
-- 32 built-in commands (games, widgets, interactive tests — see below)
+- Built-in commands (games, widgets, interactive tests — see below)
 - Dialog framework (`MenuDialog`, `InputDialog`, `ShowDialog`) with overlay compositing
 - VirtualBuffer compositing abstraction for nested UI layout
 - TSR widgets (clock, DVD logo) — draggable, position remembered
@@ -38,25 +38,23 @@ dialogs, and TSR-style widgets.
 
 ## Architecture
 
-> **Note on 256-color CSS classes:** The 480 `.q16`–`.q255`/`.b16`–`.b255` CSS rules in `style.css` are hand-maintained and intentionally kept static. Per-cell rendering in `Renderer.js` uses these classes for indexed colors and the `qhi`/`bhi` classes for truecolor — no per-cell inline styles. This avoids generating 80×25 inline style strings per frame and keeps the render hot path simple.
+The terminal separates its cell buffer, escape parser, DOM renderer, and event
+coordinator. Commands run on a frame stack; dialogs and widgets use independent
+overlays. Indexed-color CSS classes are static, and rendering updates dirty rows
+in the pre-created span grid.
 
-| Component | Approach |
-|-----------|----------|
-| **Core split** | `Screen.js` (buffer) · `Parser.js` (VT100 state machine) · `Renderer.js` (DOM grid) · `terminal.js` (coordinator) |
-| **Rendering** | Pre-created 80×25 `<span>` grid; in-place dirty-row updates via `.textContent` / `.className` (no per-cell inline styles); clip cells use CSS classes (`clip-right`/`clip-left`/`clip-cell`) sized by `var(--char-w)`/`var(--char-h)` with `data-ox`/`data-oy` + `.innerHTML` |
-| **Buffer** | 2D cell array (`{ch, fg, bg, bold, italic, …, width}`) + scrollback; CJK uses `width: 2` + continuation cell |
-| **Overlays** | Command overlays, dialogs, and widgets own separate buffers; fixed render order is command → dialog → widget, with later registration winning within a group |
-| **Shell** | `SystemManager` (singleton) + `sys.js` (Proxy exports for cmd code) + `ShellCmd` (persistent CmdBase subclass, REPL) |
-| **Dialogs** | VirtualBuffer-based layout in `js/dialog/`; `DialogFrame` saves/restores cursor on open/close |
-| **Input** | `keydown` on `document` (always captured) + hidden `<textarea>` for IME |
-| **Focus** | Automatic refocus on `keyup` (ptt.cc pattern) |
-| **Cursor** | Absolutely-positioned `<div>`, positioned via `--cur-col`/`--cur-row` CSS variables with CSS `blink` animation |
-| **Render loop** | `requestAnimationFrame` with dirty-row tracking |
-| **Scaling** | `fitToViewport()` writes `--term-scale` on init and debounced resize; layout math lives in CSS (`calc(var(--cols) * var(--char-w))`) |
+See [architecture and compatibility](docs/architecture.md) for module ownership,
+supported control sequences, and current rendering limitations.
 
-For implementation guidance, start with [AGENTS.md](AGENTS.md). Detailed references are split by topic:
-[architecture](docs/architecture.md), [command authoring](docs/command-authoring.md),
-[rendering performance](docs/rendering-performance.md), and [project history](docs/project-history.md).
+| Task | Reference |
+|---|---|
+| Run locally, validate a change, or use offline tools | [Development guide](docs/development.md) |
+| Understand modules, lifecycle, and terminal compatibility | [Architecture](docs/architecture.md) |
+| Add a command, dialog, or widget | [Command authoring](docs/command-authoring.md) |
+| Work on rendering, animation, or character widths | [Rendering performance](docs/rendering-performance.md) |
+| Update Japanese Mahjong rules or AI | [Upstream synchronization](docs/jpmj-upstream.md) |
+| Understand past changes | [Project history](docs/project-history.md) |
+| Check repository constraints for agent work | [Agent guide](AGENTS.md) |
 
 ## Fonts
 
@@ -70,9 +68,25 @@ Uses [Unifont](https://unifoundry.com/unifont/) bitmap font, subsetted into five
 
 ## Usage
 
-Open `index.html` in a modern browser, or visit the live demo:
+Visit the [live demo](https://buffalobill-taiwan.github.io/htmlterm/), or run a
+static HTTP server from the repository root. With Python 3 installed:
 
-<https://buffalobill-taiwan.github.io/htmlterm/>
+```sh
+python3 -m http.server 8000 --bind 127.0.0.1
+```
+
+Open <http://127.0.0.1:8000/>. You should see the HTML Term banner and a `$ `
+prompt; try `help`, `echo 中文`, or `menu`. Stop the server with Ctrl+C in the
+host terminal.
+
+No build or package installation is needed to run the demo. Use HTTP rather than
+opening `index.html` as a `file://` URL: the app loads ES modules and fetches the
+Wordle dictionary JSON. See the [development guide](docs/development.md) for
+troubleshooting and validation.
+
+The shell is a stateless demo: it has no filesystem, redirection, globbing,
+script execution, external binaries, or process/job control. Widget positions
+are remembered only within the running application.
 
 When embedding the terminal, tear it down in this order:
 
@@ -141,20 +155,18 @@ more than once.
 
 ## Project layout
 
-```
-js/
-├── main.js
-├── terminal/    Screen.js Parser.js Renderer.js terminal.js   # VT100 core
-├── system/      sys.js system.js CmdFrame.js LineEditor.js typewriter.js TextInputModel.js BusyAsyncHelper.js InteractiveCommandHelper.js QuestionnaireHelper.js RAFAnimationHelper.js
-├── util/        constants.js sgr.js unicode-width.js display-width.js VirtualBuffer.js drag.js tokenize.js calc-expr.js select-grid.js pixel-codec.js flash-helper.js random.js nurikabe-engine.js
-├── dialog/      Dialog.js MenuDialog.js InputDialog.js ShowDialog.js ConfirmDialog.js SelectDialog.js write.js position.js  # Dialog framework
-└── cmd/         CmdBase.js ShellCmd.js ... + widgets/ + jpmj/    # Demo commands + widgets
-css/style.css
-index.html
-tools/
-├── png2art.js                                            # Offline art converter
-├── subset-font.js                                         # Offline Unifont → woff2 subsetter
-└── compress-anime.js                                      # Offline anime pixel data compressor
+```text
+index.html          Browser entry point
+css/                Fonts, colors, grid geometry, and visual effects
+js/main.js          Application startup and callback wiring
+js/terminal/        Screen, parser, DOM renderer, and event coordinator
+js/system/          Command registry, frames, input, Typewriter, widgets, and helpers
+js/cmd/             Commands, games, command exports, and widget implementations
+js/dialog/          Buffered dialog implementations
+js/util/            Shared buffers, text/color/layout helpers, and game utilities
+fonts/              Subsetted browser fonts
+docs/               Architecture, development, authoring, and historical references
+tools/              Offline converters, font subsetting, and puzzle diagnostics
 ```
 
 ## License

@@ -2,6 +2,11 @@
 
 This is a historical reference, not a required pre-read. Current behavior and
 constraints live in [AGENTS.md](../AGENTS.md) and the focused reference docs.
+Local setup, validation, and current tool usage live in [development](development.md).
+Historical filenames and implementation descriptions below describe their period;
+they are not instructions for the current checkout. Historical mutable-cell
+optimizations below do not override the current immutable-cell rule in the
+[rendering reference](rendering-performance.md).
 
 ## Architecture milestones
 
@@ -41,21 +46,33 @@ constraints live in [AGENTS.md](../AGENTS.md) and the focused reference docs.
 - Japanese Mahjong added tenpai/yaku-less wait display, deferred round
   settlement, and a centered game-over summary.
 
-## Project boundaries and status
+## Verified September 2026 changes
 
-- The terminal core, overlay system, frame-stack shell, and Typewriter are
-  complete. Commands are registered from `js/cmd/index.js`.
-- Browser manual testing is the intended validation method; automated tests and
-  CI are not planned.
-- The shell remains a demo shell, not a POSIX implementation: no filesystem,
-  redirection, globbing, script execution, PATH binary lookup, processes, or
-  job control. Pipes are deferred because they conflict with animated output.
-- Possible future UX work includes virtual CWD state, history search, richer tab
-  completion, selection/copy behavior, and offline artwork tooling.
+These references are local repository commits, not upstream Mahjong revisions:
+
+| Date | Commit | Change |
+|---|---|---|
+| 2026-09-25 | `64748a8` | Split the Mahjong engine into focused method groups |
+| 2026-09-25 | `9e3a13a` | Fix Mahjong draw actions and discard navigation |
+| 2026-09-27 | `e197bb5` | Fix proxy assignment, command failure/cancellation handling, frame cleanup, module boundaries, and VirtualBuffer clearing APIs |
+
+Use `git show <commit>` for the exact implementation and
+[upstream synchronization](jpmj-upstream.md) for the separately recorded Mahjong
+comparison baseline. Current project boundaries are in the [README](../README.md#usage)
+and agent guide. Past ideas such as virtual CWD state or pipes were not accepted
+runtime features; this history is not a roadmap. Testing policy is maintained in
+the agent guide and development guide, not inferred from older plans.
 
 ## Detailed 2026 record
 
-Recent focus (Jun 2026): `anime` rewritten from `setInterval`+esc-seq to
+The following is a retained June–September engineering log. Exact commit,
+browser, hardware, capture settings, and measurement methodology were not recorded
+for its size/allocation/retry-rate numbers. Treat those values as historical
+observations, not reproducible benchmarks or current performance guarantees.
+For new measurements, record the conditions in
+[the performance procedure](rendering-performance.md#measuring-changes).
+
+Animation rewrite (Jun 2026): `anime` rewritten from `setInterval`+esc-seq to
 rAF + buffer overlay compositing, centered like `flash --art`.
 `js/util/pixel-codec.js` added — RLE+diff compression for pixel data;
 tools/compress-anime.js offline script compresses frame 0 → RLE (492 vs 1800),
@@ -72,7 +89,7 @@ Cmd ergonomics refactor (Jun 2026): `isTyping` → `_waitingForDrain`, `open()` 
 Directory restructure (Jun 2026): `js/` root split into `terminal/`, `system/`, `util/` subdirs.
 LineEditor rewrite (Jul 2026): `_redraw()` handles multi-row wrapped lines via
 `_cursorDisplayCol`/`_lastPromptRow` tracking, `\x1B[J` clear, and CUP positioning.
-`Screen.cursorBack`/`cursorForward` now wrap across rows (standard terminal behavior).
+`Screen.cursorBack`/`cursorForward` now wrap across rows (a project-specific behavior).
 System Proxy refactor (Jul 2026): `js/system/sys.js` added — Proxy-based `system` and
 `term` exports replace direct `SystemManager.instance` access across all cmd files.
 All 14 cmd/widget files updated; zero remaining `SystemManager.instance` references
@@ -206,9 +223,8 @@ overlay; autoplay 託管), `game.js` (turn state machine, riichi/dora/honba/tsum
 exhaustive draw with noten payment, abortive draws 三家和/四槓散了/四風連打/九種九牌/
 四家立直), `yaku.js` (yaku evaluation + payments), `wall.js`/`tiles.js`, and 6 AI
 personalities via `ai_factory.js` (初學者/一般人/高手/国士命/断么廚/門清俠).
-jpmj rule reference: the upstream implementation lives at `/home/buffalobill/playground/jpmj`
-(`js/yaku.js` scoring, `js/main.js` UI incl. `getRankLabel` 満貫/跳満/倍満/三倍満/
-数え役満/N倍役満 labels) — consult it before re-deriving any mahjong rule.
+jpmj rule reference: see the [upstream synchronization guide](jpmj-upstream.md)
+for the public repository, reviewed revision, and intentional local differences.
 jpmj tenpai status bar (Aug 2026): `_getTenpaiInfo()` computes waits via
 `evaluateHand` + `getWaitingTiles`, then per-wait yaku check (`STANDALONE_YAKU`) —
 yaku-less waits (聽牌無役) are grayed out in the status row; result cached by hand string.
@@ -243,17 +259,22 @@ such islands sit in closed swap-cycles (e.g. seed 3 cycles at step 2, seed 232
 at step 2) and even legal clue-moves, one-cell shrinks, or multi-cell shrinks
 leave them or a neighbour changeable, so `generatePuzzle` discards the board
 and retries the next carve instead. Every shipped puzzle is therefore rigid
-under the single-swap check (unique solution); the old FAIL rate surfaces as
+under the single-swap check; this does not establish a globally unique solution.
+The historical FAIL rate surfaced as
 the retry cost (≈11% at 12×12, ≈38% at 16×16).
-`tools/nurikabe-dupcheck.mjs` audits generated puzzles for single-swap
-alternatives and renders them with the swapped cells color-coded (red = cell
-out to sea, green = cell in); `tools/nurikabe-cluepin.mjs` re-checks shipped
-boards (RIGID/FAIL) and reports RETRY when a seed's single attempt found no
-rigid board; seeds 1–300 all validate (solved, one clue per island equal to
-its size).
+The then-existing `tools/nurikabe-dupcheck.mjs` audited generated puzzles for single-swap
+alternatives and rendered them with the swapped cells color-coded (red = cell
+out to sea, green = cell in); `tools/nurikabe-cluepin.mjs` re-checked shipped
+boards (RIGID/FAIL) and reported RETRY when a seed's single attempt found no
+rigid board; seeds 1–300 were reported to validate (solved, one clue per island equal to
+its size). These `.mjs` tools are no longer present. The current
+[development guide](development.md#offline-tools) documents `nurikabe-solve.mjs`
+and the independent full-search `nurikabe-dupcheck.py`; local rigidity results
+must not be treated as full uniqueness results.
 
 Renderer CSS-variable layout (Sep 2026): grid geometry is fixed (80×25,
-8×16 cells), so all inline styles were removed from `Renderer.js`. Cursor
+8×16 cells), so direct inline geometry styles were replaced with CSS
+custom-property writes. Cursor
 positioning (`style.left`/`style.top`) and viewport scale
 (`transform: scale()`) now write CSS custom properties `--cur-col`/`--cur-row`
 and `--term-scale`; `style.css` owns the layout math via
