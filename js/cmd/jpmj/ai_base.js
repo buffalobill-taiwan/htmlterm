@@ -1,5 +1,5 @@
 import { Tile } from './tiles.js';
-import { getCounts, getWaitingTiles } from './yaku.js';
+import { getCounts, getWaitingTiles } from './yaku/index.js';
 
 export class MahjongAI {
     constructor() {

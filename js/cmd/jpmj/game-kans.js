@@ -1,4 +1,4 @@
-import { evaluateHand, getCounts, removeTiles } from './yaku.js';
+import { evaluateHand, getCounts, removeTiles } from './yaku/index.js';
 
 // Human and AI concealed/added kans, including chankan handling.
 // Installed on Game.prototype; all state remains on the Game instance.

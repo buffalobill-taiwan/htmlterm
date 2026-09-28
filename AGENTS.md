@@ -16,6 +16,7 @@ Read the document that matches the work being done before changing that area.
 |---|---|
 | Terminal, renderer, overlay, shell, dialogs, or input routing | [Architecture](docs/architecture.md) |
 | Adding or changing a command, widget, dialog, or keyboard interaction | [Command authoring](docs/command-authoring.md) |
+| Locating or splitting larger command modules | [Command modules](docs/command-modules.md) |
 | Render-loop, animation, VirtualBuffer, dirty-row, or font-metric work | [Rendering performance](docs/rendering-performance.md) |
 | Local setup, validation, or offline tools | [Development](docs/development.md) |
 | Japanese Mahjong rule/AI synchronization | [Upstream synchronization](docs/jpmj-upstream.md) |

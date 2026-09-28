@@ -6,9 +6,9 @@ import { ConfirmDialog } from '../../dialog/ConfirmDialog.js';
 import { VirtualBuffer } from '../../util/VirtualBuffer.js';
 import { Game } from './game.js';
 import { palettesMixin } from './palettes.js';
-import { renderMixin } from './render.js';
+import { renderMixin } from './render/index.js';
 import { loopMixin } from './loop.js';
-import { inputMixin } from './input.js';
+import { inputMixin } from './input/index.js';
 
 const SETTINGS = [
     { key: 'gameLength', label: '對戰長度', value: '東風戰',

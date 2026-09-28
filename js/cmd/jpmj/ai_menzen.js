@@ -1,5 +1,5 @@
 import { MahjongAI } from './ai_base.js';
-import { removeTiles, getWaitingTiles } from './yaku.js';
+import { removeTiles, getWaitingTiles } from './yaku/index.js';
 
 export class MenzenAI extends MahjongAI {
     chooseDiscard(game, playerIdx) {

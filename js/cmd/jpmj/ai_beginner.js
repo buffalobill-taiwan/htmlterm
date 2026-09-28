@@ -1,5 +1,5 @@
 import { MahjongAI } from './ai_base.js';
-import { getCounts } from './yaku.js';
+import { getCounts } from './yaku/index.js';
 
 export class BeginnerAI extends MahjongAI {
     chooseDiscard(game, playerIdx) {

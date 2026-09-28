@@ -1,4 +1,4 @@
-import { checkTenpai } from './yaku.js';
+import { checkTenpai } from './yaku/index.js';
 
 // Abortive/exhaustive draws, round settlement, and final standings.
 // Installed on Game.prototype; all state remains on the Game instance.

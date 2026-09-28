@@ -1,4 +1,4 @@
-import { evaluateHand, canFormCompleteHand, getWaitingTiles, removeTiles } from './yaku.js';
+import { evaluateHand, canFormCompleteHand, getWaitingTiles, removeTiles } from './yaku/index.js';
 
 // Win eligibility, furiten, yaku context, and winning-hand payments.
 // Installed on Game.prototype; all state remains on the Game instance.

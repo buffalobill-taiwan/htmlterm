@@ -1,5 +1,5 @@
 import { MahjongAI } from './ai_base.js';
-import { getCounts, removeTiles, getWaitingTiles } from './yaku.js';
+import { getCounts, removeTiles, getWaitingTiles } from './yaku/index.js';
 
 export class ExpertAI extends MahjongAI {
     chooseDiscard(game, playerIdx) {

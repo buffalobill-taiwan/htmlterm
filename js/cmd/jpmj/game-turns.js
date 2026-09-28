@@ -1,5 +1,5 @@
 import { Tile } from './tiles.js';
-import { checkTenpai } from './yaku.js';
+import { checkTenpai } from './yaku/index.js';
 
 // Turn progression, discards, and riichi declarations.
 // Installed on Game.prototype; all state remains on the Game instance.

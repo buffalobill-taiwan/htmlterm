@@ -308,8 +308,10 @@ restored before the command runs. Do not defer transitions with an unowned
 
 - `CmdBase.js`: common contract and selection helpers.
 - `WidgetBase.js`: widget buffer lifecycle.
-- `sudoku.js`, `tetris.js`, `puyo.js`, `gweled.js`, and `klotski.js`: examples
-  of custom interactive games.
+- `sudoku/`, `tetris/`, `puyo/`, `gweled/`, and `klotski/`: examples
+  of custom interactive games, with command lifecycle and rendering separated.
+- See [Command modules](command-modules.md) for the directory map and module
+  boundaries used by larger commands.
 - `jpmj/`: Japanese Mahjong UI, engine, yaku evaluation, wall/tiles, and AI.
   Consult the [upstream synchronization guide](jpmj-upstream.md) before
   re-deriving Mahjong scoring or rule behavior.

@@ -11,7 +11,7 @@ This is a comparison baseline, not a claim that both implementations are identic
 ## Differences at the reviewed baseline
 
 - `wall.js`: same implementation after module/formatting adaptation.
-- `yaku.js`: rule logic matches this baseline; terminal exports and
+- `yaku/` (formerly `yaku.js`): rule logic matches this baseline; terminal exports and
   `getRankLabel` (adapted from upstream `main.js`) are local additions.
   The terminal version explicitly sets kokushi's `uraDoraHan` to zero.
 - `ai_*.js`: strategy logic matches after importing the missing `34618fb`
@@ -37,6 +37,36 @@ indicator positions (`346fd75`), special-hand exclusions (`0e3d600`), and the
 The baseline records a past review; it is not a claim about current upstream HEAD.
 See [project history](project-history.md#verified-september-2026-changes) for later
 local changes.
+
+## Shared yaku module layout
+
+The terminal's former `yaku.js` now exports its public API from
+[`yaku/index.js`](../js/cmd/jpmj/yaku/index.js). For upstream comparisons, use
+these groups; the split preserves the function bodies and checker order:
+
+| Module | Contents from upstream `yaku.js` |
+|---|---|
+| `yaku/tiles.js` | Tile counts, tile lookup, dora, and menzen checks |
+| `yaku/decompose.js` | Meld decomposition, wait types, special hands, and tenpai |
+| `yaku/standard.js` | Regular yaku and situational bonuses |
+| `yaku/yakuman.js` | Yakuman checkers |
+| `yaku/checkers.js` | Checker lists, aggregation, and contained-yaku filtering |
+| `yaku/scoring.js` | Fu, base scores, rank labels, and payments |
+| `yaku/evaluate.js` | Candidate evaluation and winning-hand selection |
+
+The UI's former `input.js` and `render.js` are also directories, each with an
+`index.js` that assembles the original mixin API. See the
+[command module map](command-modules.md#japanese-mahjong) for their responsibilities.
+
+On 2026-09-28, the seven yaku groups were also applied to the local web checkout
+based on `e2dd911` (`Split game engine into focused method modules`). Its
+`index.html` loads `js/yaku/{tiles,decompose,standard,yakuman,checkers,scoring,evaluate}.js`
+as classic scripts before the AI and engine. All 70 original web declarations
+were moved intact; this synchronization changes module layout, not rules or AI.
+The web UI keeps `getRankLabel` in `main.js`, and the terminal's explicit zero
+`uraDoraHan` assignment for kokushi remains a local difference. The web UI's
+DOM implementation and the terminal's input/render mixins remain separate.
+This records local working-tree synchronization, not a published upstream revision.
 
 ## Updating from upstream
 

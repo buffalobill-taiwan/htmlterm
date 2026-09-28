@@ -1,6 +1,6 @@
 import { term } from '../../system/sys.js';
 import { makeCell, makeOverlayGetCell } from '../../util/sgr.js';
-import { checkTenpai } from './yaku.js';
+import { checkTenpai } from './yaku/index.js';
 
 export const loopMixin = {
     _continueGame() {

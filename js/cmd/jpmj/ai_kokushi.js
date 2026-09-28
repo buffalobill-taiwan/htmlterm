@@ -1,6 +1,6 @@
 import { MahjongAI } from './ai_base.js';
 import { Tile } from './tiles.js';
-import { evaluateHand, getWaitingTiles, removeTiles } from './yaku.js';
+import { evaluateHand, getWaitingTiles, removeTiles } from './yaku/index.js';
 
 export class KokushiAI extends MahjongAI {
     constructor() {

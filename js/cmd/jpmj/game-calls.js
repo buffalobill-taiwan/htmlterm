@@ -1,5 +1,5 @@
 import { Tile } from './tiles.js';
-import { evaluateHand, canFormCompleteHand, getCounts, findTile } from './yaku.js';
+import { evaluateHand, canFormCompleteHand, getCounts, findTile } from './yaku/index.js';
 
 // Call discovery, priority resolution, and chi/pon/open-kan execution.
 // Installed on Game.prototype; all state remains on the Game instance.
