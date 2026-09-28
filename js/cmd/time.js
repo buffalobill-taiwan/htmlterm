@@ -38,7 +38,7 @@ export class TimeCmd extends CmdBase {
             onConfirm: (expr) => {
                 if (!expr.trim()) return;
                 if (system.menuDialog) {
-                    system.menuDialog.close();
+                    system.closeDialog(system.menuDialog);
                     system.menuDialog = null;
                 }
                 system.execCmd('time ' + expr.trim());

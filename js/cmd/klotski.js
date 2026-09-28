@@ -70,7 +70,7 @@ class LevelSelectDialog extends VerticalSelectDialog {
             options: LEVELS,
             cols: 1,
             wrap: true,
-            y: pos.y,
+            y: opts.y != null ? opts.y : pos.y,
             renderOption: (idx, opt) => {
                 const left = ' ' + String(idx + 1).padStart(2) + '  ' + opt.name;
                 const right = String(opt.mini) + '步 ';

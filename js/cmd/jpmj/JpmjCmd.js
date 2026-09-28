@@ -128,30 +128,18 @@ export class JpmjCmd extends CmdBase {
                 s.value = saved[s.key];
             }
         }
-        const stackDepth = system.cmdStack.length;
         system.createDialog(SettingsDialog, 'jpmj-settings', {
             title: 'jpmj — 日本麻將',
             settings: SETTINGS,
+            startLabel: '開始',
             footer: '↑↓ Move  ↩ Select  ESC Quit',
             onStart: (result) => {
-                const removeHook = system.addFramePopHook(() => {
-                    if (system.cmdStack.length === stackDepth) {
-                        removeHook();
-                        this._saveSettings(result);
-                        this._startGame(result);
-                    }
-                });
-                return 'close';
+                this._saveSettings(result);
+                this._startGame(result);
             },
             onCancel: () => {
-                const removeHook = system.addFramePopHook(() => {
-                    if (system.cmdStack.length === stackDepth) {
-                        removeHook();
-                        term.write(CURSOR_SHOW);
-                        this.close();
-                    }
-                });
-                return 'close';
+                term.write(CURSOR_SHOW);
+                this.close();
             },
         });
     }

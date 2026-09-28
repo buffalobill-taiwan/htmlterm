@@ -6,7 +6,7 @@ import { TextInputModel, parseCSI } from '../system/TextInputModel.js';
 
 export class InputDialog extends Dialog {
     constructor(term, opts) {
-        const width = opts.width || DEFAULT_DIALOG_WIDTH;
+        const width = Math.max(8, Math.min(term.cols, opts.width || DEFAULT_DIALOG_WIDTH));
         const h = 8;
         const pos = centeredDialogPos(term, width, h);
 
@@ -24,26 +24,24 @@ export class InputDialog extends Dialog {
     // Keep inputText as a readable alias for external callers if any
     get inputText() { return this._model.value; }
 
-    open() {
-        super.open();
-    }
-
-    _showCursor() {
-        const PREFIX = ' > ';
-        const col = 1 + PREFIX.length + this._model.widthRange(0, this._model.cursor);
-        const row = this._inputRow;
-        if (col < this.width - 1) {
-            this._vb.setCell(row, col, makeCursorCell());
-        }
-        this.term.markRowDirty(this.y + row);
-    }
-
     _renderContent() {
-        this._inputRow = 4;
-        const PREFIX = ' > ';
+        const chars = [...this._model.value];
+        const room = this.width - 5;
+        let start = Math.min(this._viewStart || 0, this._model.cursor);
+        while (this._model.widthRange(start, this._model.cursor) >= room) start++;
+        this._viewStart = start;
+        let text = '', used = 0;
+        for (let i = start; i < chars.length; i++) {
+            const w = this._model.charWidth(i);
+            if (used + w > room) break;
+            text += chars[i]; used += w;
+        }
         this._leftRow(3, '  ' + this.prompt);
-        this._leftRow(this._inputRow, PREFIX + this._model.value);
-        this._showCursor();
+        this._leftRow(4, ' > ' + text);
+        const col = 4 + this._model.widthRange(start, this._model.cursor);
+        this._vb.setCell(4, col, makeCursorCell());
+        if (this._model.cursor < chars.length && this._model.charWidth(this._model.cursor) === 2)
+            this._vb.writeStr(4, col + 1, ' ', this.width - 1);
     }
 
     _onKey(data) {
@@ -60,17 +58,15 @@ export class InputDialog extends Dialog {
             const code = ch.charCodeAt(0);
 
             if (code === 0x0D || code === 0x0A) {           // Enter
-                this._onConfirm(this._model.value);
-                return 'close';
+                return this.complete(this._onConfirm, this._model.value);
             }
             if (code === 0x03) {                            // Ctrl+C
-                this._onCancel();
-                return 'close';
+                return this.complete(this._onCancel);
             }
             if (code === 0x1B) {
                 // Single ESC = cancel; ESC [ / ESC O = cursor/edit sequence
                 const csi = parseCSI(data.slice(i));
-                if (!csi) { this._onCancel(); return 'close'; }
+                if (!csi) { return this.complete(this._onCancel); }
                 this._handleCSIFinal(csi.final, csi.params);
                 i += csi.consumed - 1;
                 changed = 'content';

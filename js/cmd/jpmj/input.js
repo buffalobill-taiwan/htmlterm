@@ -389,7 +389,6 @@ export const inputMixin = {
     _executeAction(item) {
         const g = this._game;
         const action = item.action;
-        const stackDepth = system.cmdStack.length;
 
         if (action === 'pass') {
             if (g.phase === 'draw' || g.phase === 'rinshan') {
@@ -455,13 +454,6 @@ export const inputMixin = {
                 return;
             }
             const maxW = 3 + Math.max(...options.map(o => o.waits.length)) * 2;
-            const stackDepth = system.cmdStack.length;
-            const removeHook = system.addFramePopHook(() => {
-                if (system.cmdStack.length === stackDepth) {
-                    removeHook();
-                    this._showEffectAndContinue();
-                }
-            });
             system.createDialog(VerticalSelectDialog, 'jpmj-riichi', {
                 title: '立直',
                 message: 'どの牌を捨てますか？',
@@ -474,10 +466,10 @@ export const inputMixin = {
                     this._game.humanRiichi(options[idx].handIdx);
                     this._cursorMode = 'hand';
                     this._handCursor = 0;
-                    return 'close';
+                    this._showEffectAndContinue();
                 },
                 onCancel: () => {
-                    return 'close';
+                    this._showEffectAndContinue();
                 },
             });
             return;
@@ -485,12 +477,6 @@ export const inputMixin = {
 
         if (action && typeof action === 'object') {
             if (action.type === 'chi' && action.chiSets && action.chiSets.length > 1) {
-                const removeHook = system.addFramePopHook(() => {
-                    if (system.cmdStack.length === stackDepth) {
-                        removeHook();
-                        this._showEffectAndContinue();
-                    }
-                });
                 system.createDialog(VerticalSelectDialog, 'jpmj-chi', {
                     title: 'チー選択',
                     message: 'どの組み合わせでチーしますか？',
@@ -502,10 +488,10 @@ export const inputMixin = {
                     onSelect: (idx) => {
                         const call = { ...action, chosenChiSet: idx };
                         g.humanCall(call);
-                        return 'close';
+                        this._showEffectAndContinue();
                     },
                     onCancel: () => {
-                        return 'close';
+                        this._showEffectAndContinue();
                     },
                 });
                 return;
@@ -536,13 +522,6 @@ export const inputMixin = {
                 }
                 const key = action.type === 'ankans' ? 'jpmj-ankans' : 'jpmj-kakans';
                 const kanLabel = action.type === 'ankans' ? '暗槓' : '加槓';
-                const stackDepth = system.cmdStack.length;
-                const removeHook = system.addFramePopHook(() => {
-                    if (system.cmdStack.length === stackDepth) {
-                        removeHook();
-                        this._showEffectAndContinue();
-                    }
-                });
                 system.createDialog(VerticalSelectDialog, key, {
                     title: action.type === 'ankans' ? '暗槓選択' : '加槓選択',
                     options: opts,
@@ -554,10 +533,10 @@ export const inputMixin = {
                         g.executeKan(opts[idx]);
                         this._cursorMode = 'hand';
                         this._handCursor = 0;
-                        return 'close';
+                        this._showEffectAndContinue();
                     },
                     onCancel: () => {
-                        return 'close';
+                        this._showEffectAndContinue();
                     },
                 });
                 return;

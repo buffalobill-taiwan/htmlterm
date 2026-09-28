@@ -108,6 +108,7 @@ export class DialogFrame extends CmdFrame {
         super();
         this.dialog = dialog;
         this._savedCursor = null;
+        this._afterClose = null;
     }
 
     get label() {
@@ -143,9 +144,26 @@ export class DialogFrame extends CmdFrame {
     }
 
     handleInput(data) {
+        if (this.done) return true;
         this.dialog.handleKey(data);
-        if (this.dialog.closed) this.finish();
+        if (this.dialog.closed) {
+            this._afterClose = this.dialog._completion;
+            this.dialog._completion = null;
+            this.finish();
+        }
         return true;
+    }
+
+    onPop() {
+        const callback = this._afterClose;
+        this._afterClose = null;
+        callback?.();
+    }
+
+    cancel() {
+        this._afterClose = null;
+        this.dialog._completion = null;
+        this.finish();
     }
 
     get blocked() {

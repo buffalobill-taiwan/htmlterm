@@ -21,6 +21,8 @@ export class InfoDialog extends Dialog {
         super(term, { ...opts, width, title: '', footer: '' });
 
         this.h = h;
+        this._headerRows = 1;
+        this._footerRows = 1;
         this.x = opts.x != null ? opts.x : pos.x;
         this.y = opts.y != null ? opts.y : pos.y;
         this._content = content;
@@ -31,9 +33,13 @@ export class InfoDialog extends Dialog {
     }
 
     _initBuffer() {
-        this._vb = new VirtualBuffer(this.width, this.h);
+        this._vb = new VirtualBuffer(this.width, this._fullHeight);
         this._contentSlot = this._vb.addChildSlot();
-        this._contentSlot.vb = this._content;
+        const viewport = new VirtualBuffer(this.width - 2, this._content.height);
+        const contentSlot = viewport.addChildSlot();
+        contentSlot.vb = this._content;
+        contentSlot.active = true;
+        this._contentSlot.vb = viewport;
         this._contentSlot.x = 1;
         this._contentSlot.y = 1;
         this._contentSlot.active = true;
@@ -42,11 +48,11 @@ export class InfoDialog extends Dialog {
     _drawFrame() {
         const H = '─';
         this._t(0, '┌' + H.repeat(this.width - 2) + '┐');
-        for (let row = 1; row < this.h - 1; row++) {
+        for (let row = 1; row < this._fullHeight - 1; row++) {
             this._vb.writeStr(row, 0, '│');
             this._vb.writeStr(row, this.width - 1, '│');
         }
-        this._t(this.h - 1, '└' + H.repeat(this.width - 2) + '┘');
+        this._t(this._fullHeight - 1, '└' + H.repeat(this.width - 2) + '┘');
     }
 
     _renderContent() {}
@@ -59,12 +65,10 @@ export class InfoDialog extends Dialog {
             return;
         }
         if (code === 0x1B || code === 0x03) {
-            this._onCancel();
-            return 'close';
+            return this.complete(this._onCancel);
         }
         if (code === 0x0D || code === 0x0A) {
-            this._onExit();
-            return 'close';
+            return this.complete(this._onExit);
         }
     }
 }

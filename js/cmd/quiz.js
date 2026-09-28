@@ -38,7 +38,7 @@ export class Quiz extends CmdBase {
     static openMenuDialog() {
         const { a, b, op, answer } = Quiz._genQuestion();
 
-        const dialog = system.createDialog(InputDialog, 'quiz', {
+        system.createDialog(InputDialog, 'quiz', {
             title: 'Quiz',
             prompt: `${a} ${op} ${b} = ?`,
             footer: 'Enter Answer  ESC Back',
@@ -51,7 +51,7 @@ export class Quiz extends CmdBase {
                 } else {
                     msg = bold(red('✗ Wrong!')) + '  Answer: ' + bold(white('' + answer));
                 }
-                system.replaceDialog(dialog, ShowDialog, 'show', { message: msg, onExit: () => {} });
+                system.createDialog(ShowDialog, 'show', { message: msg, onExit: () => {} });
             },
             onCancel: () => {},
         });

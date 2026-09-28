@@ -165,7 +165,7 @@ const ranges = [
 ];
 
 export function isWide(ch) {
-    const code = typeof ch === 'string' ? ch.charCodeAt(0) : ch;
+    const code = typeof ch === 'string' ? ch.codePointAt(0) : ch;
     let lo = 0;
     let hi = ranges.length - 1;
     while (lo <= hi) {

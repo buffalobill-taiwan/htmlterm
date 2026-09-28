@@ -119,9 +119,32 @@ Dialog subclasses must compute constructor values locally, call `super()`, then
 set their own `this.h`: the base constructor initializes height to zero and
 does not consume `opts.h`.
 
-Dialog strings have silent clipping. Use `bufWidth()` for visible CJK-aware
-width, including strings with SGR, and use `setCell()` for fixed box-drawing
-borders. Clear a row before replacing it with shorter text.
+Dialog result callbacks (`onConfirm`, `onSelect`, `onCancel`, `onExit`, and
+`onStart`) run after the closing frame has restored its cursor and been popped.
+Callbacks may position the shell cursor, start a game, or open a new dialog
+without a frame-pop hook. MenuDialog's `onSelect` is intentionally different:
+it runs while the menu is open, allowing a nested submenu; return `'close'` to
+close that menu. Custom dialog subclasses use `return this.complete(callback,
+...args)` for a terminal result. Calling `close()` directly only removes the
+overlay; it does not deliver a result callback.
+
+`SelectDialog` and `VerticalSelectDialog` accept `selectedIndex` (zero-based).
+Horizontal options flow into additional rows when needed; the vertical grid
+reduces its column count to fit and reveals the selection during navigation.
+Messages wrap at CJK-aware cell boundaries, preserving SGR. Tall dialogs retain
+their header/footer inside the 80×25 viewport and scroll with PageUp/PageDown.
+InputDialog scrolls horizontally to keep its editing cursor visible. Title,
+footer, prompt, and setting labels are clipped inside fixed borders.
+
+`SettingsDialog` defaults to title `Settings` and action label `Apply`; supply
+`title` and `startLabel` for command-specific wording. It opens each submenu at
+the current setting value. `InfoDialog` remains available for caller-owned
+VirtualBuffers; oversized content is clipped horizontally and scrolls vertically.
+
+Use `bufWidth()` for visible CJK-aware width, including strings with SGR. Dialog
+row helpers clear old content and preserve fixed borders. Custom rendering must
+also clear shorter replacement rows and keep writes inside the inner area.
+`refreshContent()` compares visible cells and marks only changed screen rows.
 
 Widgets render through their own buffer: `null` is transparent and a cell is
 opaque. `putc()` updates a cell and marks the matching screen row dirty.
@@ -273,10 +296,13 @@ safe after disposal or reuse of the command instance. It does not replace
 `addCleanup()` for timers, overlays, or other resources that need immediate
 cancellation.
 
-An input-dialog confirmation can use
-`system.replaceDialog(dialog, ShowDialog, key, opts)` to close and finish its
-current dialog frame before opening a result dialog. Do not defer this transition
-with an unowned `setTimeout()`.
+An input-dialog confirmation opens a result with
+`system.createDialog(ShowDialog, key, opts)`; its input frame is already gone.
+Outside a result callback, `system.replaceDialog(dialog, ShowDialog, key, opts)`
+can finish an active frame before opening its replacement. When closing a parent
+menu before starting a command, use `system.closeDialog(menu)` so its cursor is
+restored before the command runs. Do not defer transitions with an unowned
+`setTimeout()`.
 
 ## Command-specific source map
 

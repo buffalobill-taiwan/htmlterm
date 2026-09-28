@@ -109,7 +109,8 @@ export class SystemManager {
     _processStack() {
         while (true) {
             while (this.cmdStack.length > 0 && this.cmdStack[this.cmdStack.length - 1].done) {
-                this.cmdStack.pop();
+                const finished = this.cmdStack.pop();
+                finished.onPop?.();
                 for (const fn of this._framePopHooks.slice()) fn();
                 if (this.cmdStack.length > 0 && this.cmdStack[this.cmdStack.length - 1].persistent) {
                     this.cmdStack[this.cmdStack.length - 1]._pendingActivate = true;
@@ -275,6 +276,13 @@ export class SystemManager {
         this.editor.handleKey(data);
     }
 
+    closeDialog(dialog) {
+        const frame = this.cmdStack.find(f => f.dialog === dialog);
+        if (!frame || frame.done || this._disposed) return;
+        frame.finish();
+        this.tick();
+    }
+
     replaceDialog(dialog, DialogClass, key, opts, ...ctorArgs) {
         const frame = this.cmdStack.find(f => f.dialog === dialog);
         if (!frame || frame.done || this._disposed) return null;
@@ -398,7 +406,7 @@ export class SystemManager {
                 this.menuDialog = null;
                 return 'close';
             },
-            onCancel: () => {}
+            onCancel: () => { this.menuDialog = null; }
         }, this.menuItems);
         this.menuDialog = menuDlg;
     }

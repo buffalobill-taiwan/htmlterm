@@ -5,7 +5,7 @@ import { parseCSI } from '../system/TextInputModel.js';
 export class MenuDialog extends Dialog {
     constructor(term, items, opts) {
         const width = opts.width || 44;
-        const visibleCount = opts.visibleCount || 5;
+        const visibleCount = Math.max(1, Math.min(term.rows - 6, opts.visibleCount || 5));
         const h = visibleCount + 6;
         const pos = centeredDialogPos(term, width, h);
 
@@ -37,16 +37,17 @@ export class MenuDialog extends Dialog {
         const item = this.items[index];
         const sel = index === this.selected;
         const contentWidth = this.width - 3;
-        const namePadded = item.name.padEnd(10);
+        const namePadded = item.name + ' '.repeat(Math.max(0, 10 - this._bufWidth(item.name)));
         const content = '  ' + namePadded + '  ' + item.desc;
         const bufW = this._bufWidth(content);
         const pad = contentWidth - bufW;
 
-        let s = '│';
+        this._leftRow(bufRow, '');
+        let s = '';
         if (sel) s += '\x1B[7m\x1B[1m';
         s += content + ' '.repeat(Math.max(0, pad));
         if (sel) s += '\x1B[0m';
-        this._vb.writeStr(bufRow, 0, s, this.width);
+        this._vb.writeStr(bufRow, 1, s, this.width - 2);
     }
 
     _drawScrollBar() {
@@ -81,13 +82,14 @@ export class MenuDialog extends Dialog {
         const code = data.charCodeAt(0);
 
         if (code === 0x0D || code === 0x0A) {               // Enter
+            if (!this.items.length) return;
             const result = this._onSelect(this.items[this.selected]);
             if (result === 'close') return 'close';
             return;
         }
         if (code === 0x1B || code === 0x03) {               // ESC / Ctrl+C
             const csi = parseCSI(data);
-            if (!csi) { this._onCancel(); return 'close'; }
+            if (!csi) { return this.complete(this._onCancel); }
 
             const { final, params } = csi;
             if (final === 'A') {                               // ↑
@@ -124,13 +126,12 @@ export class MenuDialog extends Dialog {
             this._drawItem(prev, 3 + prev - this.scrollOffset);
             this._drawItem(next, 3 + next - this.scrollOffset);
             this._drawScrollBar();
-            this._buffer = this._vb.render();
-            this._markDirty();
+            this._publishBuffer();
         }
     }
 
     _moveTo(idx) {
-        if (idx === this.selected) return;
+        if (!this.items.length || idx === this.selected) return;
         this.selected = idx;
         this.scrollOffset = Math.min(idx, Math.max(0, this.items.length - this.visibleCount));
         this.refreshContent();

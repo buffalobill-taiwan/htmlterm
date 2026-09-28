@@ -126,8 +126,17 @@ terminal writes bypass it.
 ## Dialogs and VirtualBuffer
 
 Dialogs render to `this._vb`, flatten it with `render()`, and expose the result
-as an overlay. Inline SGR is parsed into cell attributes by `js/util/write.js`.
+as an overlay. The logical buffer may be taller than the viewport: `_fullHeight`
+tracks its rows, while `h` is the visible height used by dragging and compositing.
+The overlay maps fixed header/footer rows and a scrollable body into that buffer.
+Refresh compares visible cells and dirties only changed rows; open/close/drag
+still invalidate the affected area. Inline SGR is parsed into cell attributes by `js/util/write.js`.
 `DialogFrame` saves cursor state when opening and restores it when finishing.
+Terminal result callbacks are delivered once after `_processStack()` pops the
+finished dialog frame; cancellation/disposal drops undelivered results. Thus
+callbacks can change cursor state or open a replacement without a later restore
+overwriting their work. Menu selection callbacks can keep their menu open and
+are not terminal results.
 
 Open dialogs only through `system.createDialog()` or `CmdBase.openDialog()`.
 Those helpers construct the dialog, call `pushDialogFrame()` (which owns

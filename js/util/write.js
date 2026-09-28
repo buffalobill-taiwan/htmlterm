@@ -41,13 +41,14 @@ export function _writeStr(buf, y, x, str, maxX) {
             continue;
         }
         if (!buf[y] || cx >= (maxX || buf[y].length)) break;
-        const w = isWide(str[i]) ? 2 : 1;
+        const ch = String.fromCodePoint(str.codePointAt(i));
+        const w = isWide(ch) ? 2 : 1;
         if (cx + w > (maxX || buf[y].length)) break;
-        buf[y][cx] = makeCell(str[i], _attr, w);
+        buf[y][cx] = makeCell(ch, _attr, w);
         if (w === 2 && cx + 1 < (maxX || buf[y].length)) {
             buf[y][cx + 1] = { width: 0 };
         }
         cx += w;
-        i++;
+        i += ch.length;
     }
 }

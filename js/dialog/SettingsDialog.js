@@ -16,9 +16,10 @@ export class SettingsDialog extends Dialog {
         const width = opts.width || 40;
         const pos = centeredDialogPos(term, width, h);
 
-        super(term, { ...opts, width, title: opts.title || 'jpmj', h });
+        super(term, { ...opts, width, title: opts.title ?? 'Settings' });
 
         this._settings = settings;
+        this._startLabel = opts.startLabel ?? 'Apply';
         this._startIdx = settings.length;
         this.h = h;
         this.x = opts.x != null ? opts.x : pos.x;
@@ -33,11 +34,11 @@ export class SettingsDialog extends Dialog {
         const W = this.width;
         const innerW = W - 2;
 
-        const maxLabelW = Math.max(...this._settings.map(s => this._bufWidth(s.label)));
-        const maxValueW = Math.max(...this._settings.map(s => this._bufWidth(s.value)));
+        const maxLabelW = Math.max(0, ...this._settings.map(s => this._bufWidth(s.label)));
+        const maxValueW = Math.max(0, ...this._settings.map(s => this._bufWidth(s.value)));
         const contentW = maxLabelW + 2 + 2 + maxValueW + 2;
-        const labelX = Math.floor((innerW - contentW) / 2);
-        const valueX = labelX + maxLabelW + 2;
+        const labelX = Math.max(1, Math.floor((innerW - contentW) / 2));
+        const valueX = Math.min(Math.floor(W / 2), labelX + maxLabelW + 2);
 
         for (let i = 0; i < this._settings.length; i++) {
             const s = this._settings[i];
@@ -49,9 +50,9 @@ export class SettingsDialog extends Dialog {
             this._t(row, ' '.repeat(W));
 
             const labelStr = prefix + '  ' + s.label;
-            const valueStr = '  ' + s.value + suffix;
+            const valueStr = prefix + '  ' + s.value + suffix;
 
-            this._vb.writeStr(row, labelX, labelStr, W - 1);
+            this._vb.writeStr(row, labelX, labelStr, valueX);
             this._vb.writeStr(row, valueX, valueStr, W - 1);
             this._vb.setCell(row, 0, _borderL);
             this._vb.setCell(row, W - 1, _borderR);
@@ -62,8 +63,8 @@ export class SettingsDialog extends Dialog {
         const startRow = contentY + this._settings.length + 1;
         const startSelected = this._selected === this._startIdx;
         const startLabel = startSelected
-            ? '\x1B[7m\x1B[1m ▶ 開始 \x1B[0m'
-            : '   開始  ';
+            ? '\x1B[7m\x1B[1m ▶ ' + this._startLabel + ' \x1B[0m'
+            : '   ' + this._startLabel + '  ';
         this._centerRow(startRow, startLabel);
     }
 
@@ -72,24 +73,25 @@ export class SettingsDialog extends Dialog {
 
         if (code === 0x1B) {
             const csi = parseCSI(data);
-            if (!csi) { this._onCancel(); return 'close'; }
+            if (!csi) { return this.complete(this._onCancel); }
             const { final } = csi;
             if (final === 'A') {
                 this._selected = this._selected > 0 ? this._selected - 1 : this._startIdx;
+                this._ensureVisible(3 + this._selected + (this._selected === this._startIdx ? 1 : 0));
                 this.refreshContent();
             } else if (final === 'B') {
                 this._selected = this._selected < this._startIdx ? this._selected + 1 : 0;
+                this._ensureVisible(3 + this._selected + (this._selected === this._startIdx ? 1 : 0));
                 this.refreshContent();
             }
             return;
         }
-        if (code === 0x03) { this._onCancel(); return 'close'; }
+        if (code === 0x03) { return this.complete(this._onCancel); }
         if (code === 0x0D || code === 0x0A) {
             if (this._selected === this._startIdx) {
                 const result = {};
                 for (const s of this._settings) result[s.key] = s.value;
-                this._onStart(result);
-                return 'close';
+                return this.complete(this._onStart, result);
             }
             this._openSubmenu(this._selected);
             return;
@@ -104,6 +106,7 @@ export class SettingsDialog extends Dialog {
             system.createDialog(SelectDialog, null, {
                 title: s.label,
                 options: opts,
+                selectedIndex: Math.max(0, opts.indexOf(s.value)),
                 footer: '← → Move  ↩ Confirm  ESC Cancel',
                 onSelect: (idx) => {
                     s.value = opts[idx];
@@ -117,6 +120,7 @@ export class SettingsDialog extends Dialog {
             system.createDialog(VerticalSelectDialog, null, {
                 title: s.label,
                 options: opts,
+                selectedIndex: Math.max(0, opts.indexOf(s.value)),
                 cols: 3,
                 footer: '↑↓←→ Move  ↩ Confirm  ESC Cancel',
                 onSelect: (idx) => {
