@@ -2,13 +2,28 @@ import { term } from '../../../system/sys.js';
 
 const keysMethods = {
     handleKeyUp(key) {
-        if (key !== 'Tab' || !this._resultPeekHeld) return;
-        this._resultPeekHeld = false;
+        if (key === 'Tab') this._setPeekHeld(false);
+    },
+
+    _setPeekHeld(held) {
+        if (held === this._peekHeld) return;
+        this._peekHeld = held;
         if (!this.closed && this._phase === 'result') this._render();
+        if (this._pauseOverlay) {
+            for (let r = this._pauseOverlay.y; r < this._pauseOverlay.y + this._pauseOverlay.h; r++)
+                term.markRowDirty(r);
+        }
     },
 
     _onKey(data) {
         const code = typeof data === 'string' ? data.charCodeAt(0) : data;
+
+        if ((code === 0x09 || data === '\x1B[Z') &&
+            (this._phase === 'result' || this._phase === 'paused')) {
+            this._setPeekHeld(true);
+            return;
+        }
+        if (this._peekHeld) return;
 
         if (this._phase === 'gameOver') {
             if (code === 0x6E || code === 0x4E || code === 0x0D || code === 0x0A) {
@@ -31,18 +46,6 @@ const keysMethods = {
         }
 
         if (this._phase === 'result') {
-            if (code === 0x09) {
-                if (!this._resultPeekHeld) {
-                    this._resultPeekHeld = true;
-                    this._render();
-                }
-                return;
-            }
-            // Restore before another action can open a dialog and take keyup focus.
-            if (this._resultPeekHeld) {
-                this._resultPeekHeld = false;
-                this._render();
-            }
             if (code === 0x0D || code === 0x0A) {
                 this._game.commitRoundEnd();
                 if (this._game.gameOver) {

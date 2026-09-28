@@ -1,5 +1,4 @@
 import { checkTenpai, getWaitingTiles } from '../yaku/index.js';
-import { system } from '../../../system/sys.js';
 import { VerticalSelectDialog } from '../../../dialog/VerticalSelectDialog.js';
 import { displayWidth } from '../../../util/display-width.js';
 
@@ -145,7 +144,7 @@ const actionsMethods = {
                 return;
             }
             const maxW = 3 + Math.max(...options.map(o => o.waits.length)) * 2;
-            system.createDialog(VerticalSelectDialog, 'jpmj-riichi', {
+            this._openPeekDialog(VerticalSelectDialog, 'jpmj-riichi', {
                 title: '立直',
                 message: 'どの牌を捨てますか？',
                 options,
@@ -168,7 +167,7 @@ const actionsMethods = {
 
         if (action && typeof action === 'object') {
             if (action.type === 'chi' && action.chiSets && action.chiSets.length > 1) {
-                system.createDialog(VerticalSelectDialog, 'jpmj-chi', {
+                this._openPeekDialog(VerticalSelectDialog, 'jpmj-chi', {
                     title: 'チー選択',
                     message: 'どの組み合わせでチーしますか？',
                     options: action.chiSets,
@@ -213,7 +212,7 @@ const actionsMethods = {
                 }
                 const key = action.type === 'ankans' ? 'jpmj-ankans' : 'jpmj-kakans';
                 const kanLabel = action.type === 'ankans' ? '暗槓' : '加槓';
-                system.createDialog(VerticalSelectDialog, key, {
+                this._openPeekDialog(VerticalSelectDialog, key, {
                     title: action.type === 'ankans' ? '暗槓選択' : '加槓選択',
                     options: opts,
                     width: Math.max(displayWidth(action.type === 'ankans' ? '暗槓選択' : '加槓選択') + 6, 2 + 1 + displayWidth(kanLabel) + 10),

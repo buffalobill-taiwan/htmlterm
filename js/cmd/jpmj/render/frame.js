@@ -23,7 +23,7 @@ const frameMethods = {
                 this._renderLeftHand(this._leftVB);
                 this._renderRightHand(this._rightVB);
                 this._renderDiscards(this._discardVB);
-                if (this._phase === 'result' && !this._resultPeekHeld) {
+                if (this._phase === 'result' && !this._peekHeld) {
                     this._renderResultOverlay(this._resultVB);
                     this._slotResult.active = true;
                 } else {

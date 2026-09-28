@@ -44,13 +44,14 @@ const overlaysMethods = {
 
         vb.writeStr(3, 2, '\x1B[1;33m' + ' '.repeat(8) + '暫停中' + ' '.repeat(8) + '\x1B[0m');
         vb.writeStr(7, 2, '  P 取消暫停    Q 退出');
+        vb.writeStr(9, 2, '  按住 Tab 查看捨牌');
 
         this._pauseVBBuffer = vb.render();
         if (!this._pauseOverlay) {
             this._pauseOverlay = {
                 x: 4, y: 2, w: ow, h: oh,
                 owner: this,
-                getCell: makeOverlayGetCell(() => this._pauseVBBuffer, ow, oh),
+                getCell: makeOverlayGetCell(() => this._peekHeld ? null : this._pauseVBBuffer, ow, oh),
             };
             term.addOverlay(this._pauseOverlay);
         }

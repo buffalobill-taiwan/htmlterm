@@ -330,6 +330,7 @@ export class SystemManager {
             const ovs = this.term.overlays;
             for (let i = ovs.length - 1; i >= 0; i--) {
                 const ov = ovs[i];
+                if (ov.owner?._peekHeld) continue;
                 if (info.col >= ov.x && info.col < ov.x + ov.w &&
                     info.row >= ov.y && info.row < ov.y + ov.h) {
                     const owner = ov.owner;
@@ -361,9 +362,8 @@ export class SystemManager {
     handleKeyUp(key) {
         if (this._disposed) return;
         const top = this.cmdStack[this.cmdStack.length - 1];
-        if (top && top.cmd && typeof top.cmd.handleKeyUp === 'function') {
-            top.cmd.handleKeyUp(key);
-        }
+        const target = top?.dialog || top?.cmd;
+        target?.handleKeyUp?.(key);
     }
 
     /**

@@ -146,6 +146,12 @@ row helpers clear old content and preserve fixed borders. Custom rendering must
 also clear shorter replacement rows and keep writes inside the inner area.
 `refreshContent()` compares visible cells and marks only changed screen rows.
 
+Dialogs can opt into `peekOnTab: true`: holding Tab temporarily makes their
+overlay transparent, and releasing Tab or blurring the window restores it.
+Other keys are ignored while peeking, preserving the selection and callbacks.
+The optional `onPeekChange(held)` callback can hide related command panels;
+jpmj uses it to expose discards beneath its selection and confirmation dialogs.
+
 Widgets render through their own buffer: `null` is transparent and a cell is
 opaque. `putc()` updates a cell and marks the matching screen row dirty.
 

@@ -40,7 +40,7 @@ export class JpmjCmd extends CmdBase {
         this._discardVB = new VirtualBuffer(34, 15);
         this._infoVB = new VirtualBuffer(36, 21);
         this._resultVB = new VirtualBuffer(36, 16);
-        this._resultPeekHeld = false;
+        this._peekHeld = false;
         this._game = null;
         this._phase = 'settings';
         this._settingsValues = null;
@@ -81,6 +81,13 @@ export class JpmjCmd extends CmdBase {
     execute(args) {
         this._initPalettes();
         this.open();
+        this._peekHeld = false;
+        const releasePeek = () => this.handleKeyUp('Tab');
+        window.addEventListener('blur', releasePeek);
+        this.addCleanup(() => {
+            window.removeEventListener('blur', releasePeek);
+            this._peekHeld = false;
+        });
         term.write('\x1B[2J\x1B[1;1H');
         term.write(CURSOR_HIDE);
 
@@ -169,15 +176,23 @@ export class JpmjCmd extends CmdBase {
     }
 
     _showQuitConfirm() {
-        system.createDialog(ConfirmDialog, 'jpmj-confirm', {
+        this._openPeekDialog(ConfirmDialog, 'jpmj-confirm', {
             title: '確認',
             message: '確定要離開嗎？',
             onConfirm: () => this.close(),
         });
     }
 
+    _openPeekDialog(DialogClass, key, opts) {
+        return this.openDialog(DialogClass, key, {
+            ...opts,
+            peekOnTab: true,
+            onPeekChange: held => this._setPeekHeld(held),
+        });
+    }
+
     close() {
-        this._resultPeekHeld = false;
+        this._peekHeld = false;
         this._stopTimer();
         this._removeOverlays();
         term.write('\x1B[2J\x1B[23;1H');

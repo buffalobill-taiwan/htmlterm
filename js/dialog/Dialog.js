@@ -33,6 +33,10 @@ export class Dialog {
         this._buffer = null;
         this._overlay = null;
         this._savePos = opts.savePos || null;
+        this._peekOnTab = opts.peekOnTab || false;
+        this._peekHeld = false;
+        this._onPeekChange = opts.onPeekChange || null;
+        this._releasePeek = () => this.handleKeyUp('Tab');
 
         addDragMethods(this, term, {
             getX: () => this.x, getY: () => this.y,
@@ -55,7 +59,7 @@ export class Dialog {
             h: this.h,
             w: this.width,
             owner: this,
-            getCell: (row, col) => this._buffer?.[this._sourceRow(row, this._scroll)]?.[col] ?? null,
+            getCell: (row, col) => this._peekHeld ? null : this._buffer?.[this._sourceRow(row, this._scroll)]?.[col] ?? null,
         };
         this.term.addOverlay(this._overlay, 'dialog');
 
@@ -67,6 +71,7 @@ export class Dialog {
     close() {
         if (this.closed) return;
         this.closed = true;
+        this._setPeekHeld(false);
         if (this._savePos) this._savePos(this.x, this.y);
         this._markDirty();
         this.term.removeOverlay(this._overlay);
@@ -77,6 +82,12 @@ export class Dialog {
 
     handleKey(data) {
         if (this.closed) return;
+        if (this._peekOnTab && (data === '\t' || data === '\x1B[Z')) {
+            this._setPeekHeld(true);
+            return;
+        }
+        // Keep the selection and callbacks unchanged while the dialog is hidden.
+        if (this._peekHeld) return;
         const csi = parseCSI(data);
         if (this._fullHeight > this.h && csi?.final === '~' && (csi.params === '5' || csi.params === '6')) {
             const step = this.h - this._headerRows - this._footerRows;
@@ -87,6 +98,19 @@ export class Dialog {
         }
         const result = this._onKey(data);
         if (result === 'close') this.close();
+    }
+
+    handleKeyUp(key) {
+        if (key === 'Tab') this._setPeekHeld(false);
+    }
+
+    _setPeekHeld(held) {
+        if (held === this._peekHeld) return;
+        this._peekHeld = held;
+        if (held) window.addEventListener('blur', this._releasePeek);
+        else window.removeEventListener('blur', this._releasePeek);
+        this._markDirty();
+        this._onPeekChange?.(held);
     }
 
     refreshContent() {
