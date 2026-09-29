@@ -131,10 +131,22 @@ more than once.
 | `quiz` | Math quiz challenge |
 | `sleep` | Wait for N seconds (default 1) |
 | `snake` | Play Snake (Nokia style) |
-| `sudoku` | Play Sudoku puzzle (interactive cursor navigation) |
+| `sudoku` | Play Sudoku puzzle (interactive cursor navigation, reproducible seed) |
 | `tetris` | Play Tetris (SRS rotation, T-Spin, ghost piece, hold, line-clear flash) |
 | `time` | Measure execution time of a command |
 | `wordle` | Play Wordle (fullwidth grid, big-glyph keyboard, 16k guess dictionary) |
+
+### Sudoku seeds
+
+Run `sudoku` to choose a difficulty, or use `sudoku 123456 --hard` to reproduce
+a puzzle. `sudoku --seed 123456 --hard` is equivalent. Seeds range from 0 to
+2147483647; a seed without a difficulty defaults to Medium. Random games also
+display their seed beside the board. The same seed **and difficulty** reproduce
+the same clues and answer. `[r]estart` keeps the puzzle; `[n]ew` selects a new
+difficulty and generates a fresh random seed.
+
+From a host terminal, `node tools/sudoku-solve.mjs 123456 hard --puzzle` prints
+the matching answer and original puzzle. See [offline tools](docs/development.md#offline-tools).
 
 ### Keyboard shortcuts
 

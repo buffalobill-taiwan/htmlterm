@@ -21,7 +21,7 @@ contains shared dimensions, difficulty settings, and other fixed configuration.
 | [othello](../js/cmd/othello/index.js) | `OthelloCmd` | `board.js`: legal moves and flips; `ai.js`: evaluation and search |
 | [puyo](../js/cmd/puyo/index.js) | `PuyoCmd` | `board.js`: group detection, gravity, and chain scores |
 | [snake](../js/cmd/snake/index.js) | `SnakeCmd` | Movement and food placement stay with the command |
-| [sudoku](../js/cmd/sudoku/index.js) | `SudokuCmd` | `solver.js`: solving, uniqueness checks, and puzzle generation |
+| [sudoku](../js/cmd/sudoku/index.js) | `SudokuCmd` | `solver.js`: solving, uniqueness checks, seed validation, and deterministic puzzle generation |
 | [tetris](../js/cmd/tetris/index.js) | `TetrisCmd` | `board.js`: collisions, ghost landing, T-spins, and line clearing; `pieces.js`: shapes, wall kicks, and colors |
 
 The command class installs `renderMethods` on its prototype once, at module
@@ -35,6 +35,29 @@ rule helpers must not import their command class or its `index.js`; calls to
 other command methods go through `this`. This keeps dependencies acyclic.
 Only the directory entry exposes the command publicly; Othello's entry also
 preserves its board/AI exports for standalone consumers.
+
+## Sudoku generation
+
+[solver.js](../js/cmd/sudoku/solver.js) exports `_generate(difficulty, seed)` and
+`parseSeed(value)` for both the browser command and
+[sudoku-solve.mjs](../tools/sudoku-solve.mjs). Generation returns
+`{ board, solution, given, seed }`; an omitted seed chooses a random integer in
+the supported range. Seed validation accepts decimal integers from 0 through
+2147483647 and returns `null` for invalid input.
+
+All shuffling during generation uses a local `mulberry32(seed)` instance from
+[random.js](../js/util/random.js). Nurikabe uses the same utility and retains its
+existing `mulberry32` export. Do not substitute global `Math.random()` inside a
+seeded generation run or duplicate the generator in the offline tool: the same
+seed and difficulty must yield identical clues and answers in both environments.
+Changes to the generator or random-number consumption order can change existing
+seed mappings, so include reproduction checks when modifying either.
+
+The command stores the generated seed alongside its initial board. Restart
+restores that board without generating another seed; New returns to difficulty
+selection and generates a random puzzle. The UI displays the seed beside the
+board, including after completion. See [Sudoku seeds](../README.md#sudoku-seeds)
+for command syntax and [offline tools](development.md#offline-tools) for the CLI.
 
 ## Japanese Mahjong
 

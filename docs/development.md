@@ -57,6 +57,7 @@ automated suite or CI pipeline; focused scripts can supplement these checks.
 | Busy/nested commands | Run `time sleep 5`, cancel with Ctrl+C, then `echo ready`; also allow `time sleep 1` to finish | Cancelled wait produces no delayed completion; normal run prints timing once |
 | Dialogs | Run `menu`, move selection and drag it; run `jpmj`, enter a settings submenu and cancel back out | Only the top dialog receives keys; closed overlays disappear; parent remains usable |
 | Game cursor | Run `minesw --easy`, move with arrows, then Escape | Cursor follows the board and shell prompt returns below the layout |
+| Sudoku seeds | Run `sudoku 123456 --hard`, compare with `node tools/sudoku-solve.mjs 123456 hard --puzzle` in a host terminal; try Restart, New, seed 0, and invalid seeds | Browser/tool clues and answer match; seed is visible; Restart retains it, New generates a random puzzle; invalid seeds report an error |
 | Overlays/widgets | Toggle `clock` and `dvd`; drag them, open/close menu, then toggle them off | Overlay order stays stable and underlying screen content is preserved |
 | Rendering | Run `ascii`, `echo --big 中文`, and `anime`; resize the browser, then cancel animation | Indexed colors, wide/enlarged glyphs and scaling remain consistent; animation releases its overlay |
 | Teardown | In browser Console run `window.system.dispose(); window.term.dispose();` twice, then reload | Teardown is idempotent; reload creates a working terminal |
@@ -78,6 +79,7 @@ input paths; replace them with your own files.
 | [png2anime.js](../tools/png2anime.js) | Node; ImageMagick `convert` on PATH | Directory of `frame1.png` … `frameN.png` to an uncompressed animation module at the chosen output path |
 | [subset-font.js](../tools/subset-font.js) | Node; `pyftsubset` with WOFF2 support; Unifont OTF at `/usr/share/fonts/opentype/unifont/unifont.otf` | Unicode ranges to a WOFF2 file; output path is resolved against the repository root |
 | [nurikabe-solve.mjs](../tools/nurikabe-solve.mjs) | Node with ES-module support | Seed/size to generated solution, optional puzzle/debug stages/clue list on stdout |
+| [sudoku-solve.mjs](../tools/sudoku-solve.mjs) | Node with ES-module support | Seed/difficulty to the live game's solution, optional original puzzle and 81-digit clue string |
 | [nurikabe-dupcheck.py](../tools/nurikabe-dupcheck.py) | Python 3; `ortools` installed in that environment | Dimensions and clue triplets to a full second-solution search; boards on stdout, status on stderr |
 | [compress-anime.js](../tools/compress-anime.js) | Node for its conversion code; currently incomplete reporting code | Reads and overwrites the fixed `js/cmd/art/anime.js` path; see limitations below |
 
@@ -114,6 +116,22 @@ do not prove global uniqueness.
 The Python checker returns 0 for UNIQUE, 1 for duplicate solutions, and 2 for no
 solution, invalid usage, or an inconclusive timeout. Do not interpret timeout as
 uniqueness. It requires `ortools` in the Python environment used to run it.
+
+Sudoku reproduction (uses the same generator as the browser):
+
+```sh
+node tools/sudoku-solve.mjs 123456 hard --puzzle --clues
+```
+
+Replay in the demo with `sudoku 123456 --hard`. Difficulty defaults to `medium`
+in both interfaces when only a seed is supplied. Seeds include zero and range
+through 2147483647. The tool always prints the solution; `--puzzle` appends the
+original clues and `--clues` appends a row-major 81-digit string, using zero for
+empty cells. `--help` describes all options. Invalid arguments exit with code 1.
+The tool also accepts `--easy`, `--medium`, or `--hard` instead of a positional
+difficulty, for example `node tools/sudoku-solve.mjs 0 --easy --puzzle`.
+Clue counts are generation targets, so preserving uniqueness can leave extra
+clues, especially on Hard.
 
 ### Animation compressor limitations
 

@@ -90,6 +90,8 @@ const renderMethods = {
             this._rootVB.writeStr(r, 0, ' '.repeat(this._rootVB.width));
 
         this._drawHeader(this._rootVB);
+        if (this._seed != null)
+            this._rootVB.writeStr(2, 51, gray('seed: ' + this._seed));
         this._drawBoardBorders(this._boardVB);
         this._drawSidebarFrame(this._sidebarVB);
 

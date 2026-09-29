@@ -1,5 +1,7 @@
 const SIZE = 9;
 
+const SEED_MAX = 0x7fffffff;
+
 const BOX = 3;
 
 const DIFFICULTY = {
@@ -20,4 +22,4 @@ const SIDEBAR_X = 41;
 
 const GRID_Y = 1;
 
-export { SIZE, DIFFICULTY, BOARD_W, BOARD_H, SIDEBAR_W, BOARD_X, GRID_Y, SIDEBAR_X, BOX };
+export { SIZE, SEED_MAX, DIFFICULTY, BOARD_W, BOARD_H, SIDEBAR_W, BOARD_X, GRID_Y, SIDEBAR_X, BOX };

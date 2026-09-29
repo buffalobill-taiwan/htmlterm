@@ -1,5 +1,5 @@
 import { CmdBase } from '../CmdBase.js';
-import { _createEmpty, _generate, _copyGrid } from './solver.js';
+import { _createEmpty, _generate, _copyGrid, parseSeed } from './solver.js';
 import { SIZE } from './constants.js';
 import { term, system } from '../../system/sys.js';
 import { CURSOR_HIDE, yellow, bold, red, gray, green } from '../../util/sgr.js';
@@ -10,15 +10,25 @@ import { _formatTime, renderMethods } from './render.js';
 class SudokuCmd extends CmdBase {
     execute(args) {
         const p = this.parseArgs(args, {
-            flags: { '--easy': Boolean, '--medium': Boolean, '--hard': Boolean },
+            flags: { '--easy': Boolean, '--medium': Boolean, '--hard': Boolean, '--seed': String },
         });
         if (p.hasHelp) return this.showHelp();
+        const flagSeed = p.flag('--seed');
+        const posSeed = p.rest.length ? parseSeed(p.rest[0]) : undefined;
+        const unknownFlag = args.some(arg => arg.startsWith('-') &&
+            !['--easy', '--medium', '--hard', '--seed'].includes(arg.split('=')[0]));
+        if (unknownFlag || p.rest.length > 1 || posSeed === null ||
+            (flagSeed !== null && parseSeed(flagSeed) === null)) {
+            this.error('invalid arguments: seed must be an integer from 0 to 2147483647');
+            return this.showHelp();
+        }
+        const seed = flagSeed !== null ? parseSeed(flagSeed) : posSeed;
         let diff = null;
         if (p.flag('--easy'))   diff = 'easy';
         if (p.flag('--medium')) diff = 'medium';
         if (p.flag('--hard'))   diff = 'hard';
-        if (diff) {
-            this._startGame(diff);
+        if (diff || seed !== undefined) {
+            this._startGame(diff || 'medium', seed);
         } else {
             this._pickDifficulty();
         }
@@ -35,6 +45,7 @@ class SudokuCmd extends CmdBase {
         this._timer = 0;
         this._errors = new Set();
         this._difficulty = null;
+        this._seed = null;
 
         this.open();
         term.write(CURSOR_HIDE);
@@ -57,7 +68,7 @@ class SudokuCmd extends CmdBase {
         });
     }
 
-    _startGame(difficulty) {
+    _startGame(difficulty, seed) {
         this._difficulty = difficulty;
         this._completed = false;
         this._timer = 0;
@@ -65,7 +76,8 @@ class SudokuCmd extends CmdBase {
         this._errors = new Set();
         this._difficultyDialog = null;
 
-        const { board, solution, given } = _generate(difficulty);
+        const { board, solution, given, seed: puzzleSeed } = _generate(difficulty, seed);
+        this._seed = puzzleSeed;
         this._board = board;
         this._solution = solution;
         this._given = given;
@@ -276,7 +288,10 @@ class SudokuCmd extends CmdBase {
 
     static get menu() { return 'Sudoku Puzzle'; }
 
-    static get usage() { return 'sudoku [--easy|--medium|--hard]'; }
+    static get usage() {
+        return 'sudoku [seed] [--easy|--medium|--hard] [--seed N]\n' +
+            '         Seed: 0–2147483647; seed alone defaults to Medium.';
+    }
 }
 
 // Keep the command as the state owner and preserve class-method descriptors.

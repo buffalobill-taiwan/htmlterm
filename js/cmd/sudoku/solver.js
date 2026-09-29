@@ -1,4 +1,11 @@
-import { SIZE, DIFFICULTY } from './constants.js';
+import { SIZE, SEED_MAX, DIFFICULTY } from './constants.js';
+import { mulberry32 } from '../../util/random.js';
+
+function parseSeed(value) {
+    if (typeof value !== 'number' && (typeof value !== 'string' || !/^\d+$/.test(value))) return null;
+    const seed = Number(value);
+    return Number.isInteger(seed) && seed >= 0 && seed <= SEED_MAX ? seed : null;
+}
 
 function _createEmpty() {
     return Array.from({ length: SIZE }, () => Array(SIZE).fill(0));
@@ -8,9 +15,9 @@ function _copyGrid(g) {
     return g.map(r => [...r]);
 }
 
-function _shuffle(arr) {
+function _shuffle(arr, rng) {
     for (let i = arr.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
+        const j = Math.floor(rng() * (i + 1));
         [arr[i], arr[j]] = [arr[j], arr[i]];
     }
     return arr;
@@ -33,7 +40,7 @@ function _buildMasks(grid) {
     return { rows, cols, boxes };
 }
 
-function _solve(grid) {
+function _solve(grid, rng) {
     const m = _buildMasks(grid);
     function solve() {
         for (let r = 0; r < 9; r++) {
@@ -41,7 +48,7 @@ function _solve(grid) {
                 if (grid[r][c] === 0) {
                     const b = (r / 3 | 0) * 3 + (c / 3 | 0);
                     const used = m.rows[r] | m.cols[c] | m.boxes[b];
-                    const nums = _shuffle([1,2,3,4,5,6,7,8,9]);
+                    const nums = _shuffle([1,2,3,4,5,6,7,8,9], rng);
                     for (const n of nums) {
                         if (!(used & (1 << n))) {
                             grid[r][c] = n;
@@ -379,16 +386,21 @@ function _solveBasic(grid) {
     return true;
 }
 
-function _generate(difficulty) {
+// The seed and difficulty fully determine both the clues and solution.
+function _generate(difficulty, seed = Math.floor(Math.random() * (SEED_MAX + 1))) {
+    if (!Object.hasOwn(DIFFICULTY, difficulty)) throw new RangeError('Invalid Sudoku difficulty');
+    if (parseSeed(seed) === null) throw new RangeError('Invalid Sudoku seed');
+    seed = Number(seed);
+    const rng = mulberry32(seed);
     const grid = _createEmpty();
-    _solve(grid);
+    _solve(grid, rng);
     const solution = _copyGrid(grid);
     const given = Array.from({ length: SIZE }, () => Array(SIZE).fill(true));
     const cells = [];
     for (let r = 0; r < SIZE; r++)
         for (let c = 0; c < SIZE; c++)
             cells.push([r, c]);
-    _shuffle(cells);
+    _shuffle(cells, rng);
     const toRemove = SIZE * SIZE - DIFFICULTY[difficulty].hints;
     let removed = 0;
     for (const [r, c] of cells) {
@@ -403,7 +415,7 @@ function _generate(difficulty) {
             grid[r][c] = val;
         }
     }
-    return { board: grid, solution, given };
+    return { board: grid, solution, given, seed };
 }
 
-export { _createEmpty, _generate, _copyGrid };
+export { _createEmpty, _generate, _copyGrid, parseSeed };
