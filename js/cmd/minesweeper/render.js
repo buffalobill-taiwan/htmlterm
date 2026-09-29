@@ -32,13 +32,13 @@ const renderMethods = {
         if (!this._rootVB) {
             this._rootVB = new VirtualBuffer(term.cols, term.rows);
             this._rootSlotBoard = this._rootVB.addChildSlot();
-            this._rootSlotBoard.x = 0;
             this._rootSlotBoard.y = 2;
             this._rootSlotBoard.active = true;
         }
 
         const boardW = 1 + this._cols * 2 + 1;
         const boardH = this._rows + 2;
+        this._rootSlotBoard.x = Math.max(0, Math.floor((term.cols - boardW) / 2));
         if (!this._boardVB || this._boardVB.width !== boardW || this._boardVB.height !== boardH) {
             this._boardVB = new VirtualBuffer(boardW, boardH);
             this._rootSlotBoard.vb = this._boardVB;
@@ -57,7 +57,7 @@ const renderMethods = {
 
     _flush() {
         term.writeVB(this._rootVB);
-        term.curX = this._cursorCol * 2 + 2;
+        term.curX = this._rootSlotBoard.x + this._cursorCol * 2 + 2;
         term.curY = this._cursorRow + 3;
     },
 
