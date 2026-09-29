@@ -1,11 +1,5 @@
 import { SIZE, SEED_MAX, DIFFICULTY } from './constants.js';
-import { mulberry32 } from '../../util/random.js';
-
-function parseSeed(value) {
-    if (typeof value !== 'number' && (typeof value !== 'string' || !/^\d+$/.test(value))) return null;
-    const seed = Number(value);
-    return Number.isInteger(seed) && seed >= 0 && seed <= SEED_MAX ? seed : null;
-}
+import { mulberry32, parseSeed } from '../../util/random.js';
 
 function _createEmpty() {
     return Array.from({ length: SIZE }, () => Array(SIZE).fill(0));

@@ -71,6 +71,8 @@ const renderMethods = {
             ' '.repeat(Math.max(0, pad)) +
             bold(red(String(mines).padStart(3))) + ' mines  ' +
             yellow(t));
+        const start = this._startCell;
+        this._rootVB.writeStr(0, 30, gray('start: ' + (start ? start.row + ',' + start.col : 'pending')));
     },
 
     _footerRow() {
@@ -80,6 +82,7 @@ const renderMethods = {
     _drawFooter() {
         this._clearRootRow(1);
         this._rootVB.writeStr(1, 0, gray('  ←↑↓→ Move   Enter Reveal   Space Flag   [n]ew [q]uit'));
+        this._rootVB.writeStr(1, 55, gray('seed: ' + this._seed));
     },
 
     _drawBoard() {

@@ -58,6 +58,7 @@ automated suite or CI pipeline; focused scripts can supplement these checks.
 | Dialogs | Run `menu`, move selection and drag it; run `jpmj`, enter a settings submenu and cancel back out | Only the top dialog receives keys; closed overlays disappear; parent remains usable |
 | Game cursor | Run `minesw --easy`, move with arrows, then Escape | Cursor follows the board and shell prompt returns below the layout |
 | Sudoku seeds | Run `sudoku 123456 --hard`, compare with `node tools/sudoku-solve.mjs 123456 hard --puzzle` in a host terminal; try Restart, New, seed 0, and invalid seeds | Browser/tool clues and answer match; seed is visible; Restart retains it, New generates a random puzzle; invalid seeds report an error |
+| Minesweeper seeds | Run `minesw 123456 --hard --start 0,0`, press Enter, and compare with `node tools/minesw-solve.mjs 123456 hard --start 0,0 --puzzle`; try flags before revealing, New, seed 0, and invalid coordinates | Same seed/difficulty/first reveal gives the same minefield; opening is safe; seed/start remain visible; New stops the old timer and chooses a random seed |
 | Overlays/widgets | Toggle `clock` and `dvd`; drag them, open/close menu, then toggle them off | Overlay order stays stable and underlying screen content is preserved |
 | Rendering | Run `ascii`, `echo --big 中文`, and `anime`; resize the browser, then cancel animation | Indexed colors, wide/enlarged glyphs and scaling remain consistent; animation releases its overlay |
 | Teardown | In browser Console run `window.system.dispose(); window.term.dispose();` twice, then reload | Teardown is idempotent; reload creates a working terminal |
@@ -80,6 +81,7 @@ input paths; replace them with your own files.
 | [subset-font.js](../tools/subset-font.js) | Node; `pyftsubset` with WOFF2 support; Unifont OTF at `/usr/share/fonts/opentype/unifont/unifont.otf` | Unicode ranges to a WOFF2 file; output path is resolved against the repository root |
 | [nurikabe-solve.mjs](../tools/nurikabe-solve.mjs) | Node with ES-module support | Seed/size to generated solution, optional puzzle/debug stages/clue list on stdout |
 | [sudoku-solve.mjs](../tools/sudoku-solve.mjs) | Node with ES-module support | Seed/difficulty to the live game's solution, optional original puzzle and 81-digit clue string |
+| [minesw-solve.mjs](../tools/minesw-solve.mjs) | Node with ES-module support | Seed/difficulty/first reveal to the live minefield, optional opening and mine coordinate list |
 | [nurikabe-dupcheck.py](../tools/nurikabe-dupcheck.py) | Python 3; `ortools` installed in that environment | Dimensions and clue triplets to a full second-solution search; boards on stdout, status on stderr |
 | [compress-anime.js](../tools/compress-anime.js) | Node for its conversion code; currently incomplete reporting code | Reads and overwrites the fixed `js/cmd/art/anime.js` path; see limitations below |
 
@@ -132,6 +134,29 @@ The tool also accepts `--easy`, `--medium`, or `--hard` instead of a positional
 difficulty, for example `node tools/sudoku-solve.mjs 0 --easy --puzzle`.
 Clue counts are generation targets, so preserving uniqueness can leave extra
 clues, especially on Hard.
+
+Minesweeper reproduction:
+
+```sh
+node tools/minesw-solve.mjs 123456 hard --start 0,0 --puzzle --mines
+```
+
+Replay with `minesw 123456 --hard --start 0,0`, then press Enter before moving.
+Coordinates are zero-based `row,col`. Omit the difficulty for Medium; omit
+`--start` for the center (Easy `4,4`, Medium `6,8`, Hard `8,16`). The first revealed
+cell is part of the board identity because generation protects its neighboring
+cells. Flags placed before that reveal do not affect mine placement.
+
+The tool always prints the solution (`*` = mine, `.` = zero). `--puzzle` adds
+the opening after the first reveal, using `?` for hidden cells; `--mines` adds
+a final row-major list of `row,col` mine coordinates. Difficulty flags work in
+place of the positional difficulty. `--help` lists options; invalid arguments
+exit with code 1.
+
+Generation preserves the game's existing limit of 200 attempts, accepting the
+first board solved by its logical checker. If no attempt passes, both browser
+and tool use the last board. The tool reports this fallback explicitly; printing
+the minefield is not a guarantee that it can be solved without guessing.
 
 ### Animation compressor limitations
 

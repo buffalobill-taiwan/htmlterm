@@ -1,3 +1,70 @@
+import { DIFFICULTY } from './constants.js';
+import { mulberry32, parseSeed, SEED_MAX } from '../../util/random.js';
+
+function parseStart(value, difficulty) {
+    const cfg = DIFFICULTY[difficulty];
+    if (!cfg || typeof value !== 'string' || !/^\d+,\d+$/.test(value)) return null;
+    const [row, col] = value.split(',').map(Number);
+    return row < cfg.rows && col < cfg.cols ? { row, col } : null;
+}
+
+// Preserve the live game's 200-attempt policy, including its last-board fallback.
+function generatePuzzle(difficulty, seed = Math.floor(Math.random() * (SEED_MAX + 1)), start = null) {
+    if (!Object.hasOwn(DIFFICULTY, difficulty)) throw new RangeError('Invalid Minesweeper difficulty');
+    if (parseSeed(seed) === null) throw new RangeError('Invalid Minesweeper seed');
+    seed = Number(seed);
+    const { rows, cols, mines } = DIFFICULTY[difficulty];
+    const row = start?.row ?? Math.floor(rows / 2);
+    const col = start?.col ?? Math.floor(cols / 2);
+    if (!Number.isInteger(row) || !Number.isInteger(col) || row < 0 || row >= rows || col < 0 || col >= cols)
+        throw new RangeError('Invalid starting cell');
+    const rng = mulberry32(seed);
+    let board;
+    for (let attempt = 1; attempt <= 200; attempt++) {
+        board = _create2D(cols, rows, 0);
+        let placed = 0;
+        while (placed < mines) {
+            const r = Math.floor(rng() * rows);
+            const c = Math.floor(rng() * cols);
+            if (board[r][c] === -1 || (Math.abs(r - row) <= 1 && Math.abs(c - col) <= 1)) continue;
+            board[r][c] = -1;
+            placed++;
+        }
+        for (let r = 0; r < rows; r++)
+            for (let c = 0; c < cols; c++) {
+                if (board[r][c] === -1) continue;
+                let n = 0;
+                for (let dr = -1; dr <= 1; dr++)
+                    for (let dc = -1; dc <= 1; dc++)
+                        if (board[r + dr]?.[c + dc] === -1) n++;
+                board[r][c] = n;
+            }
+        const solvable = _isSolvable(board, rows, cols, row, col);
+        if (solvable || attempt === 200)
+            return { board, seed, start: { row, col }, attempts: attempt, solvable };
+    }
+}
+
+// Reveal a safe cell and its empty region, preserving any player flags.
+function revealCells(board, revealed, r, c, flags = null) {
+    if (board[r][c] === -1 || revealed[r][c] || flags?.[r][c]) return;
+    const rows = board.length, cols = board[0].length;
+    const q = [[r, c]];
+    revealed[r][c] = true;
+    while (q.length) {
+        const [cr, cc] = q.pop();
+        if (board[cr][cc] !== 0) continue;
+        for (let dr = -1; dr <= 1; dr++)
+            for (let dc = -1; dc <= 1; dc++) {
+                const nr = cr + dr, nc = cc + dc;
+                if (nr >= 0 && nr < rows && nc >= 0 && nc < cols && !revealed[nr][nc] && !flags?.[nr][nc]) {
+                    revealed[nr][nc] = true;
+                    q.push([nr, nc]);
+                }
+            }
+    }
+}
+
 function _create2D(cols, rows, val) {
     return Array.from({ length: rows }, () => Array(cols).fill(val));
 }
@@ -161,4 +228,4 @@ function _isSolvable(board, rows, cols, safeR, safeC) {
     return true;
 }
 
-export { _create2D, _isSolvable };
+export { _create2D, _isSolvable, generatePuzzle, parseStart, revealCells };

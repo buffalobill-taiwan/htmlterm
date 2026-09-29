@@ -1,6 +1,6 @@
-const SIZE = 9;
+import { SEED_MAX } from '../../util/random.js';
 
-const SEED_MAX = 0x7fffffff;
+const SIZE = 9;
 
 const BOX = 3;
 

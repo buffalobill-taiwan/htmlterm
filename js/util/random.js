@@ -1,5 +1,13 @@
 // Random utility functions for commands
 
+export const SEED_MAX = 0x7fffffff;
+
+export function parseSeed(value) {
+    if (typeof value !== 'number' && (typeof value !== 'string' || !/^\d+$/.test(value))) return null;
+    const seed = Number(value);
+    return Number.isInteger(seed) && seed >= 0 && seed <= SEED_MAX ? seed : null;
+}
+
 export function mulberry32(seed) {
     let a = seed >>> 0;
     return () => {

@@ -124,7 +124,7 @@ more than once.
 | `memory` | Play a card-matching Memory game (flip to find matching pairs, three difficulty levels) |
 | `menu` | Open command menu dialog |
 | `mbti` | MBTI personality test (interactive) |
-| `minesw` | Play Minesweeper (three difficulty levels) |
+| `minesw` | Play Minesweeper (three difficulty levels, reproducible seed and first reveal) |
 | `nurikabe` | Play Nurikabe logic puzzle (three difficulty levels, hold C to highlight sea) |
 | `othello` | Play Othello/Reversi (8×8 board, hint dots, 3 AI difficulties) |
 | `puyo` | Play Puyo Puyo (column gravity, no floating puyos, chain elimination, 3-5 colors) |
@@ -147,6 +147,25 @@ difficulty and generates a fresh random seed.
 
 From a host terminal, `node tools/sudoku-solve.mjs 123456 hard --puzzle` prints
 the matching answer and original puzzle. See [offline tools](docs/development.md#offline-tools).
+
+### Minesweeper seeds
+
+Run `minesw 123456 --hard` or `minesw --seed 123456 --hard` for a seeded game.
+Seed range and default difficulty match Sudoku. Without arguments, `minesw`
+still opens the difficulty menu; `[n]ew` chooses a new random seed.
+
+Mine placement happens on the first reveal and protects that cell and its
+neighbors. Reproduction requires the same **seed, difficulty, and first revealed
+cell**. The header displays the seed and actual `start` after revealing a cell.
+Use `--start R,C` to position the initial cursor, with zero-based row and column,
+then press Enter before moving. For example, `minesw 123456 --hard --start 0,0`
+starts at the top-left corner. Without `--start`, the cursor starts in the center
+(Easy: `4,4`; Medium: `6,8`; Hard: `8,16`). Moving before the first reveal changes
+the generated board; placing a flag does not generate it.
+
+From a host terminal, run
+`node tools/minesw-solve.mjs 123456 hard --start 0,0 --puzzle` to print the matching
+minefield and opening. Add `--mines` for a list of mine coordinates.
 
 ### Keyboard shortcuts
 

@@ -3,30 +3,53 @@ import { term } from '../../system/sys.js';
 import { CURSOR_HIDE, yellow, bold, green, red, gray } from '../../util/sgr.js';
 import { SelectDialog } from '../../dialog/SelectDialog.js';
 import { DIFFICULTY } from './constants.js';
-import { _create2D, _isSolvable } from './solver.js';
+import { _create2D, generatePuzzle, parseStart, revealCells } from './solver.js';
+import { parseSeed, SEED_MAX } from '../../util/random.js';
 import { _formatTime, renderMethods } from './render.js';
 
 class MinesweeperCmd extends CmdBase {
     execute(args) {
         const p = this.parseArgs(args, {
-            flags: { '--easy': Boolean, '--medium': Boolean, '--hard': Boolean },
+            flags: { '--easy': Boolean, '--medium': Boolean, '--hard': Boolean, '--seed': String, '--start': String },
         });
         if (p.hasHelp) return this.showHelp();
+        const flagSeed = p.flag('--seed');
+        const posSeed = p.rest.length ? parseSeed(p.rest[0]) : undefined;
+        const unknownFlag = args.some(arg => arg.startsWith('-') &&
+            !['--easy', '--medium', '--hard', '--seed', '--start'].includes(arg.split('=')[0]));
+        if (unknownFlag || p.rest.length > 1 || posSeed === null ||
+            (flagSeed !== null && parseSeed(flagSeed) === null)) {
+            this.error('invalid arguments: seed must be an integer from 0 to 2147483647');
+            return this.showHelp();
+        }
+        const seed = flagSeed !== null ? parseSeed(flagSeed) : posSeed;
         let diff = null;
         if (p.flag('--easy'))   diff = 'easy';
         if (p.flag('--medium')) diff = 'medium';
         if (p.flag('--hard'))   diff = 'hard';
-        if (diff) {
-            this._startGame(diff);
+        const startArg = p.flag('--start');
+        const start = startArg !== null ? parseStart(startArg, diff || 'medium') : null;
+        if (startArg !== null && !start) {
+            this.error('invalid start: use zero-based row,col within the board');
+            return this.showHelp();
+        }
+        if (diff || seed !== undefined || start) {
+            this._startGame(diff || 'medium', seed, start);
         } else {
             this._pickDifficulty();
         }
     }
 
     _pickDifficulty() {
+        if (this._timerInterval) {
+            clearInterval(this._timerInterval);
+            this._timerInterval = null;
+        }
         this._completed = false;
         this._timer = 0;
         this._difficulty = null;
+        this._seed = null;
+        this._startCell = null;
 
         this.open();
         term.write('\x1B[2J\x1B[1;1H');
@@ -49,9 +72,11 @@ class MinesweeperCmd extends CmdBase {
         });
     }
 
-    _startGame(diff) {
+    _startGame(diff, seed = Math.floor(Math.random() * (SEED_MAX + 1)), start = null) {
         const cfg = DIFFICULTY[diff];
         this._difficulty = diff;
+        this._seed = seed;
+        this._startCell = null;
         this._cols = cfg.cols;
         this._rows = cfg.rows;
         this._mineCount = cfg.mines;
@@ -61,8 +86,8 @@ class MinesweeperCmd extends CmdBase {
         this._firstClick = true;
         this._completed = false;
         this._won = false;
-        this._cursorRow = Math.floor(cfg.rows / 2);
-        this._cursorCol = Math.floor(cfg.cols / 2);
+        this._cursorRow = start?.row ?? Math.floor(cfg.rows / 2);
+        this._cursorCol = start?.col ?? Math.floor(cfg.cols / 2);
         this._flagsPlaced = 0;
         this._timer = 0;
         this._difficultyDialog = null;
@@ -84,32 +109,10 @@ class MinesweeperCmd extends CmdBase {
     }
 
     _generateMines(safeR, safeC) {
-        const { _cols: cols, _rows: rows, _mineCount: mineCount } = this;
-        for (let attempt = 0; attempt < 200; attempt++) {
-            this._board = _create2D(cols, rows, 0);
-            let placed = 0;
-            while (placed < mineCount) {
-                const r = Math.floor(Math.random() * rows);
-                const c = Math.floor(Math.random() * cols);
-                if (this._board[r][c] === -1) continue;
-                if (Math.abs(r - safeR) <= 1 && Math.abs(c - safeC) <= 1) continue;
-                this._board[r][c] = -1;
-                placed++;
-            }
-            for (let r = 0; r < rows; r++)
-                for (let c = 0; c < cols; c++) {
-                    if (this._board[r][c] === -1) continue;
-                    let n = 0;
-                    for (let dr = -1; dr <= 1; dr++)
-                        for (let dc = -1; dc <= 1; dc++) {
-                            const rr = r + dr, cc = c + dc;
-                            if (rr >= 0 && rr < rows && cc >= 0 && cc < cols && this._board[rr][cc] === -1)
-                                n++;
-                        }
-                    this._board[r][c] = n;
-                }
-            if (_isSolvable(this._board, rows, cols, safeR, safeC)) return;
-        }
+        const puzzle = generatePuzzle(this._difficulty, this._seed, { row: safeR, col: safeC });
+        this._board = puzzle.board;
+        this._startCell = puzzle.start;
+        this._drawHeader();
     }
 
     _reveal(r, c) {
@@ -122,21 +125,7 @@ class MinesweeperCmd extends CmdBase {
             this._gameOver(false);
             return;
         }
-        const q = [[r, c]];
-        this._revealed[r][c] = true;
-        while (q.length) {
-            const [cr, cc] = q.pop();
-            if (this._board[cr][cc] !== 0) continue;
-            for (let dr = -1; dr <= 1; dr++)
-                for (let dc = -1; dc <= 1; dc++) {
-                    const nr = cr + dr, nc = cc + dc;
-                    if (nr >= 0 && nr < this._rows && nc >= 0 && nc < this._cols &&
-                        !this._revealed[nr][nc] && !this._flags[nr][nc]) {
-                        this._revealed[nr][nc] = true;
-                        q.push([nr, nc]);
-                    }
-                }
-        }
+        revealCells(this._board, this._revealed, r, c, this._flags);
         this._drawBoard();
         this._flush();
         if (this._checkWin()) this._gameOver(true);
@@ -267,7 +256,11 @@ class MinesweeperCmd extends CmdBase {
 
     static get menu() { return 'Minesweeper'; }
 
-    static get usage() { return 'minesw [--easy|--medium|--hard]'; }
+    static get usage() {
+        return 'minesw [seed] [--easy|--medium|--hard] [--seed N] [--start R,C]\n' +
+            '         Seed: 0–2147483647; seed alone defaults to Medium.\n' +
+            '         Start: zero-based row,col; press Enter there to replay.';
+    }
 }
 
 // Keep the command as the state owner and preserve class-method descriptors.
