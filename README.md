@@ -2,7 +2,7 @@
 
 [![Live Demo](https://img.shields.io/badge/demo-online-44cc11?style=flat-square)](https://buffalobill-taiwan.github.io/htmlterm/)
 
-A pure HTML+CSS+JS 80×25 terminal emulator inspired by [term.ptt.cc](https://term.ptt.cc/).
+Live demo: <https://buffalobill-taiwan.github.io/htmlterm/>
 
 Renders entirely via DOM `<span>` elements with CSS color classes — no Canvas.
 Includes a demo shell with animated command output, interactive commands, draggable
