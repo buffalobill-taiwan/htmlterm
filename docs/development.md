@@ -76,7 +76,7 @@ input paths; replace them with your own files.
 
 | Tool | Dependencies | Input and output |
 |---|---|---|
-| [png2art.js](../tools/png2art.js) | Node; ImageMagick `convert` on PATH | PNG to a 256-color artwork ES module on stdout |
+| [png2art.js](../tools/png2art.js) | Node; ImageMagick `convert` on PATH | PNG to a 256-color artwork JSON file on stdout |
 | [png2anime.js](../tools/png2anime.js) | Node; ImageMagick `convert` on PATH | Directory of `frame1.png` … `frameN.png` to an uncompressed animation module at the chosen output path |
 | [subset-font.js](../tools/subset-font.js) | Node; `pyftsubset` with WOFF2 support; Unifont OTF at `/usr/share/fonts/opentype/unifont/unifont.otf` | Unicode ranges to a WOFF2 file; output path is resolved against the repository root |
 | [nurikabe-solve.mjs](../tools/nurikabe-solve.mjs) | Node with ES-module support | Seed/size to generated solution, optional puzzle/debug stages/clue list on stdout |
@@ -88,7 +88,7 @@ input paths; replace them with your own files.
 Artwork and frame conversion:
 
 ```sh
-node tools/png2art.js /path/to/image.png --name "Example" > /tmp/example-art.js
+node tools/png2art.js /path/to/image.png --name "Example" > /tmp/example-art.json
 node tools/png2anime.js /path/to/frames /tmp/example-anime.js
 ```
 

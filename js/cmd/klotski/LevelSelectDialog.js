@@ -1,5 +1,5 @@
 import { VerticalSelectDialog } from '../../dialog/VerticalSelectDialog.js';
-import { LEVELS } from '../../util/klotski-levels.js';
+import LEVELS from '../../data/klotski-levels.json' with { type: 'json' };
 import { centeredDialogPos } from '../../dialog/position.js';
 import { bufWidth } from '../../util/display-width.js';
 

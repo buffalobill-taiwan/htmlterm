@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 /**
- * png2art — Convert a PNG image to an artwork module for js/cmd/art/.
+ * png2art — Convert a PNG image to an artwork JSON file for js/data/art.
  *
  * Usage:
- *   node tools/png2art.js /path/to/image.png > js/cmd/art/foo.js
- *   node tools/png2art.js /path/to/image.png --name "Display Name" > js/cmd/art/foo.js
+ *   node tools/png2art.js /path/to/image.png > js/data/art/foo.json
+ *   node tools/png2art.js /path/to/image.png --name "Display Name" > js/data/art/foo.json
  *
- * Output: ES module exporting default { name, cols, pixels }.
+ * Output: JSON object with name, cols, and pixels.
  * pixels are 256-color palette indices (0-255).
  * Requires ImageMagick `convert` on PATH.
  */
@@ -123,16 +123,16 @@ pixels.sort((a, b) => a.y - b.y || a.x - b.x);
 const rows = [];
 for (let r = 0; r < H; r++) {
     const rowPixels = pixels.slice(r * W, (r + 1) * W).map(p => '' + p.idx);
-    rows.push("    " + rowPixels.join(',') + ",");
+    rows.push("    " + rowPixels.join(','));
 }
 
-const out = `export default {
-    name: '${artworkName}',
-    cols: ${W},
-    pixels: [
-${rows.join('\n')}
-    ],
-};
+const out = `{
+  "name": ${JSON.stringify(artworkName)},
+  "cols": ${W},
+  "pixels": [
+${rows.join(',\n')}
+  ]
+}
 `;
 
 process.stdout.write(out);

@@ -1,0 +1,57 @@
+[
+  {
+    "name": "比翼橫空",
+    "mini": 28,
+    "board": "BBAACCAADDEEN@OHP@QH"
+  },
+  {
+    "name": "捷足先登",
+    "mini": 32,
+    "board": "NAAOPAAQ@BB@HIJKHIJK"
+  },
+  {
+    "name": "勇闖五關",
+    "mini": 34,
+    "board": "NAAOPAAQBBCCDDEE@FF@"
+  },
+  {
+    "name": "五將逼宮",
+    "mini": 36,
+    "board": "BBCCHAAIHAAINDDOP@@Q"
+  },
+  {
+    "name": "四將連關",
+    "mini": 39,
+    "board": "AABBAACCHIDDHINOP@@Q"
+  },
+  {
+    "name": "雨聲淅瀝",
+    "mini": 47,
+    "board": "HAANHAAOIBBJIK@JPK@Q"
+  },
+  {
+    "name": "左右佈兵",
+    "mini": 54,
+    "board": "NAAOPAAQHIJKHIJK@BB@"
+  },
+  {
+    "name": "齊頭並進",
+    "mini": 60,
+    "board": "HAAIHAAINOPQJBBKJ@@K"
+  },
+  {
+    "name": "兵分三路",
+    "mini": 72,
+    "board": "NAAOHAAIHBBIJPQKJ@@K"
+  },
+  {
+    "name": "橫刀立關",
+    "mini": 81,
+    "board": "HAAIHAAIJBBKJNOKP@@Q"
+  },
+  {
+    "name": "層層設防",
+    "mini": 102,
+    "board": "HAAIHAAINBBOPCCQ@DD@"
+  }
+]

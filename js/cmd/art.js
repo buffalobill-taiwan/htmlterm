@@ -1,15 +1,15 @@
 import { CmdBase } from './CmdBase.js';
 
 export const ARTWORKS = [
-    () => import('./art/mona.js'),
-    () => import('./art/night.js'),
-    () => import('./art/adam.js'),
-    () => import('./art/kanagawa.js'),
-    () => import('./art/glaneuses.js'),
-    () => import('./art/blacklotus.js'),
-    () => import('./art/parel.js'),
-    () => import('./art/tang.js'),
-    () => import('./art/skrik.js'),
+    () => import('../data/art/mona.json', { with: { type: 'json' } }),
+    () => import('../data/art/night.json', { with: { type: 'json' } }),
+    () => import('../data/art/adam.json', { with: { type: 'json' } }),
+    () => import('../data/art/kanagawa.json', { with: { type: 'json' } }),
+    () => import('../data/art/glaneuses.json', { with: { type: 'json' } }),
+    () => import('../data/art/blacklotus.json', { with: { type: 'json' } }),
+    () => import('../data/art/parel.json', { with: { type: 'json' } }),
+    () => import('../data/art/tang.json', { with: { type: 'json' } }),
+    () => import('../data/art/skrik.json', { with: { type: 'json' } }),
 ];
 
 export class Art extends CmdBase {

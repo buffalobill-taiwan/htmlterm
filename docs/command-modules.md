@@ -4,6 +4,20 @@ Small commands remain single files under `js/cmd/`. Larger games use a directory
 with an explicit `index.js` entry, following the existing Wordle and Japanese
 Mahjong layout. `js/cmd/index.js` imports those entries for command registration.
 
+## Static command data
+
+Content datasets live in `js/data/`: `mbti.json` contains question pools and
+personality profiles, `astrology.json` contains signs and fortune text,
+`cowsay.json` contains fortunes and faces, and `klotski-levels.json` contains
+ordered level definitions alongside `klotski-solutions.json`.
+Commands import these with `with { type: 'json' }`. Copy arrays before shuffling
+or otherwise mutating imported data.
+
+The nine static artworks live in `js/data/art/*.json` as `{ name, cols, pixels }`.
+`ARTWORKS` in `js/cmd/art.js` retains dynamic import loaders shared by `art` and
+`flash`, so artwork data loads only when requested. `tools/png2art.js` generates
+this JSON format; see [offline tools](development.md#offline-tools).
+
 ## Game directories
 
 Each directory has a `<Name>Cmd.js` class that owns the game's mutable state,

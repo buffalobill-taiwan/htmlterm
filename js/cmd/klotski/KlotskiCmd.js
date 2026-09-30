@@ -2,7 +2,7 @@ import { CmdBase } from '../CmdBase.js';
 import { term, system } from '../../system/sys.js';
 import { CURSOR_HIDE } from '../../util/sgr.js';
 import { LevelSelectDialog } from './LevelSelectDialog.js';
-import { LEVELS } from '../../util/klotski-levels.js';
+import LEVELS from '../../data/klotski-levels.json' with { type: 'json' };
 import { ROWS, COLS, FINISH_FALL, BOARD_Y, BOARD_H } from './constants.js';
 import { NAME_COLOR, renderMethods } from './render.js';
 import { ConfirmDialog } from '../../dialog/ConfirmDialog.js';

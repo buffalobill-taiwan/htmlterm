@@ -5,7 +5,7 @@ import {
     BOARD_W, BOARD_H, SIDEBAR_W, SIDEBAR_H, BOARD_X, BOARD_Y, SIDEBAR_X, SIDEBAR_Y, ROWS, COLS,
 } from './constants.js';
 import { makeCell, bold, cyan, gray, yellow } from '../../util/sgr.js';
-import { LEVELS } from '../../util/klotski-levels.js';
+import LEVELS from '../../data/klotski-levels.json' with { type: 'json' };
 
 const NAME_COLOR = {
     '曹': 9,
