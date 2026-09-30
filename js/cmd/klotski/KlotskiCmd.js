@@ -6,7 +6,7 @@ import { LEVELS } from '../../util/klotski-levels.js';
 import { ROWS, COLS, FINISH_FALL, BOARD_Y, BOARD_H } from './constants.js';
 import { NAME_COLOR, renderMethods } from './render.js';
 import { ConfirmDialog } from '../../dialog/ConfirmDialog.js';
-import klotskiSolutions from '../../util/klotski-solutions.json' with { type: 'json' };
+import klotskiSolutions from '../../data/klotski-solutions.json' with { type: 'json' };
 
 class KlotskiCmd extends CmdBase {
     execute(args) {

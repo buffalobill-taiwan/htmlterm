@@ -10,7 +10,7 @@ below run in a host terminal from the repository root, not in the demo shell.
 | Symptom | Check |
 |---|---|
 | Blank page after opening index.html | Use `http://127.0.0.1:8000/`, not a file URL |
-| Banner/prompt never appears | Open browser Console and Network; check module errors and the Wordle dictionary request at `js/cmd/wordle/valid-words.json` |
+| Banner/prompt never appears | Open browser Console and Network; check module errors and the Wordle dictionary request at `js/data/valid-words.json` |
 | 404 for modules or fonts | Start the server in the directory containing index.html |
 | Old behavior after an edit | Reload with browser cache disabled while DevTools is open |
 | Clipped view in a narrow window | Scaling has a minimum of 1; the base 80×25 grid may exceed the viewport |

@@ -77,6 +77,7 @@ Read the document that matches the work being done before changing that area.
 - `js/dialog/`: buffered draggable dialog implementations.
 - `js/cmd/`: commands, games, widgets, and command exports.
 - `js/util/`: shared utilities, including SGR, VirtualBuffer, and animation helpers.
+- `js/data/`: JSON datasets loaded by commands, such as Klotski solutions and Wordle words.
 - `tools/`: offline art/font processing scripts, never runtime features.
 
 ## Working conventions
