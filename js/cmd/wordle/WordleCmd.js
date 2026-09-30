@@ -4,7 +4,7 @@ import { CURSOR_HIDE, makeCell } from '../../util/sgr.js';
 import { bufWidth } from '../../util/display-width.js';
 import { VirtualBuffer } from '../../util/VirtualBuffer.js';
 import { VALID_WORDS } from './valid-words.js';
-import ANSWERS from '../../data/answers.json' with { type: 'json' };
+import ANSWERS from '../../data/wordle-answers.json' with { type: 'json' };
 
 function toFullwidth(ch) {
     if (ch.length > 1) return ch.split('').map(toFullwidth).join('');
