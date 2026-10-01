@@ -166,7 +166,8 @@ export class CChessCmd extends CmdBase {
             this._lastMove = move;
             this._turn = opp(color);
             this._history.push(positionKey(this._board, this._turn));
-            this._log.push(`${this._log.length+1}. ${color === 'red' ? '紅' : '黑'} ${notation}`);
+            if (color === 'red') this._log.push(`${this._log.length+1}. ${notation}`);
+            else this._log[this._log.length-1] += `  ${notation}`;
             if (color === this._human) this._humanSteps++;
             this._busy = false; this._message = null;
             if (hasLost(this._board, this._turn)) {
