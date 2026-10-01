@@ -33,5 +33,6 @@ export { GweledCmd } from './gweled/index.js';
 export { KlotskiCmd } from './klotski/index.js';
 export { MemoryCmd } from './memory.js';
 export { OthelloCmd } from './othello/index.js';
+export { CChessCmd } from './cchess/index.js';
 export { JpmjCmd } from './jpmj/index.js';
 

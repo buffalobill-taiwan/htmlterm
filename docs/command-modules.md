@@ -33,6 +33,7 @@ contains shared dimensions, difficulty settings, and other fixed configuration.
 | [minesweeper](../js/cmd/minesweeper/index.js) | `MinesweeperCmd` | `solver.js`: seeded generation, first-reveal parsing, flood reveal, and logical solvability checks |
 | [nurikabe](../js/cmd/nurikabe/index.js) | `NurikabeCmd` | `analysis.js`: clue groups, pools, and sea connectivity; puzzle generation stays in `js/util/nurikabe-engine.js` |
 | [othello](../js/cmd/othello/index.js) | `OthelloCmd` | `board.js`: legal moves and flips; `ai.js`: evaluation and search |
+| [cchess](../js/cmd/cchess/index.js) | `CChessCmd` | `engine/`: adapted Chinese chess rules/search; `animation.js`: move overlays; `endgames.js`: response table validation; see [upstream integration](cchess-upstream.md) |
 | [puyo](../js/cmd/puyo/index.js) | `PuyoCmd` | `board.js`: group detection, gravity, and chain scores |
 | [snake](../js/cmd/snake/index.js) | `SnakeCmd` | Movement and food placement stay with the command |
 | [sudoku](../js/cmd/sudoku/index.js) | `SudokuCmd` | `solver.js`: solving, uniqueness checks, seed validation, and deterministic puzzle generation |

@@ -20,6 +20,7 @@ Read the document that matches the work being done before changing that area.
 | Render-loop, animation, VirtualBuffer, dirty-row, or font-metric work | [Rendering performance](docs/rendering-performance.md) |
 | Local setup, validation, or offline tools | [Development](docs/development.md) |
 | Japanese Mahjong rule/AI synchronization | [Upstream synchronization](docs/jpmj-upstream.md) |
+| Chinese chess rule/AI synchronization or endgame data | [Chinese chess integration](docs/cchess-upstream.md) |
 | Why a current design exists or past project milestones | [Project history](docs/project-history.md) |
 
 ## Non-negotiable constraints

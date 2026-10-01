@@ -1,0 +1,4 @@
+[
+  { "id": "horse-cannon-pawn", "name": "傌炮兵圍城", "step": 4, "file": "horse-cannon-pawn.json" },
+  { "id": "double-rook", "name": "雙俥夾車攻", "step": 3, "file": "double-rook.json" }
+]
