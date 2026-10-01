@@ -34,6 +34,7 @@ async function main() {
         entry.name = puzzle.meta.name; entry.step = puzzle.meta.step;
         outputs.set(entry.file, puzzle);
     }
+    index.sort((a, b) => a.step - b.step);
     await fs.mkdir(directory, { recursive: true });
     for (const [file, puzzle] of outputs) await fs.writeFile(path.join(directory, file), JSON.stringify(puzzle, null, 2)+'\n');
     await fs.writeFile(path.join(directory, 'index.json'), JSON.stringify(index, null, 2)+'\n');

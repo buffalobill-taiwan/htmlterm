@@ -86,6 +86,7 @@ export class CChessCmd extends CmdBase {
             const list = this._index ?? await this._fetchJSON('index.json', this._load.signal);
             if (epoch !== this._epoch) return;
             if (!Array.isArray(list) || !list.length) throw new Error('尚無殘局題目');
+            list.sort((a, b) => a.step - b.step);
             this._index = list;
             this._busy = false; this._message = null;
             this._choice('選擇殘局', list.map(p => `${p.name}（${p.step} 步）`), i => this._loadEndgame(list[i]), true, () => this._pickMode());

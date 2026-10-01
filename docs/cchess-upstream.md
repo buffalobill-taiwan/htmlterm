@@ -27,6 +27,8 @@ null for a red win. Cyclic branches are playable. No live search substitutes
 for missing or invalid entries. Both mate and stalemate count as a loss.
 
 `js/data/cchess/index.json` contains only `{ id, name, step, file }` records.
+The importer and selection list sort puzzles by ascending step count;
+equal-step puzzles retain their existing relative order.
 The command fetches the index on entering the endgame selector and fetches
 individual puzzles on selection; loaded puzzles are cached for the command
 execution and cleared on exit. The first two puzzles were supplied as
