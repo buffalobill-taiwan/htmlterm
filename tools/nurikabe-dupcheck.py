@@ -260,7 +260,10 @@ def main():
     status1 = solver1.Solve(model)
     sys.stderr.write(f'solve #1: {solver1.StatusName(status1)} in {time.time()-t1:.2f}s\n')
     if status1 not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
-        sys.stderr.write('No solution exists for these clues (check for a typo).\n')
+        if status1 == cp_model.INFEASIBLE:
+            sys.stderr.write('No solution exists for these clues (check for a typo).\n')
+        else:
+            sys.stderr.write('INCONCLUSIVE — first search did not find a solution.\n')
         sys.exit(2)
 
     board1 = _read_black(solver1, black, R, C)
@@ -279,6 +282,10 @@ def main():
         sys.stdout.write('\n' + render(R, C, board2, clue_of_cell, ptt) + '\n')
         sys.stderr.write('NOT UNIQUE — second solution found.\n')
         sys.exit(1)
+
+    if status2 != cp_model.INFEASIBLE:
+        sys.stderr.write('INCONCLUSIVE — duplicate search did not prove infeasibility.\n')
+        sys.exit(2)
 
     sys.stderr.write('UNIQUE.\n')
     sys.exit(0)
