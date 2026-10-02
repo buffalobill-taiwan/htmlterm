@@ -127,7 +127,7 @@ more than once.
 | `minesw` | Play Minesweeper (three difficulty levels, reproducible seed and first reveal) |
 | `nurikabe` | Play Nurikabe logic puzzle (three difficulty levels, hold C to highlight sea) |
 | `othello` | Play Othello/Reversi (8×8 board, hint dots, 3 AI difficulties) |
-| `cchess` | 中國象棋：三種難度的人機對弈，或內建殘局遊戲；先後手可選，含走棋動畫 |
+| `cchess` | 中國象棋：三種難度的人機對弈、先後手選擇、走棋動畫及 7 道內建殘局 |
 | `puyo` | Play Puyo Puyo (column gravity, no floating puyos, chain elimination, 3-5 colors) |
 | `quiz` | Math quiz challenge |
 | `sleep` | Wait for N seconds (default 1) |

@@ -28,11 +28,17 @@ for missing or invalid entries. Both mate and stalemate count as a loss.
 
 `js/data/cchess/index.json` contains only `{ id, name, step, file }` records.
 The importer and selection list sort puzzles by ascending step count;
-equal-step puzzles retain their existing relative order.
+equal-step puzzles retain their existing relative order. The catalog currently
+includes `endgame-005` (俥炮兵破關, 4 steps), `endgame-007` (炮勇致勝, 5
+steps), and `endgame-006` (俥炮兵打, 6 steps), in addition to the earlier
+puzzles. The first two puzzles were supplied as `/tmp/傌炮兵圍城.json` and
+`/tmp/雙俥夾車攻.json`.
+
 The command fetches the index on entering the endgame selector and fetches
 individual puzzles on selection; loaded puzzles are cached for the command
-execution and cleared on exit. The first two puzzles were supplied as
-`/tmp/傌炮兵圍城.json` and `/tmp/雙俥夾車攻.json`.
+execution and cleared on exit. Requests include `ENDGAME_DATA_VERSION` as a
+query parameter so browsers can fetch updated index and puzzle data after a
+deployment.
 
 Generate more puzzles with upstream `tools/game-analyze.mjs`, then import:
 
