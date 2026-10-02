@@ -12,8 +12,8 @@ The rules, board, notation, constants and Zobrist modules reside in
 `options.rootMoves` (optional legal candidate list), used only at the root;
 internal search moves remain unrestricted. Preserve these adaptations when
 synchronizing upstream. AI runs in a disposable module worker, with maximum
-depths 2/4/6 plies and a 3,000ms search budget for all difficulties. The final
-completed iteration supplies the move; if no iteration completes, use a legal
+depths 1/2/4 plies (Easy/Medium/Hard) and a 3,000ms search budget for all
+difficulties. The final completed iteration supplies the move; if no iteration completes, use a legal
 root candidate. Worker startup and move animation are outside this budget.
 
 Match repetition is not adjudicated. AI root candidates prefer positions

@@ -110,7 +110,7 @@ export const renderMethods = {
             }
         }
         const title = this._mode === 'endgame' ? '中國象棋 — 殘局遊戲' : '中國象棋 — 人機對弈';
-        root.writeStr(0, 2, bold(cyan(title)));
+        root.writeStr(0, SIDE_X, bold(cyan(title)));
         const label = this._mode === 'endgame' ? this._puzzle?.meta.name ?? '' : this._difficulty ? this._difficulty.toUpperCase() : '';
         root.writeStr(2, SIDE_X, bold(yellow(clip(label, SIDE_W))));
         const side = this._human === 'black' ? '黑' : '紅';
