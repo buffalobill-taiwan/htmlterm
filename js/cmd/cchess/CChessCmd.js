@@ -12,6 +12,9 @@ import { boardKey, positionKey, hasLost, responseMove } from './endgames.js';
 import { animateMove } from './animation.js';
 import { ConfirmDialog } from '../../dialog/ConfirmDialog.js';
 import { renderMethods } from './render.js';
+import { EndgameSelectDialog } from './EndgameSelectDialog.js';
+
+const ENDGAME_DATA_VERSION = '2026-10-02T03:08:57Z';
 
 export class CChessCmd extends CmdBase {
     execute(args) {
@@ -72,7 +75,9 @@ export class CChessCmd extends CmdBase {
     }
 
     async _fetchJSON(file, signal) {
-        const response = await fetch(new URL(`../../data/cchess/${file}`, import.meta.url), { signal });
+        const url = new URL(`../../data/cchess/${file}`, import.meta.url);
+        url.searchParams.set('v', ENDGAME_DATA_VERSION);
+        const response = await fetch(url, { signal });
         if (!response.ok) throw new Error(`載入失敗：${response.status}`);
         return response.json();
     }
@@ -89,7 +94,12 @@ export class CChessCmd extends CmdBase {
             list.sort((a, b) => a.step - b.step);
             this._index = list;
             this._busy = false; this._message = null;
-            this._choice('選擇殘局', list.map(p => `${p.name}（${p.step} 步）`), i => this._loadEndgame(list[i]), true, () => this._pickMode());
+            if (this._dialog) { this._dialog.close(); this._dialog = null; }
+            this._dialog = this.openDialog(EndgameSelectDialog, 'cchess-endgame', {
+                options: list,
+                onSelect: i => { this._dialog = null; this._loadEndgame(list[i]); },
+                onCancel: () => { this._dialog = null; this._pickMode(); },
+            });
         } catch (error) {
             if (epoch === this._epoch) this._fail(error);
         }

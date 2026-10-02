@@ -22,5 +22,23 @@
     "name": "兵逼將死",
     "step": 4,
     "file": "endgame-003.json"
+  },
+  {
+    "id": "endgame-005",
+    "name": "俥炮兵破關",
+    "step": 4,
+    "file": "endgame-005.json"
+  },
+  {
+    "id": "endgame-007",
+    "name": "炮勇致勝",
+    "step": 5,
+    "file": "endgame-007.json"
+  },
+  {
+    "id": "endgame-006",
+    "name": "俥炮兵打",
+    "step": 6,
+    "file": "endgame-006.json"
   }
 ]
