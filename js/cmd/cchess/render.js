@@ -92,7 +92,6 @@ export const renderMethods = {
         for (let r = 0; r < BOARD_H; r++) {
             for (let c = 0; c < BOARD_W; c++) vb.setCell(r, c, this._gridVB.getCell(r, c));
         }
-        if (!this._board) for (const row of vb._buffer) row.fill(_blankCell);
         if (this._board) {
             for (let r = 0; r < 10; r++) for (let c = 0; c < 9; c++) {
                 const piece = this._board[r][c];

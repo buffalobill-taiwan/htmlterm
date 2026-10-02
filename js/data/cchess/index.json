@@ -18,12 +18,6 @@
     "file": "horse-cannon-pawn.json"
   },
   {
-    "id": "endgame-003",
-    "name": "兵逼將死",
-    "step": 4,
-    "file": "endgame-003.json"
-  },
-  {
     "id": "endgame-005",
     "name": "俥炮兵破關",
     "step": 4,
