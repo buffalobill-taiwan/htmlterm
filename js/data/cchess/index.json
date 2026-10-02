@@ -12,6 +12,12 @@
     "file": "double-rook.json"
   },
   {
+    "id": "endgame-010",
+    "name": "陷陣俥傌驚",
+    "step": 3,
+    "file": "endgame-010.json"
+  },
+  {
     "id": "horse-cannon-pawn",
     "name": "傌炮兵圍城",
     "step": 4,
@@ -24,6 +30,12 @@
     "file": "endgame-005.json"
   },
   {
+    "id": "endgame-008",
+    "name": "炮兵傳奇",
+    "step": 4,
+    "file": "endgame-008.json"
+  },
+  {
     "id": "endgame-007",
     "name": "炮勇致勝",
     "step": 5,
@@ -34,5 +46,17 @@
     "name": "俥炮兵打",
     "step": 6,
     "file": "endgame-006.json"
+  },
+  {
+    "id": "endgame-011",
+    "name": "前仆後繼",
+    "step": 7,
+    "file": "endgame-011.json"
+  },
+  {
+    "id": "endgame-009",
+    "name": "側翼總攻",
+    "step": 8,
+    "file": "endgame-009.json"
   }
 ]
