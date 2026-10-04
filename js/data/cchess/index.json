@@ -18,6 +18,12 @@
     "file": "endgame-010.json"
   },
   {
+    "id": "endgame-012",
+    "name": "連環計",
+    "step": 3,
+    "file": "endgame-012.json"
+  },
+  {
     "id": "horse-cannon-pawn",
     "name": "傌炮兵圍城",
     "step": 4,
