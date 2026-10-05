@@ -14,7 +14,7 @@ import { ConfirmDialog } from '../../dialog/ConfirmDialog.js';
 import { renderMethods } from './render.js';
 import { EndgameSelectDialog } from './EndgameSelectDialog.js';
 
-const ENDGAME_DATA_VERSION = '2026-10-04T05:34:47Z';
+const ENDGAME_DATA_VERSION = '2026-10-05T06:19:37Z';
 
 export class CChessCmd extends CmdBase {
     execute(args) {

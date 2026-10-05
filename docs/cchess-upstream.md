@@ -33,7 +33,10 @@ includes `endgame-005` (俥炮兵破關, 4 steps), `endgame-007` (炮勇致勝, 
 steps), and `endgame-006` (俥炮兵打, 6 steps), in addition to the earlier
 puzzles, plus `endgame-008` (炮兵傳奇, 4 steps) and `endgame-009` (側翼總攻,
 8 steps), `endgame-010` (陷陣俥傌驚, 3 steps), and `endgame-011` (前仆後繼,
-7 steps), and `endgame-012` (連環計, 3 steps). 側翼總攻 and 前仆後繼 had null step counts in their source files;
+7 steps), and `endgame-012` (連環計, 3 steps), and `endgame-013` (雄俥破關,
+5 steps), `endgame-014` (炮對砲, 5 steps), and `endgame-015` (性命逐輕俥,
+6 steps), `endgame-016` (橫行無忌, 6 steps), and `endgame-017` (三出將,
+7 steps). 側翼總攻 and 前仆後繼 had null step counts in their source files;
 their respective 8-step and 7-step minima were computed by breadth-first
 traversal of the supplied response tables.
 The first two puzzles were

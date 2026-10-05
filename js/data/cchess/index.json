@@ -48,16 +48,46 @@
     "file": "endgame-007.json"
   },
   {
+    "id": "endgame-013",
+    "name": "雄俥破關",
+    "step": 5,
+    "file": "endgame-013.json"
+  },
+  {
+    "id": "endgame-014",
+    "name": "炮對砲",
+    "step": 5,
+    "file": "endgame-014.json"
+  },
+  {
     "id": "endgame-006",
     "name": "俥炮兵打",
     "step": 6,
     "file": "endgame-006.json"
   },
   {
+    "id": "endgame-015",
+    "name": "性命逐輕俥",
+    "step": 6,
+    "file": "endgame-015.json"
+  },
+  {
+    "id": "endgame-016",
+    "name": "橫行無忌",
+    "step": 6,
+    "file": "endgame-016.json"
+  },
+  {
     "id": "endgame-011",
     "name": "前仆後繼",
     "step": 7,
     "file": "endgame-011.json"
+  },
+  {
+    "id": "endgame-017",
+    "name": "三出將",
+    "step": 7,
+    "file": "endgame-017.json"
   },
   {
     "id": "endgame-009",
