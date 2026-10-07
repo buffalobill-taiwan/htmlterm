@@ -1,6 +1,6 @@
 import { defaultAttr, applySGR, makeCell } from '../util/sgr.js';
 import { isWide } from '../util/display-width.js';
-import { DEFAULT_FG, DEFAULT_BG, SCROLLBACK_MAX, TAB_WIDTH } from '../util/constants.js';
+import { DEFAULT_FG, DEFAULT_BG, SCROLLBACK_MAX, SCROLLBACK_TRIM_SLACK, TAB_WIDTH } from '../util/constants.js';
 
 export class Screen {
     constructor(cols, rows) {
@@ -25,19 +25,15 @@ export class Screen {
         this.modes = {
             applicationCursorKeys: false,
             bracketedPaste: false,
+            insertMode: false,
         };
 
-        this.mouseMode = 0;
+        this.mouseMode = 0;       // event mode: 0, 1000, 1002 or 1003
+        this.mouseEncoding = 0;   // 0 = X10, 1006 = SGR
 
         this._cursorHidden = false;
 
         this.overlays = [];
-
-        this._normalLines = null;
-        this._normalCurX = 0;
-        this._normalCurY = 0;
-        this._normalViewOffset = 0;
-        this._normalScroll = null;
 
         this._initBuffer();
     }
@@ -61,10 +57,20 @@ export class Screen {
         while (i > 0 && this.overlays[i - 1]._overlayRank > rank) i--;
         this.overlays.splice(i, 0, ov);
         ov._overlayRank = rank;
+        this._markOverlayDirty(ov);
     }
     removeOverlay(ov) {
         const i = this.overlays.indexOf(ov);
-        if (i >= 0) this.overlays.splice(i, 1);
+        if (i >= 0) {
+            this.overlays.splice(i, 1);
+            this._markOverlayDirty(ov);
+        }
+    }
+    // Callers no longer need to remember markRowDirty() around overlay changes.
+    _markOverlayDirty(ov) {
+        const top = Math.max(0, ov.y);
+        const bottom = Math.min(this.rows - 1, ov.y + ov.h - 1);
+        for (let r = top; r <= bottom; r++) this.markRowDirty(r);
     }
 
     getCellAt(col, row) {
@@ -85,27 +91,20 @@ export class Screen {
         return isWide(ch);
     }
 
+    // Cursor motion only moves the separate #cursor element; it never changes
+    // cell content, so these deliberately skip dirty marking.
     cursorUp(n) {
-        this.markRowDirty(this.curY);
         this.curY = Math.max(0, this.curY - n);
-        this.markRowDirty(this.curY);
     }
 
     cursorDown(n) {
-        this.markRowDirty(this.curY);
         this.curY = Math.min(this.rows - 1, this.curY + n);
-        this.markRowDirty(this.curY);
     }
 
     cursorForward(n) {
         const target = this.curX + n;
         if (target >= this.cols) {
-            const rowsDown = Math.min(this.rows - 1 - this.curY, Math.floor(target / this.cols));
-            if (rowsDown > 0) {
-                this.markRowDirty(this.curY);
-                this.curY += rowsDown;
-                this.markRowDirty(this.curY);
-            }
+            this.curY = Math.min(this.rows - 1, this.curY + Math.floor(target / this.cols));
             this.curX = target % this.cols;
         } else {
             this.curX = target;
@@ -116,11 +115,7 @@ export class Screen {
         const target = this.curX - n;
         if (target < 0) {
             const rowsUp = Math.min(this.curY, Math.ceil(-target / this.cols));
-            if (rowsUp > 0) {
-                this.markRowDirty(this.curY);
-                this.curY -= rowsUp;
-                this.markRowDirty(this.curY);
-            }
+            this.curY -= rowsUp;
             this.curX = ((target % this.cols) + this.cols) % this.cols;
         } else {
             this.curX = target;
@@ -128,16 +123,12 @@ export class Screen {
     }
 
     cursorPos(row, col) {
-        this.markRowDirty(this.curY);
         this.curY = Math.max(0, Math.min(this.rows - 1, row - 1));
         this.curX = Math.max(0, Math.min(this.cols - 1, col - 1));
-        this.markRowDirty(this.curY);
     }
 
     rowPos(row) {
-        this.markRowDirty(this.curY);
         this.curY = Math.max(0, Math.min(this.rows - 1, row - 1));
-        this.markRowDirty(this.curY);
     }
 
     carriageReturn() {
@@ -174,7 +165,7 @@ export class Screen {
         this.markRowDirty(this.curY);
         if (this.curY === this.scrollTop) {
             this._scrollDown(n);
-        } else {
+        } else if (this.curY > 0) {
             this.curY--;
         }
         this.markRowDirty(this.curY);
@@ -197,6 +188,11 @@ export class Screen {
         const row = this.buffer[this.curY];
         if (!row) return;
 
+        if (this.modes.insertMode) {
+            for (let c = this.cols - 1; c >= this.curX + cell.width; c--) row[c] = row[c - cell.width];
+            for (let c = this.curX; c < this.curX + cell.width; c++) row[c] = this._makeCell(' ');
+        }
+
         row[this.curX] = cell;
         if (cell.width === 2 && this.curX + 1 < this.cols) {
             row[this.curX + 1] = {
@@ -208,8 +204,42 @@ export class Screen {
                 width: 0,
             };
         }
+        // Overwriting half of an existing wide glyph must clear its partner cell.
+        this._repairWideAt(row, this.curX);
         this.markRowDirty(this.curY);
         this.curX += cell.width;
+    }
+
+    // Re-validate the wide-glyph pair around column c: a width-2 cell needs a
+    // width-0 continuation after it, and a width-0 cell needs a width-2 lead
+    // before it. Anything else is a leftover half and becomes a blank.
+    _repairWideAt(row, c) {
+        for (let i = c - 1; i <= c + 2; i++) {
+            if (i < 0 || i >= this.cols) continue;
+            const cell = row[i];
+            if (!cell) continue;
+            if (cell.width === 0) {
+                const lead = i > 0 ? row[i - 1] : null;
+                if (!lead || lead.width !== 2) row[i] = this._makeCell(' ');
+            } else if (cell.width === 2) {
+                const next = i + 1 < this.cols ? row[i + 1] : null;
+                if (!next || next.width !== 0) row[i] = this._makeCell(' ');
+            }
+        }
+    }
+
+    _repairRow(row) {
+        for (let c = 0; c < this.cols; c++) {
+            const cell = row[c];
+            if (!cell) continue;
+            if (cell.width === 0) {
+                const lead = c > 0 ? row[c - 1] : null;
+                if (!lead || lead.width !== 2) row[c] = this._makeCell(' ');
+            } else if (cell.width === 2) {
+                const next = c + 1 < this.cols ? row[c + 1] : null;
+                if (!next || next.width !== 0) row[c] = this._makeCell(' ');
+            }
+        }
     }
 
     _writeBigChar(ch) {
@@ -220,9 +250,9 @@ export class Screen {
             this.lineFeedEdge();
         }
 
-        if (this.curY >= this.rows - 1) {
+        if (this.curY + 1 > this.scrollBottom) {
             this._scrollUp(1);
-            this.curY = this.rows - 2;
+            this.curY = Math.max(this.scrollTop, this.scrollBottom - 1);
         }
 
         for (let r = 0; r < 2; r++) {
@@ -255,26 +285,44 @@ export class Screen {
         const oldCols = this.cols;
         this.cols = newCols;
         this.rows = newRows;
+        // A scroll region defined before the resize rarely survives a new grid
+        // size; falling back to the full screen is the safe interpretation.
+        this.scrollTop = 0;
         this.scrollBottom = newRows - 1;
 
-        while (this.buffer.length < newRows) {
-            this.buffer.push(this._emptyRow());
+        // Fit scrollback first: rows dropped out of the primary buffer below are
+        // pushed onto scrollback already fitted.
+        for (let i = 0; i < this.scrollback.length; i++) {
+            this._fitRow(this.scrollback[i], oldCols, newCols);
         }
-        while (this.buffer.length > newRows) {
-            this.buffer.pop();
-        }
-        for (let r = 0; r < newRows; r++) {
-            const row = this.buffer[r];
-            if (!row) continue;
-            if (newCols > oldCols) {
-                for (let c = oldCols; c < newCols; c++) row.push(this._makeCell(' '));
-            } else if (newCols < oldCols) {
-                row.length = newCols;
-            }
-        }
+        this._fitBuffer(this.buffer, oldCols, newCols, newRows, !this._primaryBuffer);
+        if (this._primaryBuffer) this._fitBuffer(this._primaryBuffer, oldCols, newCols, newRows, false);
+
         this.curX = Math.min(this.curX, newCols - 1);
         this.curY = Math.min(this.curY, newRows - 1);
+        this.viewOffset = Math.min(this.viewOffset, this.maxViewOffset());
         this.markAllDirty();
+    }
+
+    _fitRow(row, oldCols, newCols) {
+        if (!row) return;
+        if (newCols > oldCols) {
+            for (let c = oldCols; c < newCols; c++) row.push(this._makeCell(' '));
+        } else if (newCols < oldCols) {
+            const cut = row[newCols - 1];
+            // Never truncate in the middle of a wide glyph.
+            if (cut && cut.width === 2) row[newCols - 1] = this._makeCell(' ');
+            row.length = newCols;
+        }
+    }
+
+    _fitBuffer(buf, oldCols, newCols, newRows, keepInScrollback) {
+        for (const row of buf) this._fitRow(row, oldCols, newCols);
+        while (buf.length > newRows) {
+            const row = buf.pop();
+            if (keepInScrollback && row) this._pushScrollback(row);
+        }
+        while (buf.length < newRows) buf.push(this._emptyRow());
     }
 
     scrollbackUp(n) {
@@ -311,8 +359,8 @@ export class Screen {
         this.curY = this._primaryCurY || 0;
         this.viewOffset = this._primaryViewOffset || 0;
         if (this._primaryScroll) {
-            this.scrollTop = this._primaryScroll.top;
-            this.scrollBottom = this._primaryScroll.bottom;
+            this.scrollTop = Math.max(0, Math.min(this._primaryScroll.top, this.rows - 1));
+            this.scrollBottom = Math.max(this.scrollTop, Math.min(this._primaryScroll.bottom, this.rows - 1));
         }
         this._primaryBuffer = null;
         this.markAllDirty();
@@ -348,23 +396,36 @@ export class Screen {
     }
 
     _makeCell(ch) {
-        if (!this._cachedEmptyCell) {
-            this._cachedEmptyCell = Object.freeze(makeCell(' ', defaultAttr(), 1));
-        }
-        if (ch === ' ' && this.attr.fg === DEFAULT_FG && this.attr.bg === DEFAULT_BG &&
-            !this.attr.bold && !this.attr.dim && !this.attr.italic &&
-            !this.attr.underline && !this.attr.blink && !this.attr.inverse &&
-            !this.attr.conceal && !this.attr.crossedOut) {
-            return this._cachedEmptyCell;
-        }
+        if (ch === ' ') return this._blankCell();
         return makeCell(ch, this.attr, this.isWide(ch) ? 2 : 1);
+    }
+
+    // Blank cells are immutable, so one cached instance per attribute state is
+    // shared by every erased cell and empty row (major GC win during scrolling).
+    _blankCell() {
+        const a = this.attr;
+        const flags = (a.bold ? 1 : 0) | (a.dim ? 2 : 0) | (a.italic ? 4 : 0) |
+                      (a.underline ? 8 : 0) | (a.blink ? 16 : 0) | (a.inverse ? 32 : 0) |
+                      (a.conceal ? 64 : 0) | (a.crossedOut ? 128 : 0);
+        if (this._blankRef && this._blankFlags === flags &&
+            this._blankFg === a.fg && this._blankBg === a.bg) {
+            return this._blankRef;
+        }
+        if (flags === 0 && a.fg === DEFAULT_FG && a.bg === DEFAULT_BG) {
+            if (!this._cachedEmptyCell) this._cachedEmptyCell = Object.freeze(makeCell(' ', defaultAttr(), 1));
+            this._blankRef = this._cachedEmptyCell;
+        } else {
+            this._blankRef = Object.freeze(makeCell(' ', a, 1));
+        }
+        this._blankFlags = flags;
+        this._blankFg = a.fg;
+        this._blankBg = a.bg;
+        return this._blankRef;
     }
 
     _emptyRow() {
         const row = new Array(this.cols);
-        for (let i = 0; i < this.cols; i++) {
-            row[i] = this._makeCell(' ');
-        }
+        row.fill(this._blankCell());
         return row;
     }
 
@@ -375,13 +436,18 @@ export class Screen {
         }
     }
 
+    _pushScrollback(row) {
+        this.scrollback.push(row);
+        // Trim in batches: shift() on every line is O(scrollbackSize).
+        if (this.scrollback.length > this.scrollbackSize + SCROLLBACK_TRIM_SLACK) {
+            this.scrollback.splice(0, this.scrollback.length - this.scrollbackSize);
+        }
+    }
+
     _scrollUp(n) {
         for (let i = 0; i < n; i++) {
             if (this.scrollTop === 0) {
-                this.scrollback.push(Array.from(this.buffer[0]));
-                if (this.scrollback.length > this.scrollbackSize) {
-                    this.scrollback.shift();
-                }
+                this._pushScrollback(Array.from(this.buffer[0]));
             }
             for (let r = this.scrollTop; r < this.scrollBottom; r++) {
                 this.buffer[r] = this.buffer[r + 1];
@@ -413,6 +479,7 @@ export class Screen {
             this._clearRows(0, this.rows - 1);
         } else if (mode === 3) {
             this.scrollback = [];
+            this.viewOffset = 0;
             this._clearRows(0, this.rows - 1);
         }
     }
@@ -420,13 +487,17 @@ export class Screen {
     eraseLine(mode) {
         const row = this.buffer[this.curY];
         if (!row) return;
+        // A cursor parked past the last column means pending wrap: the erase
+        // starts at the last real cell, not at a column that does not exist.
+        const x = Math.min(this.curX, this.cols - 1);
         if (mode === 0) {
-            for (let c = this.curX; c < this.cols; c++) row[c] = this._makeCell(' ');
+            for (let c = x; c < this.cols; c++) row[c] = this._makeCell(' ');
         } else if (mode === 1) {
-            for (let c = 0; c <= this.curX; c++) row[c] = this._makeCell(' ');
+            for (let c = 0; c <= x; c++) row[c] = this._makeCell(' ');
         } else if (mode === 2) {
             for (let c = 0; c < this.cols; c++) row[c] = this._makeCell(' ');
         }
+        this._repairRow(row);
         this.markRowDirty(this.curY);
     }
 
@@ -439,7 +510,7 @@ export class Screen {
             }
             this.buffer[top] = this._emptyRow();
         }
-        this.markAllDirty();
+        this._markRegionDirty(top, this.scrollBottom);
     }
 
     deleteLines(n) {
@@ -451,43 +522,53 @@ export class Screen {
             }
             this.buffer[this.scrollBottom] = this._emptyRow();
         }
-        this.markAllDirty();
+        this._markRegionDirty(top, this.scrollBottom);
     }
 
     insertChars(n) {
         const row = this.buffer[this.curY];
         if (!row) return;
-        n = Math.min(n, this.cols - this.curX);
-        for (let c = this.cols - 1; c >= this.curX + n; c--) {
+        const x = Math.min(this.curX, this.cols - 1);
+        n = Math.min(n, this.cols - x);
+        for (let c = this.cols - 1; c >= x + n; c--) {
             row[c] = row[c - n];
         }
-        for (let c = this.curX; c < this.curX + n; c++) {
+        for (let c = x; c < x + n; c++) {
             row[c] = this._makeCell(' ');
         }
+        this._repairRow(row);
         this.markRowDirty(this.curY);
     }
 
     deleteChars(n) {
         const row = this.buffer[this.curY];
         if (!row) return;
-        n = Math.min(n, this.cols - this.curX);
-        for (let c = this.curX; c < this.cols - n; c++) {
+        const x = Math.min(this.curX, this.cols - 1);
+        n = Math.min(n, this.cols - x);
+        for (let c = x; c < this.cols - n; c++) {
             row[c] = row[c + n];
         }
         for (let c = this.cols - n; c < this.cols; c++) {
             row[c] = this._makeCell(' ');
         }
+        this._repairRow(row);
         this.markRowDirty(this.curY);
     }
 
     eraseChars(n) {
         const row = this.buffer[this.curY];
         if (!row) return;
-        n = Math.min(n, this.cols - this.curX);
-        for (let c = this.curX; c < this.curX + n; c++) {
+        const x = Math.min(this.curX, this.cols - 1);
+        n = Math.min(n, this.cols - x);
+        for (let c = x; c < x + n; c++) {
             row[c] = this._makeCell(' ');
         }
+        this._repairRow(row);
         this.markRowDirty(this.curY);
+    }
+
+    _markRegionDirty(from, to) {
+        for (let r = Math.max(0, from); r <= Math.min(this.rows - 1, to); r++) this.markRowDirty(r);
     }
 
     _parseExtendedColor(params, i, type) {

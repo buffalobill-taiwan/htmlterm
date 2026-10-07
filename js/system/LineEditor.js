@@ -12,7 +12,10 @@ export class LineEditor {
         this.term = term;
         this._onExecute    = callbacks.onExecute    || (() => {});
         this._onShowPrompt = callbacks.onShowPrompt || (() => {});
-
+        // readLine() aborts through SystemManager._abortAll(), which prints its
+        // own ^C; echoing here as well would print it twice.
+        this._echoCtrlC    = callbacks.echoCtrlC !== false;
+        this._restAfterEnter = '';
         this._model   = new TextInputModel();
         this.history  = [];
         this.historyPos  = -1;
@@ -24,6 +27,19 @@ export class LineEditor {
         this._cursorDisplayCol = 0;
         this._lastTotalWidth   = 0;
         this._lastPromptRow    = this.term.curY;
+        this._restAfterEnter = '';
+    }
+
+    /**
+     * Text that followed Enter in the same chunk (a paste such as
+     * "ls\nhelp"). It must go back through the system input queue so the
+     * newly started command gets first claim on it.
+     * @returns {string}
+     */
+    takeRest() {
+        const rest = this._restAfterEnter;
+        this._restAfterEnter = '';
+        return rest;
     }
 
     setCommands(names) { this._commands = names; }
@@ -121,7 +137,7 @@ export class LineEditor {
             const code = ch.charCodeAt(0);
 
             if (code === 0x03) {                          // Ctrl+C
-                this.term.write('^C\n');
+                if (this._echoCtrlC) this.term.write('^C\n');
                 this._model.reset();
                 this._onShowPrompt();
                 consumed = true; i++; continue;
@@ -144,8 +160,9 @@ export class LineEditor {
                 this._model.reset();
                 this.historyPos = -1;
                 this._savedLine = null;
+                this._restAfterEnter = data.slice(i + 1);
                 this._onExecute(line);
-                consumed = true; i++; continue;
+                return true;
             }
             if (code === 0x7F || code === 0x08) {         // Backspace
                 if (this._model.backspace() !== 'none') this._redraw();

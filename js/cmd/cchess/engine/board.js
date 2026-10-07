@@ -5,9 +5,6 @@
 
 import { ROWS, COLS } from './constants.js';
 
-export function deepCopyBoard(src) {
-  return src.map(row => row.map(cell => cell ? { type: cell.type, color: cell.color } : null));
-}
 
 export function applyBoardCopy(src, move) {
   const nb = src.map(row => row.map(cell => cell ? { ...cell } : null));

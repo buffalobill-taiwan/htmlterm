@@ -64,9 +64,14 @@ export class InputDialog extends Dialog {
                 return this.complete(this._onCancel);
             }
             if (code === 0x1B) {
-                // Single ESC = cancel; ESC [ / ESC O = cursor/edit sequence
-                const csi = parseCSI(data.slice(i));
-                if (!csi) { return this.complete(this._onCancel); }
+                // Single ESC = cancel; anything else ESC-prefixed is a sequence.
+                const rest = data.slice(i);
+                const csi = parseCSI(rest);
+                if (!csi) {
+                    if (rest.length === 1) return this.complete(this._onCancel);
+                    i++;                     // unknown/partial sequence: drop the ESC
+                    continue;
+                }
                 this._handleCSIFinal(csi.final, csi.params);
                 i += csi.consumed - 1;
                 changed = 'content';

@@ -1,7 +1,7 @@
 import { Screen } from './Screen.js';
 import { Parser } from './Parser.js';
 import { Renderer } from './Renderer.js';
-import { DEFAULT_COLS, DEFAULT_ROWS } from '../util/constants.js';
+import { DEFAULT_COLS, DEFAULT_ROWS, MOUSE_SGR } from '../util/constants.js';
 import { warn } from '../util/sgr.js';
 
 export class Terminal {
@@ -22,6 +22,7 @@ export class Terminal {
         this.onMouse = null;
         this.onKeyUp = null;
         this.mouseBtn = 0;
+        this._mouseButtonDown = false;
         this.mouseX = 0;
         this.mouseY = 0;
 
@@ -39,7 +40,7 @@ export class Terminal {
     get curY() { return this.screen.curY; }
     set curY(v) { this.screen.curY = v; }
     get viewOffset() { return this.screen.viewOffset; }
-    set viewOffset(v) { this.screen.viewOffset = v; }
+    set viewOffset(v) { this.screen.viewOffset = v; this.renderer.markAllDirty(); }
     get overlays() { return this.screen.overlays; }
     addOverlay(ov, group) { this.screen.addOverlay(ov, group); }
     removeOverlay(ov) { this.screen.removeOverlay(ov); }
@@ -50,6 +51,8 @@ export class Terminal {
     get modes() { return this.screen.modes; }
     get mouseMode() { return this.screen.mouseMode; }
     set mouseMode(v) { this.screen.mouseMode = v; }
+    get mouseEncoding() { return this.screen.mouseEncoding; }
+    set mouseEncoding(v) { this.screen.mouseEncoding = v; }
     markRowDirty(r) { this.screen.markRowDirty(r); }
     markAllDirty() { this.screen.markAllDirty(); }
     isWide(ch) { return this.screen.isWide(ch); }
@@ -283,10 +286,11 @@ export class Terminal {
 
     _onKeyUp(e) {
         if (this._isComposing) return;
-        const code = e.keyCode;
-        if (code === 16 || code === 17 || code === 18 || code === 91) return;
+        if (e.key === 'Shift' || e.key === 'Control' || e.key === 'Alt' ||
+            e.key === 'Meta' || e.key === 'CapsLock') return;
         if (this.onKeyUp) this.onKeyUp(e.key);
-        if (code > 15) this._focusInput();
+        // Tab/Enter move focus around; everything else keeps the input focused.
+        if (e.key !== 'Tab' && e.key !== 'Enter') this._focusInput();
     }
 
     _onCompositionEnd(e) {
@@ -340,6 +344,7 @@ export class Terminal {
         if (this.onMouse && this.onMouse('mousedown', info)) {
             e.preventDefault();
             this.mouseBtn = info.btn;
+            this._mouseButtonDown = true;
             this.mouseX = info.col;
             this.mouseY = info.row;
             return;
@@ -349,29 +354,27 @@ export class Terminal {
         e.preventDefault();
 
         this.mouseBtn = info.btn;
+        this._mouseButtonDown = true;
         this.mouseX = info.col;
         this.mouseY = info.row;
-
-        if (this.mouseMode === 9 || this.mouseMode === 1000 || this.mouseMode === 1002 || this.mouseMode === 1003) {
-            this._sendMouseEvent('M', info.btn, info.col + 1, info.row + 1);
-        }
+        this._sendMouseEvent('press', info.btn, info.col + 1, info.row + 1);
     }
 
     _onMouseUp(e) {
         const info = this._mouseInfo(e);
+        const btn = this.mouseBtn;
+        const wasDown = this._mouseButtonDown;
+        this._mouseButtonDown = false;
+        this.mouseBtn = 0;
 
         if (this.onMouse && this.onMouse('mouseup', info)) {
             e.preventDefault();
             return;
         }
 
-        if (!this.onData || this.mouseMode === 0) return;
-        if (this.mouseMode === 1000 || this.mouseMode === 1002 || this.mouseMode === 1003) {
-            if (info.col < 0 || info.col >= this.cols || info.row < 0 || info.row >= this.rows) return;
-            if (this.mouseMode === 9) return;
-            this._sendMouseEvent('m', this.mouseBtn, info.col + 1, info.row + 1);
-        }
-        this.mouseBtn = 0;
+        if (!wasDown || !this.onData || this.mouseMode === 0) return;
+        if (info.col < 0 || info.col >= this.cols || info.row < 0 || info.row >= this.rows) return;
+        this._sendMouseEvent('release', btn, info.col + 1, info.row + 1);
     }
 
     _onMouseMove(e) {
@@ -381,9 +384,13 @@ export class Terminal {
             return;
         }
 
-        if (!this.onData || this.mouseMode !== 1003) return;
+        if (!this.onData) return;
         if (info.col < 0 || info.col >= this.cols || info.row < 0 || info.row >= this.rows) return;
-        this._sendMouseEvent('M', this.mouseBtn, info.col + 1, info.row + 1);
+        // 1002 reports motion only while a button is held; 1003 reports it always.
+        if (this.mouseMode === 1002 && !this._mouseButtonDown) return;
+        if (this.mouseMode !== 1002 && this.mouseMode !== 1003) return;
+        const btn = this._mouseButtonDown ? this.mouseBtn : 3;
+        this._sendMouseEvent('motion', btn, info.col + 1, info.row + 1);
     }
 
     _mouseInfo(e) {
@@ -404,12 +411,36 @@ export class Terminal {
         };
     }
 
-    _sendMouseEvent(prefix, btn, col, row) {
-        if (this.mouseMode === 1006) {
-            this._send(`\x1B[<${btn};${col};${row}${prefix}`);
-        } else {
-            const ev = (prefix === 'm') ? btn + 64 : btn + 32;
-            this._send('\x1B[' + prefix + String.fromCharCode(ev) + String.fromCharCode(col + 32) + String.fromCharCode(row + 32));
+    /**
+     * Report a mouse event to the application in the active encoding.
+     * @param {'press'|'release'|'motion'} type
+     * @param {number} btn button code including modifier bits
+     * @param {number} col 1-based column
+     * @param {number} row 1-based row
+     */
+    _sendMouseEvent(type, btn, col, row) {
+        const mods = btn & 0x1C;
+        const held = btn & 0x03;
+
+        if (this.mouseEncoding === MOUSE_SGR) {
+            if (type === 'release') {
+                this._send(`\x1B[<${mods | held};${col};${row}m`);
+            } else {
+                const cb = mods | held | (type === 'motion' ? 32 : 0);
+                this._send(`\x1B[<${cb};${col};${row}M`);
+            }
+            return;
         }
+
+        // X10 encoding: positions above 223 do not fit in one byte. Send
+        // nothing rather than a report pointing at the wrong cell.
+        if (col > 223 || row > 223 || col < 1 || row < 1) return;
+        let cb;
+        if (type === 'release') cb = mods | 3;
+        else cb = mods | held | (type === 'motion' ? 32 : 0);
+        this._send('\x1B[M' +
+            String.fromCharCode(cb + 32) +
+            String.fromCharCode(col + 32) +
+            String.fromCharCode(row + 32));
     }
 }

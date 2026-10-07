@@ -458,31 +458,3 @@ export async function searchRootAsync(b, maxDepth, timeLimit, options = {}) {
   best.interrupted = isCancelled() || Date.now() >= deadline;
   return best;
 }
-
-export async function findRefutation(b, color, maxDepth, startTime, timeLimit, options = {}) {
-  const deadline = Math.min(options.deadline ?? (startTime + timeLimit), startTime + timeLimit);
-  const isCancelled = options.isCancelled ?? (() => false);
-  const continuousCheck = options.continuousCheck ?? false;
-  let best = { score: 0, move: null, pv: [], nodes: 0 };
-  const tt = new Array(TT_SIZE);
-  const killers = [];
-  const orderScratch = new Int32Array(ORDER_SCRATCH_LEN);
-  let totalNodes = 0;
-  const rootHash = zobristFromBoard(b, color, continuousCheck);
-  for (let d = 2; d <= maxDepth; d += 2) {
-    if (isCancelled() || Date.now() >= deadline) break;
-    const ctx = createSearchContext({ deadline, isCancelled, continuousCheck, maxDepth: d, tt, killers, orderScratch });
-    const r = await alphaBeta(b, color, 0, -INF, INF, ctx, rootHash);
-    totalNodes += ctx.nodes;
-    if (!r.completed) break;
-    if (Math.abs(r.score) > MATE_VAL / 2) {
-      const { extended, verified } = await extendMatePV(b, r.pv, color, { deadline, isCancelled, continuousCheck });
-      if (!verified) continue;
-      best = { score: r.score, move: r.move, pv: extended, nodes: totalNodes };
-      break;
-    }
-    if (r.move) best = { score: r.score, move: r.move, pv: r.pv, nodes: totalNodes };
-  }
-  best.interrupted = isCancelled() || Date.now() >= deadline;
-  return best;
-}

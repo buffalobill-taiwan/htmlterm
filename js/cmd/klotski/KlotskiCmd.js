@@ -360,7 +360,8 @@ class KlotskiCmd extends CmdBase {
                 if (s === '\x1B[3~' || s === '\x1B[2~') return;
                 if (s === '\x1B[H' || s === '\x1B[F') return;
                 if (s === '\x1B[5~' || s === '\x1B[6~') return;
-                this._quit(); return;
+                if (s === '\x1B' || data === 0x1B) this._quit();
+                return;
             }
             if (typeof data === 'string') {
                 const ch = data.toLowerCase();
@@ -379,7 +380,8 @@ class KlotskiCmd extends CmdBase {
                 if (s === '\x1B[3~' || s === '\x1B[2~') return;
                 if (s === '\x1B[H' || s === '\x1B[F') return;
                 if (s === '\x1B[5~' || s === '\x1B[6~') return;
-                this._quit(); return;
+                if (s === '\x1B' || data === 0x1B) this._quit();
+                return;
             }
             if (typeof data === 'string') {
                 const ch = data.toLowerCase();

@@ -1,4 +1,4 @@
-import { CURSOR_HIDE, CURSOR_SHOW, skipEscapeSeq } from '../util/sgr.js';
+import { CURSOR_HIDE, CURSOR_SHOW, skipEscapeSeq, warn } from '../util/sgr.js';
 
 export class Typewriter {
     constructor(term) {
@@ -37,7 +37,8 @@ export class Typewriter {
             }
         }
 
-        this._queue.push(...expanded);
+        // push(...items) throws past the engine's argument limit for a large paste.
+        for (let i = 0; i < expanded.length; i++) this._queue.push(expanded[i]);
         this._start();
     }
 
@@ -56,7 +57,13 @@ export class Typewriter {
         this._queue = [];
         this._head = 0;
         this._active = false;
-        if (out) this.term.write(out);
+        if (out) {
+            try {
+                this.term.write(out);
+            } catch (err) {
+                warn('typewriter write failed: ' + (err && err.stack ? err.stack : err));
+            }
+        }
         this._flushDrain();
     }
 
@@ -170,7 +177,14 @@ export class Typewriter {
             else out += item.ch;
         }
 
-        if (out) this.term.write(out);
+        if (out) {
+            try {
+                this.term.write(out);
+            } catch (err) {
+                // A throw here would drop the rAF chain and freeze all output.
+                warn('typewriter write failed: ' + (err && err.stack ? err.stack : err));
+            }
+        }
 
         if (this._head < this._queue.length) {
             this._rafId = requestAnimationFrame(t => this._tick(t));
@@ -185,6 +199,13 @@ export class Typewriter {
 
     _flushDrain() {
         this.term.write(CURSOR_SHOW);
-        for (const cb of this._drainCallbacks.slice()) cb();
+        // One throwing completion callback must not strand the others.
+        for (const cb of this._drainCallbacks.slice()) {
+            try {
+                cb();
+            } catch (err) {
+                warn('drain callback failed: ' + (err && err.stack ? err.stack : err));
+            }
+        }
     }
 }

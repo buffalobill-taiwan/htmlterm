@@ -73,7 +73,11 @@ export class SettingsDialog extends Dialog {
 
         if (code === 0x1B) {
             const csi = parseCSI(data);
-            if (!csi) { return this.complete(this._onCancel); }
+            if (!csi) {
+                // Only a lone ESC cancels; unrecognised sequences are ignored.
+                if (data === '\x1B' || data.length === 1) return this.complete(this._onCancel);
+                return;
+            }
             const { final } = csi;
             if (final === 'A') {
                 this._selected = this._selected > 0 ? this._selected - 1 : this._startIdx;

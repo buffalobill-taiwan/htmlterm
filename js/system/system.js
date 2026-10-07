@@ -22,7 +22,7 @@ export class SystemManager {
         this.cmdStack = [];
         this._tickQueued = false;
         this._queuedInput = [];
-        this._busy = false;
+        this._busyDepth = 0;
         this.readLineState = null;
         this._abortEpoch = 0;
         this._framePopHooks = [];
@@ -69,13 +69,15 @@ export class SystemManager {
         this.tick();
     }
 
-    get busy() { return this._busy; }
+    get busy() { return this._busyDepth > 0; }
     get abortEpoch() { return this._abortEpoch; }
 
-    holdBusy() { this._busy = true; }
+    // Counted, not boolean: animations and flash effects nest, and a single
+    // release() from an inner effect used to unblock input the outer one still owned.
+    holdBusy() { this._busyDepth++; }
     releaseBusy() {
-        this._busy = false;
-        if (!this._disposed) this.tick();
+        if (this._busyDepth > 0) this._busyDepth--;
+        if (this._busyDepth === 0 && !this._disposed) this.tick();
     }
 
     print(text) {
@@ -107,6 +109,12 @@ export class SystemManager {
     }
 
     _processStack() {
+        // Typed-ahead input is queued while output streams. A frame blocked on
+        // readLine() never re-enters the flush path by itself, so deliver here.
+        if (this.readLineState && this._queuedInput.length > 0 &&
+            !this.typewriter.isActive() && this._busyDepth === 0) {
+            this.flushQueuedInput();
+        }
         while (true) {
             while (this.cmdStack.length > 0 && this.cmdStack[this.cmdStack.length - 1].done) {
                 const finished = this.cmdStack.pop();
@@ -123,25 +131,29 @@ export class SystemManager {
 
             const frame = this.cmdStack[this.cmdStack.length - 1];
 
-            if (!frame.started) {
-                frame.started = true;
-                frame.start();
-                continue;
-            }
-
-            if (frame.blocked) return;
-
-            if (frame.persistent) {
-                if (frame._pendingActivate) {
-                    if (this.typewriter.isActive() || this._busy || this.readLineState) return;
-                    frame.onActivate();
-                    frame._pendingActivate = false;
-                    this.flushQueuedInput();
+            try {
+                if (!frame.started) {
+                    frame.started = true;
+                    frame.start();
+                    continue;
                 }
-                return;
-            }
 
-            frame.finish();
+                if (frame.blocked) return;
+
+                if (frame.persistent) {
+                    if (frame._pendingActivate) {
+                        if (this.typewriter.isActive() || this._busyDepth > 0 || this.readLineState) return;
+                        frame.onActivate();
+                        frame._pendingActivate = false;
+                        this.flushQueuedInput();
+                    }
+                    return;
+                }
+
+                frame.finish();
+            } catch (err) {
+                this.failFrame(frame, err);
+            }
         }
     }
 
@@ -174,6 +186,7 @@ export class SystemManager {
             warn('readLine called while another readLine is pending — overwriting');
         }
         const editor = new LineEditor(this.term, {
+            echoCtrlC: false,
             onExecute: (line) => {
                 this.readLineState = null;
                 callback(line.trim());
@@ -186,10 +199,19 @@ export class SystemManager {
         });
         editor.setPrompt('');
         this.readLineState = { editor };
+        if (!this.typewriter.isActive()) this.flushQueuedInput();
     }
 
     _handleReadLineInput(data) {
-        this.readLineState.editor.handleKey(data);
+        const editor = this.readLineState.editor;
+        editor.handleKey(data);
+        this.requeueRest(editor);
+    }
+
+    // Text after Enter must re-enter the queue: the command it starts may want it.
+    requeueRest(editor) {
+        const rest = editor.takeRest();
+        if (rest) this._queuedInput.unshift(rest);
     }
 
     getCommandFrame(cmd) {
@@ -204,7 +226,7 @@ export class SystemManager {
 
     _cancelFrames(fromIndex) {
         this._abortEpoch++;
-        this._busy = false;
+        this._busyDepth = 0;
         this._queuedInput = [];
         this.readLineState = null;
         this._dragTarget = null;
@@ -232,8 +254,7 @@ export class SystemManager {
 
     _checkCtrlC(data) {
         for (let i = 0; i < data.length; i++) {
-            const ch = data[i];
-            const code = ch.charCodeAt ? ch.charCodeAt(0) : ch;
+            const code = data.charCodeAt(i);
             if (code === 0x03) {
                 this._abortAll();
                 return;
@@ -274,6 +295,7 @@ export class SystemManager {
             return;
         }
         this.editor.handleKey(data);
+        this.requeueRest(this.editor);
     }
 
     closeDialog(dialog) {
@@ -304,14 +326,22 @@ export class SystemManager {
     }
 
     flushQueuedInput() {
-        const batch = this._queuedInput;
-        this._queuedInput = [];
-        for (let i = 0; i < batch.length; i++) {
-            if (this.typewriter.isActive()) {
-                this._queuedInput.push(...batch.slice(i));
-                return;
+        if (this._flushingInput) return;
+        this._flushingInput = true;
+        try {
+            const batch = this._queuedInput;
+            this._queuedInput = [];
+            for (let i = 0; i < batch.length; i++) {
+                if (this.typewriter.isActive()) {
+                    // Anything typed while draining goes after this backlog, not
+                    // before it: put the remainder back in front.
+                    this._queuedInput = batch.slice(i).concat(this._queuedInput);
+                    return;
+                }
+                this.handleInput(batch[i]);
             }
-            this.handleInput(batch[i]);
+        } finally {
+            this._flushingInput = false;
         }
     }
 
@@ -351,8 +381,9 @@ export class SystemManager {
         }
 
         if (type === 'mouseup' && this._dragTarget) {
-            this._dragTarget.endDrag();
+            const target = this._dragTarget;
             this._dragTarget = null;
+            try { target.endDrag(); } catch (err) { console.error(err); }
             return true;
         }
 
@@ -416,7 +447,7 @@ export class SystemManager {
         this._disposed = true;
         this.running = false;
         this._abortEpoch++;
-        this._busy = false;
+        this._busyDepth = 0;
         this._queuedInput = [];
         this.readLineState = null;
         this._dragTarget = null;

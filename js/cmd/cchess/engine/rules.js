@@ -122,23 +122,8 @@ export function isInCheck(b, color, kp, okp, enemyList, skipSq) {
   return false;
 }
 
-export function isCheckmate(b, color) {
-  return isInCheck(b, color) && generateLegalMoves(b, color).length === 0;
-}
 
-export function isStalemate(b, color) {
-  return !isInCheck(b, color) && generateLegalMoves(b, color).length === 0;
-}
 
-// Compute both terminal states with one legal-move generation.
-export function terminalState(b, color) {
-  const inCheck = isInCheck(b, color);
-  const moves = generateLegalMoves(b, color);
-  return {
-    isMate: inCheck && moves.length === 0,
-    isStalemate: !inCheck && moves.length === 0,
-  };
-}
 
 // ─── Pseudo-legal move generators ───
 
@@ -328,26 +313,4 @@ export function unmakeMove(b, move, undo, hash) {
   }
   b[move.from.row][move.from.col] = undo.moved;
   b[move.to.row][move.to.col] = undo.captured;
-}
-
-// Position editor constraints (distinct from legal moves during play).
-export function canPlaceAt(row, col, type, color) {
-  if (type === 'king') return inPalace(row, col, color);
-  if (type === 'advisor') {
-    const pos = color === 'red'
-      ? [[7,3],[7,5],[8,4],[9,3],[9,5]]
-      : [[0,3],[0,5],[1,4],[2,3],[2,5]];
-    return pos.some(([r,c]) => r===row && c===col);
-  }
-  if (type === 'elephant') {
-    const pos = color === 'red'
-      ? [[5,2],[5,6],[7,0],[7,4],[7,8],[9,2],[9,6]]
-      : [[0,2],[0,6],[2,0],[2,4],[2,8],[4,2],[4,6]];
-    return pos.some(([r,c]) => r===row && c===col);
-  }
-  if (type === 'soldier') {
-    if (color === 'red' && row >= 5) return (row===5||row===6) && col%2===0;
-    if (color === 'black' && row <= 4) return (row===3||row===4) && col%2===0;
-  }
-  return true;
 }

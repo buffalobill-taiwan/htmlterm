@@ -46,6 +46,33 @@ as quit:
 | PageUp / PageDown | `\x1B[5~`, `\x1B[6~` |
 | Backspace / Ctrl+C | `0x08` or `0x7F`; `0x03` |
 
+A sequence you did not match — an incomplete one such as `\x1B[` or
+`\x1B[1;`, an unknown CSI, or a modified-arrow form — must be ignored rather
+than treated as Escape. Only a lone Escape (or, for a single printable
+control byte, that byte itself) may cancel:
+
+```js
+_onKey(data) {
+    const csi = parseCSI(data);
+    if (!csi) {
+        if (data === '\x1B' || data.length === 1) return this.close();
+        return;                                   // incomplete / unrecognised
+    }
+    switch (csi.final) {
+        case 'A': this._moveBy(-1); return;
+        case 'B': this._moveBy(1); return;
+    }
+    // unknown final byte: ignore
+}
+```
+
+`parseCSI()` from `js/system/TextInputModel.js` returns
+`{ final, params, consumed }` for a complete `\x1B[` or `\x1B O` sequence and
+`null` for an incomplete or non-CSI one; `params` is the raw parameter string
+(`'1;5'`, `'?25'`). Use it instead of hand-rolling the parameter split.
+Dialogs and games in this repository follow the same rule, so a key that
+reaches a child handler is never silently quit by the parent.
+
 ## Command screen buffers and shell return
 
 For a command with a multi-row or animated layout, use a root `VirtualBuffer`

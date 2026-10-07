@@ -1,4 +1,13 @@
-import { CHAR_WIDTH, CHAR_HEIGHT } from '../util/constants.js';
+import { CHAR_WIDTH, CHAR_HEIGHT, DEFAULT_FG, DEFAULT_BG } from '../util/constants.js';
+
+// Shared fallback when a row is shorter than the viewport (transient during a
+// resize); cells are immutable so one frozen instance is safe to reuse.
+const BLANK_CELL = Object.freeze({
+    ch: ' ', fg: DEFAULT_FG, bg: DEFAULT_BG,
+    bold: false, dim: false, italic: false, underline: false,
+    blink: false, inverse: false, conceal: false, crossedOut: false,
+    width: 1,
+});
 
 export class Renderer {
     constructor(container, screen, opts = {}) {
@@ -8,7 +17,6 @@ export class Renderer {
         this._baseCharHeight = opts.charHeight || CHAR_HEIGHT;
         this.charWidth = this._baseCharWidth;
         this.charHeight = this._baseCharHeight;
-        this._scale = 1;
         this._loopRunning = false;
         this._rafId = null;
         this._disposed = false;
@@ -73,10 +81,24 @@ export class Renderer {
         const loop = () => {
             this._rafId = null;
             if (!this._loopRunning) return;
-            this._render();
+            // Schedule first so a throwing frame cannot freeze rendering forever.
             this._rafId = requestAnimationFrame(loop);
+            try {
+                this._render();
+            } catch (err) {
+                this._reportLoopError(err);
+            }
         };
         this._rafId = requestAnimationFrame(loop);
+    }
+
+    // One exception must not stop the loop, but it must not flood the console
+    // either; log at most once per second.
+    _reportLoopError(err) {
+        const now = Date.now();
+        if (now - (this._lastLoopErrorAt || 0) < 1000) return;
+        this._lastLoopErrorAt = now;
+        console.error('render loop error', err);
     }
 
     stopRenderLoop() {
@@ -150,7 +172,7 @@ export class Renderer {
         const blended = this._blendOverlays(rowIdx, dataRow);
 
         for (let c = 0; c < cols; c++) {
-            const cell = blended[c];
+            const cell = blended[c] || BLANK_CELL;
             const span = cellRow[c];
 
             if (cell.width === 0) {
@@ -181,7 +203,10 @@ export class Renderer {
                 if (span.className === cls && span._clipText === text && span._ox === ox && span._oy === oy) continue;
                 span.dataset.ox = offX;
                 span.dataset.oy = offY;
-                span.innerHTML = '<span>' + text + '</span>';
+                const clipSpan = document.createElement('span');
+                clipSpan.textContent = text;
+                span.textContent = '';
+                span.appendChild(clipSpan);
                 span.className = cls;
                 span._clipText = text;
                 span._ox = ox;
@@ -327,15 +352,24 @@ export class Renderer {
 
     _renderCursor() {
         const screen = this.screen;
-        const hidden = screen.cursorHidden || screen.viewOffset !== 0
-            || screen.curX < 0 || screen.curX >= screen.cols;
+        // A cursor parked past the last column reflects pending wrap; the block
+        // cursor belongs on the last cell of that row.
+        const col = Math.min(screen.curX, screen.cols - 1);
+        const row = Math.min(Math.max(screen.curY, 0), screen.rows - 1);
+        const hidden = screen.cursorHidden || screen.viewOffset !== 0 || screen.curX < 0;
 
-        const cell = hidden ? null : screen.getCellAt(screen.curX, screen.curY);
+        const cell = hidden ? null : screen.getCellAt(col, row);
         let rawFg = 0, rawBg = 0;
+        let cls = 'q0 b0';
         if (cell) {
             this._swapInverse(cell.fg, cell.bg, cell);
             rawFg = this._swapFg;
             rawBg = this._swapBg;
+            let fg = rawFg;
+            if (cell.bold && typeof fg === 'number' && fg < 8) fg += 8;
+            // Block cursor: cell background becomes the text color, the (possibly
+            // brightened) cell foreground becomes the background.
+            cls = this._spanClass(rawBg, fg, false, false, false, false, false);
         }
 
         // Pick the slot that is NOT currently used as _cursorCurrent for writing
@@ -343,11 +377,12 @@ export class Renderer {
 
         let next = null;
         if (!hidden) {
-            nc.x = screen.curX;
-            nc.y = screen.curY;
-            nc.ch = cell.ch;
+            nc.x = col;
+            nc.y = row;
+            nc.ch = cell ? cell.ch : ' ';
             nc.fg = rawFg;
             nc.bg = rawBg;
+            nc.cls = cls;
             nc.w = this.charWidth;
             nc.h = this.charHeight;
             next = nc;
@@ -358,7 +393,7 @@ export class Renderer {
         if (!next && !prev) return; // still hidden
         if (next && prev &&
             next.x === prev.x && next.y === prev.y &&
-            next.ch === prev.ch && next.fg === prev.fg && next.bg === prev.bg &&
+            next.ch === prev.ch && next.cls === prev.cls &&
             next.w === prev.w && next.h === prev.h) return; // unchanged
 
         this._cursorCurrent = next;
@@ -368,7 +403,7 @@ export class Renderer {
             return;
         }
 
-        this.cursorEl.className = 'b' + next.fg + ' q' + next.bg;
+        this.cursorEl.className = next.cls;
         this.cursorEl.textContent = next.ch;
         this.cursorEl.style.setProperty('--cur-col', next.x);
         this.cursorEl.style.setProperty('--cur-row', next.y);
@@ -387,7 +422,6 @@ export class Renderer {
         let scale = Math.min(maxW / baseW, maxH / baseH);
         if (scale < 1) scale = 1;
 
-        this._scale = scale;
         const wrapper = this.container.parentElement;
         if (wrapper) {
             wrapper.style.setProperty('--term-scale', scale);

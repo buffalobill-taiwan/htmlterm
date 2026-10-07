@@ -339,6 +339,7 @@ export class MemoryCmd extends CmdBase {
 
     _animateFlip(r, c, done) {
         let progress = 0;
+        if (this._flipAnimTimer) clearInterval(this._flipAnimTimer);
         this._flipAnimTimer = setInterval(() => {
             progress++;
             this._flipProgress[r][c] = progress;
@@ -380,6 +381,7 @@ export class MemoryCmd extends CmdBase {
 
     _animateClose(a, b, done) {
         let progress = FLIP_COLUMNS;
+        if (this._flipAnimTimer) clearInterval(this._flipAnimTimer);
         this._flipAnimTimer = setInterval(() => {
             progress--;
             this._flipProgress[a.r][a.c] = progress;
@@ -465,6 +467,10 @@ export class MemoryCmd extends CmdBase {
         if (this._revealTimer) {
             clearInterval(this._revealTimer);
             this._revealTimer = null;
+        }
+        if (this._flipAnimTimer) {
+            clearInterval(this._flipAnimTimer);
+            this._flipAnimTimer = null;
         }
         this.placeShellCursor(this._footerRow());
         this.close();

@@ -9,11 +9,16 @@ updates. Reuse instance scratch objects, arrays, cells, buffers, and palettes.
 - Cells are immutable after placement; place reusable references rather than
   spreading attributes into newly allocated cells. Numeric game status rows use
   `util/stat-row.js` to replace references from an immutable digit palette.
+- Blank cells and blank rows come from the cached frozen blank cell and
+  `Array.fill`, not from `_makeCell()` per column; a line feed must not
+  allocate a row of cells. Scrollback is trimmed in batches of
+  `SCROLLBACK_TRIM_SLACK` rows so a shift does not run on every line feed.
 - Iterate overlay arrays with indexed loops and dirty-row sets with `Set.forEach`.
 - Renderer value comparisons are the DOM-write skip mechanism; do not add a
   reference-only shortcut that misses visual changes.
 - Dirty only rows affected by an overlay; use `markAllDirty()` for resize,
-  scrolling, and other global changes.
+  scrollback viewOffset changes, and other global changes. Cursor-only cell
+  movement dirties nothing, so keep it free of dirty marking.
 
 ## Renderer details
 
@@ -70,6 +75,13 @@ double-width. Core font glyphs advance 8px at 16px; extended glyphs such as
 When composing a dialog frame of width `W`, content is at most `W - 2` visible
 cells. Place borders with `setCell` if content may be wide: concatenated strings
 can silently push the right border past the buffer limit.
+
+All five `@font-face` rules use `font-display: block`. Terminal rows are inline
+text measured in the font, so a `swap` fallback would reflow row widths between
+frames; `block` holds the text invisible until the face is ready instead.
+`index.html` preloads the core WOFF2 (`unifont-eascii-core.woff2`) with
+`crossorigin` so the first paint does not wait on a discovered-late font
+request. When adding a font face, keep `block` and load it from `css/style.css`.
 
 ## Measuring changes
 

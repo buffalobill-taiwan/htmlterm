@@ -270,6 +270,7 @@ const keysMethods = {
                 return;
             }
             if (s === '\x1B[B' || s === '\x1B[A') return;
+            if (s !== '\x1B' && data !== 0x1B) return;   // unknown sequence: ignore
             this._cursorMode = 'hand';
             this._render();
             return;
@@ -297,6 +298,7 @@ const keysMethods = {
                 return;
             }
             if (s === '\x1B[B' || s === '\x1B[A') return;
+            if (s !== '\x1B' && data !== 0x1B) return;   // unknown sequence: ignore
             this._cursorMode = 'hand';
             this._render();
             return;

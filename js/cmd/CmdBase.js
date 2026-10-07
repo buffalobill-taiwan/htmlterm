@@ -4,6 +4,8 @@ import { ShowDialog } from '../dialog/ShowDialog.js';
 import { InputDialog } from '../dialog/InputDialog.js';
 import { defaultGridMove, defaultGridRender } from '../util/select-grid.js';
 
+function isDigit(ch) { return ch >= '0' && ch <= '9'; }
+
 export class CmdBase {
     constructor() {
         this.closed = true;
@@ -41,6 +43,10 @@ export class CmdBase {
     // like anime that hold busy and don't open interactive mode).
     _afterDrain(callback) {
         const writer = system.typewriter;
+        if (!writer.isActive()) {
+            callback();
+            return;
+        }
         let remove = () => {};
         const cb = () => { writer.removeOnDrain(cb); remove(); callback(); };
         remove = this.addCleanup(() => writer.removeOnDrain(cb));
@@ -80,13 +86,17 @@ export class CmdBase {
                 if (eqIdx > 0) {
                     const name = a.substring(0, eqIdx);
                     const val = a.substring(eqIdx + 1);
-                    flags[name] = flagTypes[name] === Number ? Number(val) : val;
+                    if (flagTypes[name] === Boolean) {
+                        flags[name] = val !== 'false' && val !== '0';
+                    } else {
+                        flags[name] = flagTypes[name] === Number ? Number(val) : val;
+                    }
                 } else if (flagTypes[a] === Boolean) {
                     flags[a] = true;
                 } else {
                     flags[a] = (i + 1 < args.length && !args[i + 1].startsWith('-')) ? args[++i] : true;
                 }
-            } else if (a.startsWith('-') && a.length === 2) {
+            } else if (a.startsWith('-') && a.length === 2 && !isDigit(a[1])) {
                 if (flagTypes[a] === Boolean) {
                     flags[a] = true;
                 } else {
@@ -147,6 +157,12 @@ export class CmdBase {
         const epoch = this._printCallbackEpoch;
         this.print(text);
         const writer = system.typewriter;
+        if (!writer.isActive()) {
+            // Empty text never activates the typewriter, so an onDrain callback
+            // would be registered for an event that can never arrive.
+            if (!this.closed && epoch === this._printCallbackEpoch) callback();
+            return;
+        }
         let remove = () => {};
         const cb = () => {
             writer.removeOnDrain(cb);
@@ -277,8 +293,6 @@ export class CmdBase {
         });
     }
 
-    // === Quick dialog helpers ===
-
     /**
      * Open a dialog via DialogFrame. Do not call dialog.open() yourself.
      * @param {Function} DialogClass
@@ -289,109 +303,5 @@ export class CmdBase {
      */
     openDialog(DialogClass, key, opts, ...ctorArgs) {
         return system.createDialog(DialogClass, key, opts, ...ctorArgs);
-    }
-
-    showMessage(msg) {
-        return new Promise(resolve => {
-            const remove = this.addCleanup(() => resolve(null));
-            this.openDialog(ShowDialog, null, {
-                message: msg,
-                onExit: () => { remove(); resolve(); },
-            });
-        });
-    }
-
-    ask(question) {
-        return new Promise(resolve => {
-            const remove = this.addCleanup(() => resolve(null));
-            this.openDialog(InputDialog, null, {
-                title: 'Input',
-                prompt: question,
-                onConfirm: val => { remove(); resolve(val); },
-                onCancel: () => { remove(); resolve(null); },
-            });
-        });
-    }
-
-    async confirm(question) {
-        this.open();
-        try {
-            const result = await this.selectAsync({
-                text: question + '\n',
-                options: [['Yes', 'No']],
-            });
-            return result ? result.col === 0 : false;
-        } finally {
-            this.close();
-        }
-    }
-
-    // === Additional dialog helpers ===
-
-    /**
-     * Menu selection helper: show items and return selected value.
-     * @param {string} prompt - Prompt text
-     * @param {Array<string>} items - Menu items
-     * @returns {Promise<string|null>} Selected item or null if cancelled
-     */
-    async choose(prompt, items) {
-        this.open();
-        try {
-            const result = await this.selectAsync({
-                text: prompt + '\n',
-                options: [items],
-            });
-            return result ? items[result.col] : null;
-        } finally {
-            this.close();
-        }
-    }
-
-    /**
-     * Multi-select helper: show checkboxes and return selected indices.
-     * @param {string} prompt - Prompt text
-     * @param {Array<string>} items - Items to select from
-     * @returns {Promise<Array<number>>} Array of selected indices
-     */
-    async multiSelect(prompt, items) {
-        this.open();
-        try {
-            const selected = [];
-            const marked = items.map(() => false);
-
-            while (true) {
-                const result = await this.selectAsync({
-                    text: prompt + '\n' + items.map((item, i) =>
-                        (marked[i] ? '[✓] ' : '[ ] ') + item
-                    ).join('\n') + '\n\nEnter to confirm, Esc to cancel\n',
-                    options: [items],
-                });
-
-                if (!result) break;
-                marked[result.col] = !marked[result.col];
-            }
-
-            return marked
-                .map((mark, i) => mark ? i : null)
-                .filter(i => i !== null);
-        } finally {
-            this.close();
-        }
-    }
-
-    /**
-     * Progress bar display helper.
-     * @param {number} current - Current progress
-     * @param {number} max - Maximum progress
-     * @param {string} label - Optional label
-     * @returns {string} Formatted progress bar
-     */
-    formatProgressBar(current, max, label = '') {
-        const width = 30;
-        const filled = Math.round((current / max) * width);
-        const empty = width - filled;
-        const bar = '█'.repeat(filled) + '░'.repeat(empty);
-        const pct = Math.round((current / max) * 100);
-        return `${label} [${bar}] ${pct}%`;
     }
 }

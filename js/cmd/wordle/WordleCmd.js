@@ -3,7 +3,7 @@ import { CmdBase } from '../CmdBase.js';
 import { CURSOR_HIDE, makeCell } from '../../util/sgr.js';
 import { bufWidth } from '../../util/display-width.js';
 import { VirtualBuffer } from '../../util/VirtualBuffer.js';
-import { VALID_WORDS } from './valid-words.js';
+import { loadValidWords } from './valid-words.js';
 import ANSWERS from '../../data/wordle-answers.json' with { type: 'json' };
 
 function toFullwidth(ch) {
@@ -83,6 +83,10 @@ export class WordleCmd extends CmdBase {
         this._message = '';
         this._keyState = {};
         this._revealState = null;
+        this._validWords = null;
+        this._wordsError = false;
+        loadValidWords().then((set) => { this._validWords = set; })
+            .catch(() => { this._wordsError = true; });
 
         this.open();
         term.write(CURSOR_HIDE);
@@ -308,7 +312,12 @@ export class WordleCmd extends CmdBase {
                 this._render();
                 return;
             }
-            if (!VALID_WORDS.includes(this._currentGuess)) {
+            if (!this._validWords) {
+                this._message = this._wordsError ? '\x1B[91m字庫載入失敗' : '\x1B[91m字庫載入中…';
+                this._render();
+                return;
+            }
+            if (!this._validWords.has(this._currentGuess)) {
                 this._message = '\x1B[91m不在字庫中';
                 this._render();
                 return;

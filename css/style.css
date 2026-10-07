@@ -1,5 +1,6 @@
 @font-face {
     font-family: 'UnifontTerm';
+    font-display: block;
     src: url('../fonts/unifont-eascii-core.woff2') format('woff2');
     unicode-range: U+0000-00FF, U+2000-206F, U+20A0-20CF,
                    U+2100-2122, U+2190-21FF,
@@ -8,6 +9,7 @@
 
 @font-face {
     font-family: 'UnifontTerm';
+    font-display: block;
     src: url('../fonts/unifont-eascii-ext.woff2') format('woff2');
     unicode-range: U+0100-024F, U+02B0-04FF,
                    U+2070-209F, U+2123-218F, U+2200-24FF,
@@ -19,12 +21,14 @@
 
 @font-face {
     font-family: 'UnifontTerm';
+    font-display: block;
     src: url('../fonts/unifont-ja.woff2') format('woff2');
     unicode-range: U+3040-309F, U+30A0-30FF;
 }
 
 @font-face {
     font-family: 'UnifontTerm';
+    font-display: block;
     src: url('../fonts/unifont-zh-common.woff2') format('woff2');
     unicode-range: U+2E80-2EFF, U+2F00-2FDF, U+3000-303F,
                    U+3100-312F, U+31C0-31EF, U+3200-32FF,
@@ -34,6 +38,7 @@
 
 @font-face {
     font-family: 'UnifontTerm';
+    font-display: block;
     src: url('../fonts/unifont-zh-rare.woff2') format('woff2');
     unicode-range: U+3400-4DBF, U+6300-9FFF;
 }

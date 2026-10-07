@@ -26,15 +26,16 @@ validating changes.
 | Symptom | Check |
 |---|---|
 | Blank page after opening index.html | Use `http://127.0.0.1:8000/`, not a file URL |
-| Banner/prompt never appears | Open browser Console and Network; check module errors and the Wordle dictionary request at `js/data/wordle-valid-words.json` |
+| Banner/prompt never appears | Open browser Console and Network; check module errors. `wordle` fetches `js/data/wordle-valid-words.json` on first use, so a missing dictionary only affects that command |
 | 404 for modules or fonts | Start the server in the directory containing index.html |
 | Old behavior after an edit | Reload with browser cache disabled while DevTools is open |
 | Clipped view in a narrow window | Scaling has a minimum of 1; the base 80×25 grid may exceed the viewport (accepted limitation, see [Scope](#scope)) |
 | Wrong colors for RGB escape sequences | See the [compatibility table](architecture.md#terminal-compatibility); RGB rendering is not implemented |
 
 The browser entry uses `js/main.js`. Importing every command in Node is not a
-runtime smoke test: Wordle fetches a relative JSON URL during module evaluation.
-Validate browser imports over HTTP.
+runtime smoke test: `tools/import-check.mjs` only proves that modules parse,
+resolve their imports, and evaluate without touching browser globals. Validate
+behavior over HTTP in a browser.
 
 ## Static checks
 
@@ -43,19 +44,33 @@ the September 2026 lifecycle verification; this is a known working environment,
 not a promised minimum version. Browser source files use ES modules; some offline
 `.js` tools use CommonJS. Do not force one module mode on the entire repository.
 
-Check each changed JavaScript file, for example:
-
 ```sh
-node --check js/cmd/CmdBase.js
-node --check js/system/CmdFrame.js
+./tools/check-syntax.sh     # ESM parse of every js/ module and ESM tool
+node tools/import-check.mjs # dynamic import: paths, syntax, module side effects
 git diff --check
 ```
 
+`node --check file.js` alone is not reliable in this repository: with no
+`package.json`, the file is checked in CommonJS mode, which accepts a
+top-level `return`. `tools/check-syntax.sh` pipes each file to
+`node --input-type=module --check` instead. Check one changed file the same
+way:
+
+```sh
+node --input-type=module --check < js/cmd/CmdBase.js
+```
+
+`tools/import-check.mjs` reports modules that need browser globals (`self`,
+`window`, `document`) as skipped; anything else fails the run. Use it to catch
+a renamed import path or a module-evaluation side effect, not as a runtime
+smoke test.
+
 For documentation changes, check relative links and heading anchors, confirm
-referenced paths exist, and check complete code samples with `node --check`.
-Fragments intended for class bodies are not standalone modules. Run complete
-command examples through a SystemManager frame or the browser; calling `execute()`
-directly bypasses cleanup registration and lifecycle behavior.
+referenced paths exist, and run complete code samples through the same ESM
+check. Fragments intended for class bodies are not standalone modules. Run
+complete command examples through a SystemManager frame or the browser;
+calling `execute()` directly bypasses cleanup registration and lifecycle
+behavior.
 
 ## Manual validation
 

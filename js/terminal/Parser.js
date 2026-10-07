@@ -9,8 +9,13 @@ import { isFinalByte } from '../util/sgr.js';
 import {
     CSI_INTRODUCER, ESC, ESC_OSC, ESC_DCS, ESC_SOS, ESC_PM, ESC_APC,
     ESC_SS2, ESC_SS3, ESC_IND, ESC_NEL, ESC_SAVE, ESC_RESTORE,
-    ESC_TABSET, ESC_RI, ESC_ST, BEL, CR, LF, BS, TAB,
+    ESC_TABSET, ESC_RI, ESC_ST, BEL, CR, LF, BS, TAB, DEL, CAN, SUB,
+    MOUSE_SGR, MOUSE_EVENT_MODES,
 } from '../util/constants.js';
+
+// A CSI parameter block longer than this is corrupt: drop it instead of
+// accumulating attacker-controlled text without bound.
+const CSI_MAX_LEN = 128;
 
 export class Parser {
     constructor(screen, callbacks = {}) {
@@ -18,27 +23,29 @@ export class Parser {
         this._send = callbacks.onSend || (() => {});
 
         this._state = 'ground';
-        this._buf = '';
-        this._privateMarker = '';
-        this._oscString = '';
+        this._retained = '';
         this._stringEscape = false;
     }
 
     /**
-     * Write string or byte data into the parser.
-     * @param {string|number[]} data
+     * Write string data into the parser. Astral characters are kept whole so
+     * an emoji occupies one cell instead of two broken surrogates.
+     * @param {string} data
      */
     write(data) {
         if (!data) return;
-        for (let i = 0; i < data.length; i++) {
+        const len = data.length;
+        let i = 0;
+        while (i < len) {
             const ch = data[i];
-            if (this._state === 'escape') {
-                this._handleEscape(ch);
-                continue;
-            }
+            const code = data.charCodeAt(i);
+            i++;
+
+            if (this._state === 'escape') { this._handleEscape(ch); continue; }
+
             if (this._state === 'csi') {
-                this._retained += ch;
-                const code = ch.charCodeAt ? ch.charCodeAt(0) : ch;
+                if (code === CAN || code === SUB) { this._state = 'ground'; this._retained = ''; continue; }
+                if (this._retained.length < CSI_MAX_LEN) this._retained += ch;
                 if (isFinalByte(code)) {
                     this._handleCSI(this._retained);
                     this._retained = '';
@@ -46,21 +53,31 @@ export class Parser {
                 }
                 continue;
             }
-            if (this._state === 'osc' || this._state === 'dcs' || this._state === 'sos' || this._state === 'pm' || this._state === 'apc') {
+
+            if (this._state === 'osc' || this._state === 'dcs' || this._state === 'sos' ||
+                this._state === 'pm' || this._state === 'apc') {
                 this._feedStringMode(ch);
                 continue;
             }
-            this._feedGround(ch);
+
+            let text = ch;
+            if (code >= 0xD800 && code <= 0xDBFF && i < len) {
+                const next = data.charCodeAt(i);
+                if (next >= 0xDC00 && next <= 0xDFFF) {
+                    text = data.slice(i - 1, i + 1);
+                    i++;
+                }
+            }
+            this._feedGround(text);
         }
     }
 
     _feedGround(ch) {
         const screen = this.screen;
-        const code = ch.charCodeAt ? ch.charCodeAt(0) : ch;
+        const code = ch.charCodeAt(0);
         if (code === ESC) {
             this._state = 'escape';
             this._retained = '';
-            this._decPrivate = '';
             return;
         }
         if (code === CR) { screen.carriageReturn(); return; }
@@ -69,6 +86,7 @@ export class Parser {
         if (code === TAB) { screen.tab(); return; }
         if (code === BEL) { return; }
         if (code === 0x0B || code === 0x0C) { screen.lineFeedEdge(); return; }
+        if (code === DEL) { return; }          // delete is never printable
         if (code < 0x20) return;
         screen.writeChar(ch);
     }
@@ -76,30 +94,20 @@ export class Parser {
     _feedStringMode(ch) {
         // ST may be split across two Parser.write() calls. Keep the ESC
         // pending until the following character confirms ESC + backslash.
+        // Payloads are consumed, never stored: OSC/DCS are not implemented.
         if (this._stringEscape) {
             this._stringEscape = false;
-            if (ch === '\\') {
-                if (this._state === 'osc') this._oscString = '';
-                this._state = 'ground';
-                return;
-            }
+            if (ch === '\\') { this._state = 'ground'; return; }
         }
-
-        if (ch === '\x07') {
-            if (this._state === 'osc') this._oscString = '';
-            this._state = 'ground';
-        } else if (ch === '\x1B') {
-            this._stringEscape = true;
-        } else if (this._state === 'osc') {
-            this._oscString += ch;
-        }
+        if (ch === '\x07') this._state = 'ground';
+        else if (ch === '\x1B') this._stringEscape = true;
     }
 
     _handleEscape(ch) {
         const screen = this.screen;
-        const code = ch.charCodeAt ? ch.charCodeAt(0) : ch;
+        const code = ch.charCodeAt(0);
         if (code === CSI_INTRODUCER) { this._state = 'csi'; this._retained = ''; return; }
-        if (code === ESC_OSC) { this._state = 'osc'; this._oscString = ''; this._stringEscape = false; return; }
+        if (code === ESC_OSC) { this._state = 'osc'; this._stringEscape = false; return; }
         if (code === ESC_DCS) { this._state = 'dcs'; this._stringEscape = false; return; }
         if (code === ESC_SOS) { this._state = 'sos'; this._stringEscape = false; return; }
         if (code === ESC_PM) { this._state = 'pm'; this._stringEscape = false; return; }
@@ -108,7 +116,7 @@ export class Parser {
         if (code === ESC_IND) { screen.lineFeedEdge(); this._state = 'ground'; return; }
         if (code === ESC_NEL) { screen.lineFeedEdge(); screen.carriageReturn(); this._state = 'ground'; return; }
         if (code === ESC_SAVE) { screen.savedX = screen.curX; screen.savedY = screen.curY; this._state = 'ground'; return; }
-        if (code === ESC_RESTORE) { if (screen.savedX >= 0) { screen.curX = screen.savedX; screen.curY = screen.savedY; screen.markRowDirty(screen.curY); } this._state = 'ground'; return; }
+        if (code === ESC_RESTORE) { if (screen.savedX >= 0) { screen.curX = screen.savedX; screen.curY = screen.savedY; } this._state = 'ground'; return; }
         if (code === ESC_TABSET) { this._state = 'ground'; return; }
         if (code === ESC_RI) { screen.reverseScroll(); this._state = 'ground'; return; }
         if (code === ESC_ST) { this._state = 'ground'; return; }
@@ -121,7 +129,7 @@ export class Parser {
         let n = '';
         for (let i = 0; i < buf.length; i++) {
             const ch = buf[i];
-            const code = ch.charCodeAt ? ch.charCodeAt(0) : ch;
+            const code = ch.charCodeAt(0);
             if (isFinalByte(code)) {
                 if (n && "?!><'".includes(n[0])) {
                     decPrivate = n[0];
@@ -168,9 +176,9 @@ export class Parser {
             case 'T': screen._scrollDown(Math.max(1, p0)); break;
             case 'm': screen.setSGR(params); break;
             case 's': screen.savedX = screen.curX; screen.savedY = screen.curY; break;
-            case 'u': if (screen.savedX >= 0) { screen.curX = screen.savedX; screen.curY = screen.savedY; screen.markRowDirty(screen.curY); } break;
-            case 'h': break;
-            case 'l': break;
+            case 'u': if (screen.savedX >= 0) { screen.curX = screen.savedX; screen.curY = screen.savedY; } break;
+            case 'h': if (p0 === 4) screen.modes.insertMode = true; break;
+            case 'l': if (p0 === 4) screen.modes.insertMode = false; break;
             case 'n': this._deviceStatusReport(p0); break;
             case 'r': {
                 const top = Math.max(0, (params[0] || 1) - 1);
@@ -188,31 +196,43 @@ export class Parser {
         }
     }
 
+    /**
+     * DEC private modes — `CSI ? Pm h` / `CSI ? Pm l`.
+     * Every entry of Pm is applied: applications commonly send
+     * `CSI ?1000;1002;1006h` as one sequence.
+     */
     _privateCSI(params, finalByte) {
         const screen = this.screen;
-        const p0 = params[0] || 0;
-        switch (finalByte) {
-            case 'h':
-                if (p0 === 25) { screen.cursorHidden = false; return; }
-                if (p0 === 1000) { screen.mouseMode = 1000; return; }
-                if (p0 === 1002) { screen.mouseMode = 1002; return; }
-                if (p0 === 1003) { screen.mouseMode = 1003; return; }
-                if (p0 === 1006) { screen.mouseMode = 1006; return; }
-                if (p0 === 1049) { screen.useAltBuffer(); return; }
-                if (p0 === 1) { screen.modes.applicationCursorKeys = true; return; }
-                if (p0 === 2000) { screen.modes.bracketedPaste = true; return; }
-                break;
-            case 'l':
-                if (p0 === 25) { screen.cursorHidden = true; return; }
-                if (p0 === 1000 || p0 === 1002 || p0 === 1003) { screen.mouseMode = 0; return; }
-                if (p0 === 1006) { screen.mouseMode = 0; return; }
-                if (p0 === 1049) { screen.restorePrimaryBuffer(); return; }
-                if (p0 === 1) { screen.modes.applicationCursorKeys = false; return; }
-                if (p0 === 2000) { screen.modes.bracketedPaste = false; return; }
-                break;
-            case 'n':
-                if (p0 === 6) this._send('\x1B[' + (screen.curY + 1) + ';' + (screen.curX + 1) + 'R');
-                break;
+        if (finalByte === 'n') {
+            if ((params[0] || 0) === 6) this._deviceStatusReport(6);
+            return;
+        }
+        const set = finalByte === 'h';
+        if (!set && finalByte !== 'l') return;
+        for (let i = 0; i < params.length; i++) {
+            const p = params[i] || 0;
+            if (MOUSE_EVENT_MODES.includes(p)) {
+                // Event mode: each value replaces the previous one; clearing
+                // only applies when it matches the active mode.
+                if (set) screen.mouseMode = p;
+                else if (screen.mouseMode === p) screen.mouseMode = 0;
+                continue;
+            }
+            switch (p) {
+                case 1:
+                    screen.modes.applicationCursorKeys = set; break;
+                case 25:
+                    screen.cursorHidden = !set; break;
+                case MOUSE_SGR:
+                    // SGR encoding is independent of the event mode.
+                    screen.mouseEncoding = set ? MOUSE_SGR : 0;
+                    break;
+                case 1049:
+                    if (set) screen.useAltBuffer(); else screen.restorePrimaryBuffer();
+                    break;
+                case 2000: // project-specific bracketed-paste flag
+                    screen.modes.bracketedPaste = set; break;
+            }
         }
     }
 

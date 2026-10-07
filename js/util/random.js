@@ -26,15 +26,3 @@ export function shuffle(array) {
     }
     return array;
 }
-
-export function pickRandom(array) {
-    if (!array || array.length === 0) return null;
-    return array[Math.floor(Math.random() * array.length)];
-}
-
-export function pickRandomN(array, n) {
-    if (!array || n <= 0) return [];
-    const result = [...array];
-    shuffle(result);
-    return result.slice(0, Math.min(n, result.length));
-}

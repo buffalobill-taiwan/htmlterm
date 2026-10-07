@@ -33,7 +33,10 @@ Read the document that matches the work being done before changing that area.
   `\uXXXX` escapes.
 - Do not commit or push unless the user's message literally contains the word "commit".
 - There is no automated-test or CI requirement. Validate browser-facing changes
-  manually and run appropriate syntax/static checks.
+  manually and run appropriate syntax/static checks: `./tools/check-syntax.sh`
+  and `node tools/import-check.mjs`. Plain `node --check file.js` is not
+  reliable here — with no `package.json` the file is parsed as CommonJS, which
+  accepts a top-level `return`.
 - Do not add `jsconfig.json`, `tsconfig.json`, `.editorconfig`, `.vscode/`, or
   any other LSP/editor configuration files to this repository.
 - Mobile and accessibility are out of scope. Do not add touch/pointer input,
@@ -85,6 +88,7 @@ Read the document that matches the work being done before changing that area.
 - `js/util/`: shared utilities, including SGR, VirtualBuffer, and animation helpers.
 - `js/data/`: JSON datasets loaded by commands, such as Klotski solutions and Wordle words.
 - `tools/`: offline art/font processing scripts, never runtime features.
+- `LICENSE`: MIT; keep it in place and match the holder line for any reuse.
 
 ## Working conventions
 

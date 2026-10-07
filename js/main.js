@@ -6,6 +6,18 @@
 import { Terminal } from './terminal/terminal.js';
 import { SystemManager } from './system/system.js';
 import * as cmdModule from './cmd/index.js';
+import { warn } from './util/sgr.js';
+
+// Without these a throw inside an event handler or a rejected fetch fails
+// silently: the page keeps rendering while the shell stops responding.
+window.addEventListener('error', (e) => {
+    warn('uncaught: ' + (e.message || 'error') +
+        (e.filename ? ' @ ' + e.filename + ':' + e.lineno : ''));
+});
+window.addEventListener('unhandledrejection', (e) => {
+    const r = e.reason;
+    warn('unhandled rejection: ' + (r && r.stack ? r.stack : r));
+});
 
 const term = new Terminal(document.getElementById('screen'), {
     cols: 80,

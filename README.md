@@ -4,6 +4,8 @@
 
 Live demo: <https://buffalobill-taiwan.github.io/htmlterm/>
 
+Licensed under the [MIT License](LICENSE).
+
 Renders entirely via DOM `<span>` elements with CSS color classes — no Canvas.
 Includes a demo shell with animated command output, interactive commands, draggable
 dialogs, and TSR-style widgets.

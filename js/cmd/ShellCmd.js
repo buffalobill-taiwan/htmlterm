@@ -12,6 +12,7 @@ export class ShellCmd extends CmdBase {
 
     handleKey(data) {
         system.editor.handleKey(data);
+        system.requeueRest(system.editor);
         return true;
     }
 

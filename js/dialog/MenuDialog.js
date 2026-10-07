@@ -89,7 +89,11 @@ export class MenuDialog extends Dialog {
         }
         if (code === 0x1B || code === 0x03) {               // ESC / Ctrl+C
             const csi = parseCSI(data);
-            if (!csi) { return this.complete(this._onCancel); }
+            if (!csi) {
+                // Only a lone ESC cancels; unrecognised sequences are ignored.
+                if (data === '\x1B' || data.length === 1) return this.complete(this._onCancel);
+                return;
+            }
 
             const { final, params } = csi;
             if (final === 'A') {                               // ↑

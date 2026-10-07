@@ -168,7 +168,11 @@ export class VerticalSelectDialog extends Dialog {
 
         if (code === 0x1B) {
             const csi = parseCSI(data);
-            if (!csi) { return this.complete(this._onCancel); }
+            if (!csi) {
+                // Only a lone ESC cancels; unrecognised sequences are ignored.
+                if (data === '\x1B' || data.length === 1) return this.complete(this._onCancel);
+                return;
+            }
             const { final } = csi;
             if (!this._options.length) return;
             if (final === 'A') {
