@@ -5,6 +5,22 @@ is static HTML/CSS/JavaScript: no bundler, npm install, or backend is needed.
 Use a browser with ES modules, top-level await, and Fetch support. The commands
 below run in a host terminal from the repository root, not in the demo shell.
 
+## Scope
+
+The demo targets a desktop browser with a keyboard and a viewport large enough
+for the 80×25 grid. Mobile and accessibility work are explicitly out of scope:
+
+- No touch/pointer input and no responsive narrow-viewport layout. A viewport
+  smaller than the grid clips content; this is a known, accepted limitation
+  (see the troubleshooting row below), not a defect to fix.
+- No ARIA/`role` markup, screen-reader support, or focus management beyond the
+  existing keyboard model.
+- No `prefers-reduced-motion` handling; animations such as cursor blink,
+  Typewriter output, and `flash` always run.
+
+Treat missing behavior in these areas as intentional when reviewing or
+validating changes.
+
 ## Local troubleshooting
 
 | Symptom | Check |
@@ -13,7 +29,7 @@ below run in a host terminal from the repository root, not in the demo shell.
 | Banner/prompt never appears | Open browser Console and Network; check module errors and the Wordle dictionary request at `js/data/wordle-valid-words.json` |
 | 404 for modules or fonts | Start the server in the directory containing index.html |
 | Old behavior after an edit | Reload with browser cache disabled while DevTools is open |
-| Clipped view in a narrow window | Scaling has a minimum of 1; the base 80×25 grid may exceed the viewport |
+| Clipped view in a narrow window | Scaling has a minimum of 1; the base 80×25 grid may exceed the viewport (accepted limitation, see [Scope](#scope)) |
 | Wrong colors for RGB escape sequences | See the [compatibility table](architecture.md#terminal-compatibility); RGB rendering is not implemented |
 
 The browser entry uses `js/main.js`. Importing every command in Node is not a

@@ -36,6 +36,11 @@ Read the document that matches the work being done before changing that area.
   manually and run appropriate syntax/static checks.
 - Do not add `jsconfig.json`, `tsconfig.json`, `.editorconfig`, `.vscode/`, or
   any other LSP/editor configuration files to this repository.
+- Mobile and accessibility are out of scope. Do not add touch/pointer input,
+  responsive narrow-viewport layouts, ARIA/`role` markup, screen-reader support,
+  `prefers-reduced-motion` handling, or contrast rework. The demo targets a
+  desktop browser with a keyboard and a viewport that fits the 80×25 grid;
+  narrow-window clipping is a documented, accepted limitation.
 
 ## Core invariants
 

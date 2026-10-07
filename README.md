@@ -84,6 +84,10 @@ opening `index.html` as a `file://` URL: the app loads ES modules and fetches th
 Wordle dictionary JSON. See the [development guide](docs/development.md) for
 troubleshooting and validation.
 
+The demo targets a desktop browser with a keyboard. Touch input, narrow/mobile
+viewports, and accessibility (ARIA, screen readers, reduced motion) are out of
+scope; a window narrower than the 80×25 grid clips content by design.
+
 The shell is a stateless demo: it has no filesystem, redirection, globbing,
 script execution, external binaries, or process/job control. Widget positions
 are remembered only within the running application.
