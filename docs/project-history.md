@@ -21,6 +21,12 @@ optimizations below do not override the current immutable-cell rule in the
   access to `SystemManager.instance`.
 - Dialogs and game layouts moved to VirtualBuffer. `addChildSlot()` later made
   persistent child composition allocation-free.
+- Parser robustness landed as a batch: insert mode (IRM), `DEL` ignore and
+  `CAN`/`SUB` abort, a CSI length cap, code-point decoding, and a mouse model
+  where event type (1000/1002/1003) and encoding (X10/SGR 1006) are
+  independent. `Screen.resize` refits scrollback and rows, resets the scroll
+  region, and never routes alternate-buffer rows into scrollback; wide-glyph
+  erasure repairs an orphaned continuation cell.
 
 ## Rendering and memory milestones
 
@@ -33,6 +39,11 @@ optimizations below do not override the current immutable-cell rule in the
   objects, in-place attributes, cached sidebar cells, and preallocated slots.
 - Clip rendering moved from per-cell inline styles to CSS classes and per-span
   clip metadata; font subsetting tooling was added for WOFF2 output.
+- The render loop keeps running after an error (reported at most once per
+  second) instead of freezing the terminal. Blank cells and rows are cached
+  frozen objects, scrollback is trimmed in batches, clip rebuilds use
+  `textContent`, and pure cursor movement marks no rows dirty. Font faces use
+  `font-display: block` with the core WOFF2 preloaded.
 
 ## Feature milestones
 
@@ -62,6 +73,14 @@ comparison baseline. Current project boundaries are in the [README](../README.md
 and agent guide. Past ideas such as virtual CWD state or pipes were not accepted
 runtime features; this history is not a roadmap. Testing policy is maintained in
 the agent guide and development guide, not inferred from older plans.
+
+## Verified October 2026 changes
+
+| Date | Commit | Change |
+|---|---|---|
+| 2026-10-08 | `6d215f6` | Terminal hardening: code-point decoding, insert mode (IRM), `DEL` ignore, `CAN`/`SUB` abort, CSI length cap, mouse event-type/encoding split, resize refit, wide-glyph erase repair, region-only dirty for cursor movement, render-loop error isolation, busy-depth counter, queued-input replay, bare-ESC-only cancel in games/dialogs, lazy Wordle dictionary, offline syntax/import checkers, and README/doc/license sync |
+
+Use `git show 6d215f6` for the exact implementation.
 
 ## Detailed 2026 record
 

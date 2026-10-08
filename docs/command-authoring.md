@@ -306,9 +306,7 @@ not settle a Promise waiting for it; the example also resolves `false` on exit.
 |---|---|---|
 | `readLineAsync()` | Input string | `null` |
 | `selectAsync(opts)` | `{ row, col, value }` | `null` |
-| `ask(question)` | Input string | `null` |
 | `waitForPrint()` | `true` (also if already idle) | `false` |
-| `showMessage(msg)` | `undefined` on normal exit | `null` on frame cleanup |
 
 Check cancellation results before continuing an async flow. Keep per-execution
 values in local variables: command instances are reused. Overriding `onCancel()`

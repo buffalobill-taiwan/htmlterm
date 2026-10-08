@@ -17,7 +17,8 @@ dialogs, and TSR-style widgets.
 - Common ANSI/VT100 escape sequences (SGR colors, cursor positioning, scroll regions)
 - 16-color ANSI palette with bold brightening
 - 256-color indexed rendering; RGB parsing has rendering limitations
-- Mouse tracking (normal, button-events, any-event, SGR 1006)
+- Insert mode (IRM), scroll regions, alternate screen (1049), and robust input decoding (surrogate pairs, `DEL` ignored, `CAN`/`SUB` abort in-progress sequences)
+- Mouse tracking (event types 1000/1002/1003 combinable with either X10 or SGR 1006 encoding)
 - Scrollback buffer (2000 lines) with mouse wheel navigation
 - IME support for Chinese/Japanese input via hidden textarea
 - CJK double-width character handling (buffer + rendering + input/delete)
@@ -82,9 +83,9 @@ prompt; try `help`, `echo 中文`, or `menu`. Stop the server with Ctrl+C in the
 host terminal.
 
 No build or package installation is needed to run the demo. Use HTTP rather than
-opening `index.html` as a `file://` URL: the app loads ES modules and fetches the
-Wordle dictionary JSON. See the [development guide](docs/development.md) for
-troubleshooting and validation.
+opening `index.html` as a `file://` URL: the app loads ES modules, and `wordle`
+fetches its dictionary JSON on first use. See the [development
+guide](docs/development.md) for troubleshooting and validation.
 
 The demo targets a desktop browser with a keyboard. Touch input, narrow/mobile
 viewports, and accessibility (ARIA, screen readers, reduced motion) are out of
@@ -204,7 +205,8 @@ js/dialog/          Buffered dialog implementations
 js/util/            Shared buffers, text/color/layout helpers, and game utilities
 fonts/              Subsetted browser fonts
 docs/               Architecture, development, authoring, and historical references
-tools/              Offline converters, font subsetting, and puzzle diagnostics
+tools/              Offline converters, font subsetting, syntax/import checks, puzzle diagnostics
+LICENSE             MIT license
 ```
 
 ## License
