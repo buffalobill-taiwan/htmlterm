@@ -231,6 +231,7 @@ export class Parser {
                     if (set) screen.useAltBuffer(); else screen.restorePrimaryBuffer();
                     break;
                 case 2000: // project-specific bracketed-paste flag
+                case 2004: // standard DEC bracketed-paste mode
                     screen.modes.bracketedPaste = set; break;
             }
         }

@@ -1,4 +1,4 @@
-import { defaultAttr, applySGR, makeCell } from '../util/sgr.js';
+import { defaultAttr, applySGR, makeCell, rgbToAnsi256 } from '../util/sgr.js';
 import { isWide } from '../util/display-width.js';
 import { DEFAULT_FG, DEFAULT_BG, SCROLLBACK_MAX, SCROLLBACK_TRIM_SLACK, TAB_WIDTH } from '../util/constants.js';
 
@@ -581,10 +581,9 @@ export class Screen {
             return i + 2;
         }
         if (mode === 2 && i + 4 < params.length) {
-            const r = params[i + 2], g = params[i + 3], b = params[i + 4];
-            const hex = '#' + [r, g, b].map(v => Math.max(0, Math.min(255, v)).toString(16).padStart(2, '0')).join('');
-            if (type === 'fg') this.attr.fg = hex;
-            else this.attr.bg = hex;
+            const idx = rgbToAnsi256(params[i + 2], params[i + 3], params[i + 4]);
+            if (type === 'fg') this.attr.fg = idx;
+            else this.attr.bg = idx;
             return i + 4;
         }
         return i;

@@ -198,13 +198,9 @@ first board solved by its logical checker. If no attempt passes, both browser
 and tool use the last board. The tool reports this fallback explicitly; printing
 the minefield is not a guarantee that it can be solved without guessing.
 
-### Animation compressor limitations
+### Animation compressor
 
-`compress-anime.js` expects an uncompressed `frames` array, but the checked-in
-animation is already compressed. It has no input/output arguments and writes to
-the source asset in place. Its final gzip report also invokes an undefined `$`
-tag, so plain Node execution can fail after the file has already been rewritten.
-It is therefore not a ready-to-run regeneration command. Repair the reporting
-step and work with a copy of an uncompressed asset before using it; review the
-generated diff and playback before replacing the checked-in asset. This document
-records the limitation rather than implying that conversion tooling was repaired.
+`compress-anime.js` compresses uncompressed frames into RLE0 + diffs. It supports
+`--input <file>` and `--output <file>` arguments (defaulting to inspection when
+given already-compressed files like `js/data/anime.json`), calculates gzip savings
+using Node's built-in zlib, and generates diffs for animation playback.
