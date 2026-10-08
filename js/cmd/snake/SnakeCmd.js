@@ -6,6 +6,8 @@ import {
     DIFFICULTY, GRID_COLS, GRID_ROWS, DIR, SPEED_LEVELS, OPPOSITE, DY, DX, BOARD_Y, BOARD_H,
 } from './constants.js';
 import { renderMethods } from './render.js';
+import { GAME_META } from '../game-meta.js';
+const META = GAME_META.snake;
 
 class SnakeCmd extends CmdBase {
     execute(args) {
@@ -275,13 +277,11 @@ class SnakeCmd extends CmdBase {
         this._quit();
     }
 
-    static get commandName() { return 'snake'; }
 
-    static get help() { return 'Play Snake (Nokia style)'; }
-
-    static get menu() { return 'Snake'; }
-
-    static get usage() { return 'snake [--easy|--medium|--hard]'; }
+    static get commandName() { return META.commandName; }
+    static get help() { return META.help; }
+    static get menu() { return META.menu; }
+    static get usage() { return META.usage; }
 }
 
 // Keep the command as the state owner and preserve class-method descriptors.

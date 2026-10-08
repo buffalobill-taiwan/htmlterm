@@ -7,6 +7,8 @@ import { ROWS, COLS, FINISH_FALL, BOARD_Y, BOARD_H } from './constants.js';
 import { NAME_COLOR, renderMethods } from './render.js';
 import { ConfirmDialog } from '../../dialog/ConfirmDialog.js';
 import klotskiSolutions from '../../data/klotski-solutions.json' with { type: 'json' };
+import { GAME_META } from '../game-meta.js';
+const META = GAME_META.klotski;
 
 class KlotskiCmd extends CmdBase {
     execute(args) {
@@ -423,13 +425,11 @@ class KlotskiCmd extends CmdBase {
         }
     }
 
-    static get commandName() { return 'klotski'; }
 
-    static get help() { return 'Play Klotski 華容道'; }
-
-    static get menu() { return 'Klotski 華容道'; }
-
-    static get usage() { return 'klotski'; }
+    static get commandName() { return META.commandName; }
+    static get help() { return META.help; }
+    static get menu() { return META.menu; }
+    static get usage() { return META.usage; }
 }
 
 // Keep the command as the state owner and preserve class-method descriptors.

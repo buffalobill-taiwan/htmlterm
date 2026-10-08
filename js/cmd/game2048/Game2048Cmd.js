@@ -4,6 +4,8 @@ import { term } from '../../system/sys.js';
 import { CURSOR_HIDE } from '../../util/sgr.js';
 import { BOARD_Y, BOARD_H } from './constants.js';
 import { renderMethods } from './render.js';
+import { GAME_META } from '../game-meta.js';
+const META = GAME_META['2048'];
 
 class Game2048Cmd extends CmdBase {
     execute(args) {
@@ -193,13 +195,11 @@ class Game2048Cmd extends CmdBase {
         this._quit();
     }
 
-    static get commandName() { return '2048'; }
 
-    static get help() { return 'Play 2048'; }
-
-    static get menu() { return '2048'; }
-
-    static get usage() { return '2048'; }
+    static get commandName() { return META.commandName; }
+    static get help() { return META.help; }
+    static get menu() { return META.menu; }
+    static get usage() { return META.usage; }
 }
 
 // Keep the command as the state owner and preserve class-method descriptors.

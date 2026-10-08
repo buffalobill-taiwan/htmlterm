@@ -6,6 +6,8 @@ import { idx, isValid, applyMove, other, getValidMoves, countPieces } from './bo
 import { BLACK, WHITE, N, FLIP_MS, PASS_MS, THINK_MS, BLINK_MS, CLEAR_ROW } from './constants.js';
 import { aiMoveEasy, aiMoveMedium, aiMoveHard } from './ai.js';
 import { renderMethods } from './render.js';
+import { GAME_META } from '../game-meta.js';
+const META = GAME_META.othello;
 
 class OthelloCmd extends CmdBase {
     execute(args) {
@@ -332,13 +334,11 @@ class OthelloCmd extends CmdBase {
         this._quit();
     }
 
-    static get commandName() { return 'othello'; }
 
-    static get help() { return 'Play Othello (Reversi)'; }
-
-    static get menu() { return 'Othello'; }
-
-    static get usage() { return 'othello [--easy|--medium|--hard]'; }
+    static get commandName() { return META.commandName; }
+    static get help() { return META.help; }
+    static get menu() { return META.menu; }
+    static get usage() { return META.usage; }
 }
 
 // Keep the command as the state owner and preserve class-method descriptors.

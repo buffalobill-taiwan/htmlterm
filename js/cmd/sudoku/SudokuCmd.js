@@ -6,6 +6,8 @@ import { CURSOR_HIDE, yellow, bold, red, gray, green } from '../../util/sgr.js';
 import { SelectDialog } from '../../dialog/SelectDialog.js';
 import { ConfirmDialog } from '../../dialog/ConfirmDialog.js';
 import { _formatTime, renderMethods } from './render.js';
+import { GAME_META } from '../game-meta.js';
+const META = GAME_META.sudoku;
 
 class SudokuCmd extends CmdBase {
     execute(args) {
@@ -282,16 +284,11 @@ class SudokuCmd extends CmdBase {
         this._quit();
     }
 
-    static get commandName() { return 'sudoku'; }
 
-    static get help() { return 'Play Sudoku puzzle'; }
-
-    static get menu() { return 'Sudoku Puzzle'; }
-
-    static get usage() {
-        return 'sudoku [seed] [--easy|--medium|--hard] [--seed N]\n' +
-            '         Seed: 0–2147483647; seed alone defaults to Medium.';
-    }
+    static get commandName() { return META.commandName; }
+    static get help() { return META.help; }
+    static get menu() { return META.menu; }
+    static get usage() { return META.usage; }
 }
 
 // Keep the command as the state owner and preserve class-method descriptors.

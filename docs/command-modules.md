@@ -2,7 +2,14 @@
 
 Small commands remain single files under `js/cmd/`. Larger games use a directory
 with an explicit `index.js` entry, following the existing Wordle and Japanese
-Mahjong layout. `js/cmd/index.js` imports those entries for command registration.
+Mahjong layout.
+
+`js/cmd/index.js` registers small commands by exporting their classes eagerly.
+Large games (and `memory`) are registered as lazy descriptors via
+`defineLazy()` from [lazy.js](../js/cmd/lazy.js): startup only loads
+[game-meta.js](../js/cmd/game-meta.js) for help/menu/Tab metadata, and the game
+module is fetched on first run. Keep `GAME_META` and each command's static
+getters in sync by importing `GAME_META` from the Cmd class.
 
 ## Static command data
 

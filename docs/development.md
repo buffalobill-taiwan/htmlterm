@@ -47,6 +47,7 @@ not a promised minimum version. Browser source files use ES modules; some offlin
 ```sh
 ./tools/check-syntax.sh     # ESM parse of every js/ module and ESM tool
 node tools/import-check.mjs # dynamic import: paths, syntax, module side effects
+node tools/test-headless.mjs # Parser/Screen, VirtualBuffer, seeds, lazy commands
 git diff --check
 ```
 
@@ -64,6 +65,13 @@ node --input-type=module --check < js/cmd/CmdBase.js
 `window`, `document`) as skipped; anything else fails the run. Use it to catch
 a renamed import path or a module-evaluation side effect, not as a runtime
 smoke test.
+
+`tools/test-headless.mjs` exercises Screen/Parser compatibility (SGR, IRM, wide
+glyphs, mouse modes, resize), VirtualBuffer composition, pixel-codec roundtrips,
+seeded puzzle generators, and command registration including lazy game
+descriptors. It does not drive the DOM renderer or a full SystemManager session;
+keep using the [manual validation](#manual-validation) table for browser-facing
+behavior. Prefer it as a fast gate before those checks.
 
 For documentation changes, check relative links and heading anchors, confirm
 referenced paths exist, and run complete code samples through the same ESM

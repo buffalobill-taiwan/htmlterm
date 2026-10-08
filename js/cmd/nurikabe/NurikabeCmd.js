@@ -6,6 +6,8 @@ import { SelectDialog } from '../../dialog/SelectDialog.js';
 import { _create2D, _analyzeClueColors, _analyzePools, _analyzeSeaConnectivity } from './analysis.js';
 import { WHITE, geom, generatePuzzle, BLACK, isSolved } from '../../util/nurikabe-engine.js';
 import { _formatTime, renderMethods } from './render.js';
+import { GAME_META } from '../game-meta.js';
+const META = GAME_META.nurikabe;
 
 class NurikabeCmd extends CmdBase {
     execute(args) {
@@ -421,13 +423,11 @@ class NurikabeCmd extends CmdBase {
         this._quit();
     }
 
-    static get commandName() { return 'nurikabe'; }
 
-    static get help() { return 'Play Nurikabe'; }
-
-    static get menu() { return 'Nurikabe'; }
-
-    static get usage() { return 'nurikabe [--easy|--medium|--hard] [<seed> [<size>]]'; }
+    static get commandName() { return META.commandName; }
+    static get help() { return META.help; }
+    static get menu() { return META.menu; }
+    static get usage() { return META.usage; }
 }
 
 // Keep the command as the state owner and preserve class-method descriptors.

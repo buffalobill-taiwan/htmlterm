@@ -10,6 +10,8 @@ import {
     _createBoard, _findMatches, _hasAnyMove, _swapCreatesMatch, _calcChainScore, _fallOneStep,
 } from './board.js';
 import { renderMethods } from './render.js';
+import { GAME_META } from '../game-meta.js';
+const META = GAME_META.gweled;
 
 class GweledCmd extends CmdBase {
     execute(args) {
@@ -403,13 +405,11 @@ class GweledCmd extends CmdBase {
         this._quit();
     }
 
-    static get commandName() { return 'gweled'; }
 
-    static get help() { return 'Play Gweled'; }
-
-    static get menu() { return 'Gweled'; }
-
-    static get usage() { return 'gweled [--easy|--medium|--hard]'; }
+    static get commandName() { return META.commandName; }
+    static get help() { return META.help; }
+    static get menu() { return META.menu; }
+    static get usage() { return META.usage; }
 }
 
 // Keep the command as the state owner and preserve class-method descriptors.

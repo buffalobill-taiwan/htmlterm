@@ -4,6 +4,8 @@ import { SelectDialog } from '../dialog/SelectDialog.js';
 import { bold, red, green, yellow, cyan, gray, CURSOR_HIDE, makeCell } from '../util/sgr.js';
 import { isWide } from '../util/unicode-width.js';
 import { VirtualBuffer, _blankCell } from '../util/VirtualBuffer.js';
+import { GAME_META } from './game-meta.js';
+const META = GAME_META.memory;
 
 const DIFFICULTY = {
     easy:   { cols: 4, rows: 3, label: 'Easy',   maxFails: 3, revealMs: 800 },
@@ -480,8 +482,9 @@ export class MemoryCmd extends CmdBase {
         this._quit();
     }
 
-    static get commandName() { return 'memory'; }
-    static get help() { return 'Play a card-matching Memory game'; }
-    static get menu() { return 'Memory'; }
-    static get usage() { return 'memory [--easy|--medium|--hard]'; }
+
+    static get commandName() { return META.commandName; }
+    static get help() { return META.help; }
+    static get menu() { return META.menu; }
+    static get usage() { return META.usage; }
 }

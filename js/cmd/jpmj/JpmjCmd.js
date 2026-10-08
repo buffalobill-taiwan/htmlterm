@@ -9,6 +9,8 @@ import { palettesMixin } from './palettes.js';
 import { renderMixin } from './render/index.js';
 import { loopMixin } from './loop.js';
 import { inputMixin } from './input/index.js';
+import { GAME_META } from '../game-meta.js';
+const META = GAME_META.jpmj;
 
 const SETTINGS = [
     { key: 'gameLength', label: '對戰長度', value: '東風戰',
@@ -212,10 +214,11 @@ export class JpmjCmd extends CmdBase {
         if (this._pauseOverlay) { term.removeOverlay(this._pauseOverlay); this._pauseOverlay = null; }
     }
 
-    static get commandName() { return 'jpmj'; }
-    static get help() { return 'Japanese Mahjong (14 tiles, 6 AI types)'; }
-    static get menu() { return 'Japanese Mahjong'; }
-    static get usage() { return 'jpmj'; }
+
+    static get commandName() { return META.commandName; }
+    static get help() { return META.help; }
+    static get menu() { return META.menu; }
+    static get usage() { return META.usage; }
 }
 
 Object.assign(JpmjCmd.prototype, palettesMixin, renderMixin, loopMixin, inputMixin);

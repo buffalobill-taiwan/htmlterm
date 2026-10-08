@@ -21,18 +21,22 @@ export { Art } from './art.js';
 export { Sleep } from './sleep.js';
 export { TimeCmd } from './time.js';
 export { FiveWillow } from './5willow.js';
-export { SudokuCmd } from './sudoku/index.js';
-export { MinesweeperCmd } from './minesweeper/index.js';
-export { TetrisCmd } from './tetris/index.js';
-export { Game2048Cmd } from './game2048/index.js';
-export { SnakeCmd } from './snake/index.js';
-export { WordleCmd } from './wordle/index.js';
-export { NurikabeCmd } from './nurikabe/index.js';
-export { PuyoCmd } from './puyo/index.js';
-export { GweledCmd } from './gweled/index.js';
-export { KlotskiCmd } from './klotski/index.js';
-export { MemoryCmd } from './memory.js';
-export { OthelloCmd } from './othello/index.js';
-export { CChessCmd } from './cchess/index.js';
-export { JpmjCmd } from './jpmj/index.js';
 
+import { defineLazy } from './lazy.js';
+import { GAME_META as G } from './game-meta.js';
+
+// Large games load on first use; metadata stays available for help/menu/Tab.
+export const SudokuCmd = defineLazy(G.sudoku, () => import('./sudoku/index.js').then(m => m.SudokuCmd));
+export const MinesweeperCmd = defineLazy(G.minesw, () => import('./minesweeper/index.js').then(m => m.MinesweeperCmd));
+export const TetrisCmd = defineLazy(G.tetris, () => import('./tetris/index.js').then(m => m.TetrisCmd));
+export const Game2048Cmd = defineLazy(G['2048'], () => import('./game2048/index.js').then(m => m.Game2048Cmd));
+export const SnakeCmd = defineLazy(G.snake, () => import('./snake/index.js').then(m => m.SnakeCmd));
+export const WordleCmd = defineLazy(G.wordle, () => import('./wordle/index.js').then(m => m.WordleCmd));
+export const NurikabeCmd = defineLazy(G.nurikabe, () => import('./nurikabe/index.js').then(m => m.NurikabeCmd));
+export const PuyoCmd = defineLazy(G.puyo, () => import('./puyo/index.js').then(m => m.PuyoCmd));
+export const GweledCmd = defineLazy(G.gweled, () => import('./gweled/index.js').then(m => m.GweledCmd));
+export const KlotskiCmd = defineLazy(G.klotski, () => import('./klotski/index.js').then(m => m.KlotskiCmd));
+export const MemoryCmd = defineLazy(G.memory, () => import('./memory.js').then(m => m.MemoryCmd));
+export const OthelloCmd = defineLazy(G.othello, () => import('./othello/index.js').then(m => m.OthelloCmd));
+export const CChessCmd = defineLazy(G.cchess, () => import('./cchess/index.js').then(m => m.CChessCmd));
+export const JpmjCmd = defineLazy(G.jpmj, () => import('./jpmj/index.js').then(m => m.JpmjCmd));

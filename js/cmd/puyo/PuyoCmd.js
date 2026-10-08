@@ -8,6 +8,8 @@ import {
 } from './constants.js';
 import { _createBoard, _findGroups, _calcChainScore, _fallOneStep } from './board.js';
 import { renderMethods } from './render.js';
+import { GAME_META } from '../game-meta.js';
+const META = GAME_META.puyo;
 
 class PuyoCmd extends CmdBase {
     execute(args) {
@@ -458,13 +460,11 @@ class PuyoCmd extends CmdBase {
         this._quit();
     }
 
-    static get commandName() { return 'puyo'; }
 
-    static get help() { return 'Play Puyo Puyo'; }
-
-    static get menu() { return 'Puyo Puyo'; }
-
-    static get usage() { return 'puyo [--easy|--medium|--hard]'; }
+    static get commandName() { return META.commandName; }
+    static get help() { return META.help; }
+    static get menu() { return META.menu; }
+    static get usage() { return META.usage; }
 }
 
 // Keep the command as the state owner and preserve class-method descriptors.

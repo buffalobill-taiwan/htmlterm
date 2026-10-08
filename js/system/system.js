@@ -44,6 +44,9 @@ export class SystemManager {
         this.menuItems = registry.menuItems;
         this.commands = registry.commands;
         this._cmdInstances = registry.instances;
+        this._cmdLoaders = registry.loaders;
+        this._cmdLoading = Object.create(null);
+        this._wireLazyCommands();
         this.prompt = '$ ';
         this.running = false;
 
@@ -57,6 +60,42 @@ export class SystemManager {
         this.editor.setCommands(Object.keys(this.commands));
         this.editor.setPrompt(this.prompt);
         this.start();
+    }
+
+    // Lazy game modules register metadata only; the first run loads the class,
+    // attaches the instance to the SyncCmdFrame, then calls execute().
+    _wireLazyCommands() {
+        for (const name of Object.keys(this._cmdLoaders)) {
+            this.commands[name] = async (args) => {
+                const inst = await this._ensureCmdInstance(name);
+                const frame = this.cmdStack.slice().reverse().find(
+                    f => f.cmdName === name && !f.done
+                );
+                if (!frame || frame.done) return;
+                frame.cmd = inst;
+                this.commands[name] = inst.execute.bind(inst);
+                return inst.execute(args);
+            };
+        }
+    }
+
+    async _ensureCmdInstance(name) {
+        if (this._cmdInstances[name]) return this._cmdInstances[name];
+        if (this._cmdLoading[name]) return this._cmdLoading[name];
+        const load = this._cmdLoaders[name];
+        if (!load) throw new Error('No loader for command: ' + name);
+        const pending = (async () => {
+            try {
+                const Cls = await load();
+                if (this._disposed) throw new Error('system disposed');
+                if (!this._cmdInstances[name]) this._cmdInstances[name] = new Cls();
+                return this._cmdInstances[name];
+            } finally {
+                delete this._cmdLoading[name];
+            }
+        })();
+        this._cmdLoading[name] = pending;
+        return pending;
     }
 
     start() {

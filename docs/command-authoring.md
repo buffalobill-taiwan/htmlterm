@@ -6,6 +6,19 @@ Export a command class from `js/cmd/index.js`; `SystemManager` uses `CommandRegi
 register exported classes with a `commandName`. `ShellCmd` is persistent and
 is not a user command.
 
+For a large game, export a lazy descriptor instead of the class:
+
+```js
+import { defineLazy } from './lazy.js';
+import { GAME_META as G } from './game-meta.js';
+export const TetrisCmd = defineLazy(G.tetris, () =>
+    import('./tetris/index.js').then(m => m.TetrisCmd));
+```
+
+Add the metadata entry to `game-meta.js` and have the Cmd class read static
+`commandName` / `help` / `usage` / `menu` from `GAME_META` so help text cannot
+drift. Eager registration remains appropriate for small utilities.
+
 `CmdBase` commands have no constructor parameters and import `system` / `term`
 from `../system/sys.js` when needed.
 

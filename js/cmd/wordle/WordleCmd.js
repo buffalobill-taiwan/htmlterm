@@ -5,6 +5,8 @@ import { bufWidth } from '../../util/display-width.js';
 import { VirtualBuffer } from '../../util/VirtualBuffer.js';
 import { loadValidWords } from './valid-words.js';
 import ANSWERS from '../../data/wordle-answers.json' with { type: 'json' };
+import { GAME_META } from '../game-meta.js';
+const META = GAME_META.wordle;
 
 function toFullwidth(ch) {
     if (ch.length > 1) return ch.split('').map(toFullwidth).join('');
@@ -351,8 +353,9 @@ export class WordleCmd extends CmdBase {
         super.close();
     }
 
-    static get commandName() { return 'wordle'; }
-    static get help() { return 'Play Wordle — guess the 5-letter word'; }
-    static get menu() { return 'Wordle'; }
-    static get usage() { return 'wordle'; }
+
+    static get commandName() { return META.commandName; }
+    static get help() { return META.help; }
+    static get menu() { return META.menu; }
+    static get usage() { return META.usage; }
 }

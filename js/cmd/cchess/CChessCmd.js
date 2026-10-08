@@ -13,6 +13,8 @@ import { animateMove } from './animation.js';
 import { ConfirmDialog } from '../../dialog/ConfirmDialog.js';
 import { renderMethods } from './render.js';
 import { EndgameSelectDialog } from './EndgameSelectDialog.js';
+import { GAME_META } from '../game-meta.js';
+const META = GAME_META.cchess;
 
 const ENDGAME_DATA_VERSION = '2026-10-05T06:19:37Z';
 
@@ -290,10 +292,11 @@ export class CChessCmd extends CmdBase {
         this.close();
     }
     onCancel() { this._quit(); }
-    static get commandName() { return 'cchess'; }
-    static get help() { return 'Play Chinese chess or endgame puzzles'; }
-    static get menu() { return '中國象棋'; }
-    static get usage() { return 'cchess'; }
+
+    static get commandName() { return META.commandName; }
+    static get help() { return META.help; }
+    static get menu() { return META.menu; }
+    static get usage() { return META.usage; }
 }
 
 for (const [name, value] of Object.entries(renderMethods)) {

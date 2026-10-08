@@ -6,6 +6,8 @@ import { DIFFICULTY } from './constants.js';
 import { _create2D, generatePuzzle, parseStart, revealCells } from './solver.js';
 import { parseSeed, SEED_MAX } from '../../util/random.js';
 import { _formatTime, renderMethods } from './render.js';
+import { GAME_META } from '../game-meta.js';
+const META = GAME_META.minesw;
 
 class MinesweeperCmd extends CmdBase {
     execute(args) {
@@ -250,17 +252,11 @@ class MinesweeperCmd extends CmdBase {
         this._quit();
     }
 
-    static get commandName() { return 'minesw'; }
 
-    static get help() { return 'Play Minesweeper'; }
-
-    static get menu() { return 'Minesweeper'; }
-
-    static get usage() {
-        return 'minesw [seed] [--easy|--medium|--hard] [--seed N] [--start R,C]\n' +
-            '         Seed: 0–2147483647; seed alone defaults to Medium.\n' +
-            '         Start: zero-based row,col; press Enter there to replay.';
-    }
+    static get commandName() { return META.commandName; }
+    static get help() { return META.help; }
+    static get menu() { return META.menu; }
+    static get usage() { return META.usage; }
 }
 
 // Keep the command as the state owner and preserve class-method descriptors.

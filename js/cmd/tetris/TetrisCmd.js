@@ -9,6 +9,8 @@ import {
 import { _createBoard, _bag, _fits, _isTSpin, _isTSpinMini } from './board.js';
 import { SHAPES, KICKS_I, KICKS_3x3, PIECE_COLORS } from './pieces.js';
 import { renderMethods } from './render.js';
+import { GAME_META } from '../game-meta.js';
+const META = GAME_META.tetris;
 
 class TetrisCmd extends CmdBase {
     execute(args) {
@@ -458,13 +460,11 @@ class TetrisCmd extends CmdBase {
         this._quit();
     }
 
-    static get commandName() { return 'tetris'; }
 
-    static get help() { return 'Play Tetris'; }
-
-    static get menu() { return 'Tetris'; }
-
-    static get usage() { return 'tetris [--easy|--medium|--hard]'; }
+    static get commandName() { return META.commandName; }
+    static get help() { return META.help; }
+    static get menu() { return META.menu; }
+    static get usage() { return META.usage; }
 }
 
 // Keep the command as the state owner and preserve class-method descriptors.

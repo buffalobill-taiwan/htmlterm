@@ -89,7 +89,10 @@ The runtime binding in `sys.js` does not import SystemManager, avoiding a cycle
 through command modules.
 [CommandRegistry](../js/system/CommandRegistry.js) owns command instances and
 registration metadata; [WidgetManager](../js/system/WidgetManager.js) owns widget
-lifecycle and receives its system explicitly. Each registered command instance is
+lifecycle and receives its system explicitly. Eager commands are instantiated at
+startup. Lazy game descriptors supply metadata and a `load()` function;
+`SystemManager` fetches the class on first use, attaches the instance to the
+`SyncCmdFrame`, then calls `execute()`. Each registered command instance is
 reused across executions; initialize per-run state in `execute()` or its helpers.
 
 The frame stack always contains a persistent `ShellFrame`. Commands add a
