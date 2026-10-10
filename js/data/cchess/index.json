@@ -90,9 +90,27 @@
     "file": "endgame-017.json"
   },
   {
+    "id": "endgame-019",
+    "name": "生死之進退",
+    "step": 7,
+    "file": "endgame-019.json"
+  },
+  {
     "id": "endgame-009",
     "name": "側翼總攻",
     "step": 8,
     "file": "endgame-009.json"
+  },
+  {
+    "id": "endgame-020",
+    "name": "五兵戰五卒",
+    "step": 8,
+    "file": "endgame-020.json"
+  },
+  {
+    "id": "endgame-018",
+    "name": "奮不顧身",
+    "step": 9,
+    "file": "endgame-018.json"
   }
 ]
