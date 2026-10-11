@@ -2,7 +2,7 @@ import { CmdBase } from '../CmdBase.js';
 import { DIFFICULTY, SEED_MAX, MIN_SIZE, MAX_SIZE, _sizeLabel } from './constants.js';
 import { term } from '../../system/sys.js';
 import { CURSOR_HIDE, yellow, bold, red, gray, green } from '../../util/sgr.js';
-import { SelectDialog } from '../../dialog/SelectDialog.js';
+import { FieldPickerDialog } from '../../dialog/FieldPickerDialog.js';
 import { _create2D, _analyzeClueColors, _analyzePools, _analyzeSeaConnectivity } from './analysis.js';
 import { WHITE, geom, generatePuzzle, BLACK, isSolved } from '../../util/nurikabe-engine.js';
 import { _formatTime, renderMethods } from './render.js';
@@ -86,15 +86,13 @@ class NurikabeCmd extends CmdBase {
         term.write('\x1B[2J\x1B[1;1H');
         term.write(CURSOR_HIDE);
 
-        const opts = ['Easy', 'Medium', 'Hard'];
-        this._difficultyDialog = this.openDialog(SelectDialog, 'nurikabe-diff', {
+        this._difficultyDialog = this.openDialog(FieldPickerDialog, 'nurikabe-diff', {
             title: 'Nurikabe',
-            message: yellow('Select difficulty'),
-            options: opts,
-            footer: '← → Move  ↩ Confirm  ESC Quit',
-            onSelect: (idx) => {
+            fields: [{ key: 'difficulty', label: '難度',
+                options: [['Easy', 'easy'], ['Medium', 'medium'], ['Hard', 'hard']] }],
+            onConfirm: ({ difficulty }) => {
                 this._difficultyDialog = null;
-                this._startGame(DIFFICULTY[opts[idx].toLowerCase()].size);
+                this._startGame(DIFFICULTY[difficulty].size);
             },
             onCancel: () => {
                 this._difficultyDialog = null;

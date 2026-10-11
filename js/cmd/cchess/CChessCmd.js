@@ -9,10 +9,10 @@ import { INITIAL_FEN } from './constants.js';
 import { boardKey, positionKey, hasLost, responseMove } from './endgames.js';
 import { animateMove } from './animation.js';
 import { ConfirmDialog } from '../../dialog/ConfirmDialog.js';
+import { CompactListDialog } from '../../dialog/CompactListDialog.js';
+import { FieldPickerDialog } from '../../dialog/FieldPickerDialog.js';
 import { renderMethods } from './render.js';
 import { EndgameSelectDialog } from './EndgameSelectDialog.js';
-import { AiSetupDialog } from './AiSetupDialog.js';
-import { ModeSelectDialog } from './ModeSelectDialog.js';
 import { GAME_META } from '../game-meta.js';
 const META = GAME_META.cchess;
 
@@ -44,7 +44,7 @@ export class CChessCmd extends CmdBase {
 
     _pickMode() {
         this._stopAsync();
-        this._dialog = this.openDialog(ModeSelectDialog, 'cchess-select', {
+        this._dialog = this.openDialog(CompactListDialog, 'cchess-select', {
             title: '中國象棋',
             options: ['傳統象棋', '殘局遊戲'],
             onSelect: i => {
@@ -58,9 +58,16 @@ export class CChessCmd extends CmdBase {
 
     _pickAI() {
         this._stopAsync();
-        this._dialog = this.openDialog(AiSetupDialog, 'cchess-ai-setup', {
-            difficulty: this._difficulty,
-            human: this._human,
+        this._dialog = this.openDialog(FieldPickerDialog, 'cchess-ai-setup', {
+            title: '中國象棋',
+            width: 48,
+            footer: '↑↓ 切換  ← → 選擇  Enter 開始  Esc 返回',
+            fields: [
+                { key: 'difficulty', label: '難度', default: this._difficulty || 'medium',
+                  options: [['Easy', 'easy'], ['Medium', 'medium'], ['Hard', 'hard']] },
+                { key: 'human', label: '先後手', default: this._human,
+                  options: [['先手（紅方）', 'red'], ['後手（黑方）', 'black']] },
+            ],
             onConfirm: ({ difficulty, human }) => {
                 this._dialog = null;
                 this._difficulty = difficulty;

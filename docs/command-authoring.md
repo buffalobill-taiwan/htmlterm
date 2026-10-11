@@ -134,14 +134,13 @@ persist drag position across opens, or `null` to skip. Never call
 `_onKey()` — `DialogFrame` owns input while the dialog is open.
 
 ```js
-this._diffDialog = this.openDialog(SelectDialog, 'mycmd-diff', {
+this._diffDialog = this.openDialog(FieldPickerDialog, 'mycmd-diff', {
     title: 'MyCmd',
-    message: yellow('Select difficulty'),
-    options: ['Easy', 'Medium', 'Hard'],
-    footer: '← → Move  ↩ Confirm  ESC Quit',
-    onSelect: (idx) => {
+    fields: [{ key: 'difficulty', label: '難度',
+        options: [['Easy', 'easy'], ['Medium', 'medium'], ['Hard', 'hard']] }],
+    onConfirm: ({ difficulty }) => {
         this._diffDialog = null;
-        this._startGame(idx);
+        this._startGame(difficulty);
     },
     onCancel: () => {
         this._diffDialog = null;
@@ -175,6 +174,14 @@ Messages wrap at CJK-aware cell boundaries, preserving SGR. Tall dialogs retain
 their header/footer inside the 80×25 viewport and scroll with PageUp/PageDown.
 InputDialog scrolls horizontally to keep its editing cursor visible. Title,
 footer, prompt, and setting labels are clipped inside fixed borders.
+
+`CompactListDialog` is a compact, title-only vertical menu with no footer, for
+short picks such as a mode list. `FieldPickerDialog` renders one labelled row
+per field with inline options: pass `fields` of `{ key, label, options, default }`
+(an option is either a label string or a `[label, value]` pair) and read the
+chosen values from the `onConfirm(values)` object. Both size to their content.
+The `Dialog` base also accepts `header: false` and `footer: false` to omit the
+title or footer rows.
 
 `SettingsDialog` defaults to title `Settings` and action label `Apply`; supply
 `title` and `startLabel` for command-specific wording. It opens each submenu at

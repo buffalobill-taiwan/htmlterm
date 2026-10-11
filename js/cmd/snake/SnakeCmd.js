@@ -1,7 +1,7 @@
 import { CmdBase } from '../CmdBase.js';
 import { term } from '../../system/sys.js';
-import { CURSOR_HIDE, yellow } from '../../util/sgr.js';
-import { SelectDialog } from '../../dialog/SelectDialog.js';
+import { CURSOR_HIDE } from '../../util/sgr.js';
+import { FieldPickerDialog } from '../../dialog/FieldPickerDialog.js';
 import {
     DIFFICULTY, GRID_COLS, GRID_ROWS, DIR, SPEED_LEVELS, OPPOSITE, DY, DX, BOARD_Y, BOARD_H,
 } from './constants.js';
@@ -32,15 +32,13 @@ class SnakeCmd extends CmdBase {
         this.open();
         term.write('\x1B[2J\x1B[1;1H');
         term.write(CURSOR_HIDE);
-        const opts = ['Easy', 'Medium', 'Hard'];
-        this._difficultyDialog = this.openDialog(SelectDialog, 'snake-diff', {
+        this._difficultyDialog = this.openDialog(FieldPickerDialog, 'snake-diff', {
             title: 'Snake',
-            message: yellow('Select difficulty'),
-            options: opts,
-            footer: '← → Move  ↩ Confirm  ESC Quit',
-            onSelect: (idx) => {
+            fields: [{ key: 'difficulty', label: '難度',
+                options: [['Easy', 'easy'], ['Medium', 'medium'], ['Hard', 'hard']] }],
+            onConfirm: ({ difficulty }) => {
                 this._difficultyDialog = null;
-                this._startGame(opts[idx].toLowerCase());
+                this._startGame(difficulty);
             },
             onCancel: () => {
                 this._difficultyDialog = null;

@@ -3,7 +3,7 @@ import { _createEmpty, _generate, _copyGrid, parseSeed } from './solver.js';
 import { SIZE } from './constants.js';
 import { term, system } from '../../system/sys.js';
 import { CURSOR_HIDE, yellow, bold, red, gray, green } from '../../util/sgr.js';
-import { SelectDialog } from '../../dialog/SelectDialog.js';
+import { FieldPickerDialog } from '../../dialog/FieldPickerDialog.js';
 import { ConfirmDialog } from '../../dialog/ConfirmDialog.js';
 import { _formatTime, renderMethods } from './render.js';
 import { GAME_META } from '../game-meta.js';
@@ -53,15 +53,13 @@ class SudokuCmd extends CmdBase {
         term.write(CURSOR_HIDE);
         this._initVBs();
         this._render();
-        const opts = ['Easy', 'Medium', 'Hard'];
-        this._difficultyDialog = this.openDialog(SelectDialog, 'sudoku-diff', {
+        this._difficultyDialog = this.openDialog(FieldPickerDialog, 'sudoku-diff', {
             title: 'Sudoku',
-            message: yellow('Select difficulty'),
-            options: opts,
-            footer: '← → Move  ↩ Confirm  ESC Quit',
-            onSelect: (idx) => {
+            fields: [{ key: 'difficulty', label: '難度',
+                options: [['Easy', 'easy'], ['Medium', 'medium'], ['Hard', 'hard']] }],
+            onConfirm: ({ difficulty }) => {
                 this._difficultyDialog = null;
-                this._startGame(opts[idx].toLowerCase());
+                this._startGame(difficulty);
             },
             onCancel: () => {
                 this._difficultyDialog = null;

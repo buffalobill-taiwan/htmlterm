@@ -18,8 +18,8 @@ export class Dialog {
     constructor(term, opts) {
         this.term = term;
         this.width = Math.max(2, Math.min(term.cols, opts.width || DEFAULT_DIALOG_WIDTH));
-        this._headerRows = 3;
-        this._footerRows = 3;
+        this._headerRows = opts.header === false ? 1 : 3;
+        this._footerRows = opts.footer === false ? 1 : 3;
         this._scroll = 0;
         this._publishedScroll = 0;
         this._completion = null;
@@ -181,14 +181,16 @@ export class Dialog {
         for (let row = 1; row < this._fullHeight - 1; row++) this._leftRow(row, '');
         this._t(0, '┌' + H.repeat(W - 2) + '┐');
 
-        if (this.title) {
+        if (this._headerRows > 1 && this.title) {
             this._centerRow(1, ' \x1B[1m' + this.title + '\x1B[22m ');
             this._t(2, '├' + H.repeat(W - 2) + '┤');
         }
 
-        this._t(this._fullHeight - 3, '├' + H.repeat(W - 2) + '┤');
-        const footer = this._fullHeight > this.h ? 'PgUp/Dn Scroll  ' + this.footer : this.footer;
-        this._centerRow(this._fullHeight - 2, ' ' + footer + ' ');
+        if (this._footerRows > 1) {
+            this._t(this._fullHeight - 3, '├' + H.repeat(W - 2) + '┤');
+            const footer = this._fullHeight > this.h ? 'PgUp/Dn Scroll  ' + this.footer : this.footer;
+            this._centerRow(this._fullHeight - 2, ' ' + footer + ' ');
+        }
         this._t(this._fullHeight - 1, '└' + H.repeat(W - 2) + '┘');
     }
 

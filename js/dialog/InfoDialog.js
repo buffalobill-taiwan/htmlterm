@@ -18,11 +18,9 @@ export class InfoDialog extends Dialog {
         const h = content.height + 2;
         const pos = centeredDialogPos(term, width, h);
 
-        super(term, { ...opts, width, title: '', footer: '' });
+        super(term, { ...opts, width, header: false, footer: false });
 
         this.h = h;
-        this._headerRows = 1;
-        this._footerRows = 1;
         this.x = opts.x != null ? opts.x : pos.x;
         this.y = opts.y != null ? opts.y : pos.y;
         this._content = content;
@@ -43,16 +41,6 @@ export class InfoDialog extends Dialog {
         this._contentSlot.x = 1;
         this._contentSlot.y = 1;
         this._contentSlot.active = true;
-    }
-
-    _drawFrame() {
-        const H = '─';
-        this._t(0, '┌' + H.repeat(this.width - 2) + '┐');
-        for (let row = 1; row < this._fullHeight - 1; row++) {
-            this._vb.writeStr(row, 0, '│');
-            this._vb.writeStr(row, this.width - 1, '│');
-        }
-        this._t(this._fullHeight - 1, '└' + H.repeat(this.width - 2) + '┘');
     }
 
     _renderContent() {}

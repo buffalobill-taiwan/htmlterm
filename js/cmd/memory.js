@@ -1,6 +1,6 @@
 import { term } from '../system/sys.js';
 import { CmdBase } from './CmdBase.js';
-import { SelectDialog } from '../dialog/SelectDialog.js';
+import { FieldPickerDialog } from '../dialog/FieldPickerDialog.js';
 import { bold, red, green, yellow, cyan, gray, CURSOR_HIDE, makeCell } from '../util/sgr.js';
 import { isWide } from '../util/unicode-width.js';
 import { VirtualBuffer, _blankCell } from '../util/VirtualBuffer.js';
@@ -85,15 +85,13 @@ export class MemoryCmd extends CmdBase {
         term.write('\x1B[2J\x1B[1;1H');
         term.write(CURSOR_HIDE);
 
-        const opts = ['Easy', 'Medium', 'Hard'];
-        this._difficultyDialog = this.openDialog(SelectDialog, 'memory-diff', {
+        this._difficultyDialog = this.openDialog(FieldPickerDialog, 'memory-diff', {
             title: 'Memory',
-            message: yellow('Select difficulty'),
-            options: opts,
-            footer: '← → Move  ↩ Confirm  ESC Quit',
-            onSelect: (idx) => {
+            fields: [{ key: 'difficulty', label: '難度',
+                options: [['Easy', 'easy'], ['Medium', 'medium'], ['Hard', 'hard']] }],
+            onConfirm: ({ difficulty }) => {
                 this._difficultyDialog = null;
-                this._startGame(opts[idx].toLowerCase());
+                this._startGame(difficulty);
             },
             onCancel: () => {
                 this._difficultyDialog = null;

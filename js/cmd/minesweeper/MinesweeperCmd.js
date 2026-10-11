@@ -1,7 +1,7 @@
 import { CmdBase } from '../CmdBase.js';
 import { term } from '../../system/sys.js';
 import { CURSOR_HIDE, yellow, bold, green, red, gray } from '../../util/sgr.js';
-import { SelectDialog } from '../../dialog/SelectDialog.js';
+import { FieldPickerDialog } from '../../dialog/FieldPickerDialog.js';
 import { DIFFICULTY } from './constants.js';
 import { _create2D, generatePuzzle, parseStart, revealCells } from './solver.js';
 import { parseSeed, SEED_MAX } from '../../util/random.js';
@@ -57,15 +57,13 @@ class MinesweeperCmd extends CmdBase {
         term.write('\x1B[2J\x1B[1;1H');
         term.write(CURSOR_HIDE);
 
-        const opts = ['Easy', 'Medium', 'Hard'];
-        this._difficultyDialog = this.openDialog(SelectDialog, 'minesweeper-diff', {
+        this._difficultyDialog = this.openDialog(FieldPickerDialog, 'minesweeper-diff', {
             title: 'Minesweeper',
-            message: yellow('Select difficulty'),
-            options: opts,
-            footer: '← → Move  ↩ Confirm  ESC Quit',
-            onSelect: (idx) => {
+            fields: [{ key: 'difficulty', label: '難度',
+                options: [['Easy', 'easy'], ['Medium', 'medium'], ['Hard', 'hard']] }],
+            onConfirm: ({ difficulty }) => {
                 this._difficultyDialog = null;
-                this._startGame(opts[idx].toLowerCase());
+                this._startGame(difficulty);
             },
             onCancel: () => {
                 this._difficultyDialog = null;

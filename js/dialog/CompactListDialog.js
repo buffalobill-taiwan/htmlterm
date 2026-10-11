@@ -1,10 +1,10 @@
-import { Dialog } from '../../dialog/Dialog.js';
-import { centeredDialogPos } from '../../dialog/position.js';
-import { parseCSI } from '../../system/TextInputModel.js';
-import { bufWidth } from '../../util/display-width.js';
+import { Dialog } from './Dialog.js';
+import { centeredDialogPos } from './position.js';
+import { parseCSI } from '../system/TextInputModel.js';
+import { bufWidth } from '../util/display-width.js';
 
 // A compact title + vertical option list without a footer.
-export class ModeSelectDialog extends Dialog {
+export class CompactListDialog extends Dialog {
     constructor(term, opts) {
         const options = opts.options || [];
         const contentW = options.length ? Math.max(0, ...options.map(o => bufWidth(o))) : 0;
@@ -12,7 +12,7 @@ export class ModeSelectDialog extends Dialog {
         const h = 3 + Math.max(1, options.length) + 1;
         const pos = centeredDialogPos(term, width, h);
 
-        super(term, { ...opts, width, title: opts.title || '' });
+        super(term, { ...opts, width, title: opts.title || '', footer: false });
 
         this.x = opts.x != null ? opts.x : pos.x;
         this.y = opts.y != null ? opts.y : Math.max(0, pos.y - 1);
@@ -21,15 +21,6 @@ export class ModeSelectDialog extends Dialog {
         this._selected = Math.max(0, Math.min(options.length - 1, opts.selectedIndex || 0));
         this._onSelect = opts.onSelect || (() => {});
         this._onCancel = opts.onCancel || (() => {});
-    }
-
-    _drawFrame() {
-        const H = '─';
-        this._t(0, '┌' + H.repeat(this.width - 2) + '┐');
-        this._centerRow(1, ' \x1B[1m' + this.title + '\x1B[22m ');
-        this._t(2, '├' + H.repeat(this.width - 2) + '┤');
-        for (let row = 3; row < this._fullHeight - 1; row++) this._leftRow(row, '');
-        this._t(this._fullHeight - 1, '└' + H.repeat(this.width - 2) + '┘');
     }
 
     _renderContent() {
