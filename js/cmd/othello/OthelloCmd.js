@@ -20,13 +20,13 @@ class OthelloCmd extends CmdBase {
         if (p.flag('--medium')) diff = 'medium';
         if (p.flag('--hard'))   diff = 'hard';
         if (diff) {
-            this._startGame(diff);
+            this._startGame(diff, 'black');
         } else {
-            this._pickDifficulty();
+            this._pickSetup();
         }
     }
 
-    _pickDifficulty() {
+    _pickSetup() {
         this._completed = false;
         this._difficulty = null;
         this._clearTimers();
@@ -35,11 +35,15 @@ class OthelloCmd extends CmdBase {
         term.write(CURSOR_HIDE);
         this._difficultyDialog = this.openDialog(FieldPickerDialog, 'othello-diff', {
             title: 'Othello',
-            fields: [{ key: 'difficulty', label: '難度',
-                options: [['Easy', 'easy'], ['Medium', 'medium'], ['Hard', 'hard']] }],
-            onConfirm: ({ difficulty }) => {
+            fields: [
+                { key: 'difficulty', label: '難度',
+                  options: [['Easy', 'easy'], ['Medium', 'medium'], ['Hard', 'hard']] },
+                { key: 'human', label: '先後手',
+                  options: [['先手（黑方）', 'black'], ['後手（白方）', 'white']] },
+            ],
+            onConfirm: ({ difficulty, human }) => {
                 this._difficultyDialog = null;
-                this._startGame(difficulty);
+                this._startGame(difficulty, human);
             },
             onCancel: () => {
                 this._difficultyDialog = null;
@@ -48,8 +52,10 @@ class OthelloCmd extends CmdBase {
         });
     }
 
-    _startGame(diff) {
+    _startGame(diff, human = 'black') {
         this._difficulty = diff;
+        this._human = human === 'white' ? WHITE : BLACK;
+        this._ai = other(this._human);
         this._completed = false;
         this._difficultyDialog = null;
         this._clearTimers();
@@ -67,7 +73,7 @@ class OthelloCmd extends CmdBase {
         this._thinkHighlight = null;
         this._passMsg = null;
         this._result = null;
-        this._firstMove = true;
+
         this._cursorFlips = null;
 
         this.open();
@@ -75,30 +81,32 @@ class OthelloCmd extends CmdBase {
         term.write(CURSOR_HIDE);
         this._initVBs();
         this._render();
+        if (this._turn === this._human) {
+            const m = getValidMoves(this._board, this._human);
+            if (m && m.length) {
+                this._cursorR = m[0][0];
+                this._cursorC = m[0][1];
+                this._render();
+            }
+        } else if (this._turn === this._ai) {
+            this._startAiTurn();
+        }
     }
 
     // ── Turn flow ───────────────────────────────────────────────────────────
     _tryPlace() {
         if (this._completed || this._flipBusy) return;
-        if (this._turn !== BLACK) return;
+        if (this._turn !== this._human) return;
         const r = this._cursorR;
         const c = this._cursorC;
-        if (!isValid(this._board, r, c, BLACK)) return;
+        if (!isValid(this._board, r, c, this._human)) return;
         this._playMove(r, c);
-    }
-
-    _passFirst() {
-        if (this._completed || this._flipBusy) return;
-        if (this._turn !== BLACK || !this._firstMove) return;
-        this._firstMove = false;
-        this._startAiTurn();
     }
 
     _playMove(r, c) {
         const p = this._turn;
         const flips = applyMove(this._board, r, c, p);
         if (!flips) return;
-        this._firstMove = false;
 
         const map = new Map();
         let maxRing = 0;
@@ -146,8 +154,15 @@ class OthelloCmd extends CmdBase {
         const next = other(this._turn);
         if (getValidMoves(this._board, next).length > 0) {
             this._turn = next;
+            if (next === this._human) {
+                const m = getValidMoves(this._board, this._human);
+                if (m && m.length) {
+                    this._cursorR = m[0][0];
+                    this._cursorC = m[0][1];
+                }
+            }
             this._render();
-            if (next === WHITE) this._startAiTurn();
+            if (next === this._ai) this._startAiTurn();
             return;
         }
         const back = other(next);
@@ -155,7 +170,7 @@ class OthelloCmd extends CmdBase {
             this._gameOver();
             return;
         }
-        this._passMsg = (next === BLACK ? 'You' : 'AI') + ' has no moves — pass';
+        this._passMsg = (next === this._human ? 'You' : 'AI') + ' has no moves — pass';
         this._turn = back;
         this._render();
         const epoch = this.abortEpoch;
@@ -163,7 +178,7 @@ class OthelloCmd extends CmdBase {
             if (this.abortEpoch !== epoch) return;
             if (this._completed) return;
             this._passMsg = null;
-            if (this._turn === WHITE) {
+            if (this._turn === this._ai) {
                 this._startAiTurn();
             } else {
                 this._render();
@@ -173,10 +188,10 @@ class OthelloCmd extends CmdBase {
     }
 
     _startAiTurn() {
-        this._turn = WHITE;
+        this._turn = this._ai;
         this._flipBusy = true;
         this._render();
-        const moves = getValidMoves(this._board, WHITE);
+        const moves = getValidMoves(this._board, this._ai);
         if (!moves.length) {
             this._flipBusy = false;
             this._render();
@@ -206,11 +221,11 @@ class OthelloCmd extends CmdBase {
             this._render();
             let mv = null;
             if (this._difficulty === 'easy') {
-                mv = aiMoveEasy(this._board, WHITE);
+                mv = aiMoveEasy(this._board, this._ai);
             } else if (this._difficulty === 'medium') {
-                mv = aiMoveMedium(this._board, WHITE);
+                mv = aiMoveMedium(this._board, this._ai);
             } else {
-                mv = aiMoveHard(this._board, WHITE);
+                mv = aiMoveHard(this._board, this._ai);
             }
             if (!mv) {
                 this._flipBusy = false;
@@ -298,7 +313,6 @@ class OthelloCmd extends CmdBase {
             const ch = data.toLowerCase();
             if (ch === 'q') { this._quit(); return; }
             if (ch === 'n') { this._newGame(); return; }
-            if (ch === 'p') { this._passFirst(); return; }
         }
     }
 
@@ -308,7 +322,7 @@ class OthelloCmd extends CmdBase {
             this._difficultyDialog = null;
         }
         this._clearTimers();
-        this._pickDifficulty();
+        this._pickSetup();
     }
 
     _clearTimers() {

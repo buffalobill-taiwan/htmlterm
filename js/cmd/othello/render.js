@@ -76,8 +76,8 @@ const renderMethods = {
 
         this._cursorFlips = null;
         if (this._flipBusy === false && this._completed === false && this._passMsg === null &&
-                this._turn === BLACK) {
-            const flips = discFlips(this._board, this._cursorR, this._cursorC, BLACK);
+                this._turn === this._human) {
+            const flips = discFlips(this._board, this._cursorR, this._cursorC, this._human);
             if (flips) this._cursorFlips = new Set(flips);
         }
 
@@ -97,7 +97,7 @@ const renderMethods = {
         const y = 1 + r;
         const p = this._board[idx(r, c)];
         const isCur = this._flipBusy === false && this._completed === false &&
-            this._turn === BLACK && r === this._cursorR && c === this._cursorC;
+            this._turn === this._human && r === this._cursorR && c === this._cursorC;
         const isThink = this._thinkHighlight &&
             this._thinkHighlight[0] === r && this._thinkHighlight[1] === c;
 
@@ -123,7 +123,7 @@ const renderMethods = {
             cell = C.thinkSq;
             cell2 = C.thinkSq2;
         } else if (!this._flipBusy && !this._passMsg && !this._completed &&
-                this._turn === BLACK && isValid(this._board, r, c, BLACK)) {
+                this._turn === this._human && isValid(this._board, r, c, this._human)) {
             if (isCur) { cell = C.curHint; cell2 = C.curHint2; }
             else { cell = C.hint; cell2 = C.hint2; }
         } else if (isCur) {
@@ -153,11 +153,11 @@ const renderMethods = {
         if (this._completed) {
             msg = this._result || '';
         } else if (this._flipBusy) {
-            msg = this._turn === WHITE ? yellow(' AI thinking...') : fg(240)(' Flipping...');
+            msg = this._turn === this._ai ? yellow(' AI thinking...') : fg(240)(' Flipping...');
         } else if (this._passMsg) {
             msg = fg(240)(this._passMsg);
         } else if (this._turn === BLACK && this._firstMove) {
-            msg = fg(240)(' Your turn — [p] pass, AI moves first');
+            msg = fg(240)(' Your turn');
         } else {
             msg = fg(240)(' Your turn');
         }
@@ -165,9 +165,8 @@ const renderMethods = {
     },
 
     _drawFooter(root) {
-        const pass = this._firstMove ? '   [p]ass' : '';
         root.writeStr(FOOTER_Y, 1, '  ' +
-            fg(240)('←↑↓→ Move   Enter Place' + pass + '   [n]ew [q]uit'));
+            fg(240)('←↑↓→ Move   Enter Place   [n]ew [q]uit'));
     },
 };
 
