@@ -1,8 +1,6 @@
 import { CmdBase } from '../CmdBase.js';
 import { term } from '../../system/sys.js';
 import { CURSOR_HIDE } from '../../util/sgr.js';
-import { SelectDialog } from '../../dialog/SelectDialog.js';
-import { VerticalSelectDialog } from '../../dialog/VerticalSelectDialog.js';
 import { parseFen, moveToNotation } from './engine/notation.js';
 import { generateLegalMoves } from './engine/rules.js';
 import { applyBoardCopy } from './engine/board.js';
@@ -13,6 +11,8 @@ import { animateMove } from './animation.js';
 import { ConfirmDialog } from '../../dialog/ConfirmDialog.js';
 import { renderMethods } from './render.js';
 import { EndgameSelectDialog } from './EndgameSelectDialog.js';
+import { AiSetupDialog } from './AiSetupDialog.js';
+import { ModeSelectDialog } from './ModeSelectDialog.js';
 import { GAME_META } from '../game-meta.js';
 const META = GAME_META.cchess;
 
@@ -44,36 +44,32 @@ export class CChessCmd extends CmdBase {
 
     _pickMode() {
         this._stopAsync();
-        this._choice('選擇模式', ['人機對弈', '殘局遊戲'], i => {
-            this._mode = i === 0 ? 'ai' : 'endgame';
-            if (i === 0) this._pickAI(); else this._pickEndgame();
-        });
-    }
-
-    _choice(message, options, onSelect, vertical = false, onBack = null) {
-        if (this._dialog) { this._dialog.close(); this._dialog = null; }
-        this._dialog = this.openDialog(vertical ? VerticalSelectDialog : SelectDialog, 'cchess-select', {
-            title: '中國象棋', message, options, width: 48, cols: 1,
-            footer: `${vertical ? '↑ ↓' : '← →'} 選擇  Enter 確認  Esc ${onBack ? '返回' : '退出'}`,
-            onSelect: i => { this._dialog = null; onSelect(i); },
-            onCancel: () => {
+        this._dialog = this.openDialog(ModeSelectDialog, 'cchess-select', {
+            title: '中國象棋',
+            options: ['傳統象棋', '殘局遊戲'],
+            onSelect: i => {
                 this._dialog = null;
-                if (onBack) onBack();
-                else this._confirmQuit(() => this._choice(message, options, onSelect, vertical));
+                this._mode = i === 0 ? 'ai' : 'endgame';
+                if (i === 0) this._pickAI(); else this._pickEndgame();
             },
+            onCancel: () => { this._dialog = null; this._quit(); },
         });
     }
 
     _pickAI() {
         this._stopAsync();
-        this._choice('選擇難度', ['Easy', 'Medium', 'Hard'], i => {
-            this._difficulty = ['easy', 'medium', 'hard'][i];
-            this._choice('選擇先後手', ['先手（紅方）', '後手（黑方）'], side => {
-                this._human = side === 0 ? 'red' : 'black';
+        this._dialog = this.openDialog(AiSetupDialog, 'cchess-ai-setup', {
+            difficulty: this._difficulty,
+            human: this._human,
+            onConfirm: ({ difficulty, human }) => {
+                this._dialog = null;
+                this._difficulty = difficulty;
+                this._human = human;
                 this._puzzle = null;
                 this._start(INITIAL_FEN);
-            }, false, () => this._pickAI());
-        }, false, () => this._pickMode());
+            },
+            onCancel: () => { this._dialog = null; this._pickMode(); },
+        });
     }
 
     async _fetchJSON(file, signal) {
