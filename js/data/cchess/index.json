@@ -120,6 +120,12 @@
     "file": "endgame-022.json"
   },
   {
+    "id": "endgame-023",
+    "name": "避敵建功",
+    "step": 11,
+    "file": "endgame-023.json"
+  },
+  {
     "id": "endgame-021",
     "name": "十二連",
     "step": 12,
