@@ -112,5 +112,17 @@
     "name": "奮不顧身",
     "step": 9,
     "file": "endgame-018.json"
+  },
+  {
+    "id": "endgame-022",
+    "name": "續傌再殺將",
+    "step": 10,
+    "file": "endgame-022.json"
+  },
+  {
+    "id": "endgame-021",
+    "name": "十二連",
+    "step": 12,
+    "file": "endgame-021.json"
   }
 ]
