@@ -12,6 +12,7 @@ import { ConfirmDialog } from '../../dialog/ConfirmDialog.js';
 import { CompactListDialog } from '../../dialog/CompactListDialog.js';
 import { FieldPickerDialog } from '../../dialog/FieldPickerDialog.js';
 import { renderMethods } from './render.js';
+import { darkMethods } from './dark.js';
 import { EndgameSelectDialog } from './EndgameSelectDialog.js';
 import { GAME_META } from '../game-meta.js';
 const META = GAME_META.cchess;
@@ -44,13 +45,17 @@ export class CChessCmd extends CmdBase {
 
     _pickMode() {
         this._stopAsync();
+        this._board = this._mode = null;
+        this._render();
         this._dialog = this.openDialog(CompactListDialog, 'cchess-select', {
             title: '中國象棋',
-            options: ['傳統象棋', '殘局遊戲'],
+            options: ['傳統象棋', '殘局遊戲', '休閒暗棋'],
             onSelect: i => {
                 this._dialog = null;
-                this._mode = i === 0 ? 'ai' : 'endgame';
-                if (i === 0) this._pickAI(); else this._pickEndgame();
+                this._mode = ['ai', 'endgame', 'dark'][i];
+                if (i === 0) this._pickAI();
+                else if (i === 1) this._pickEndgame();
+                else this._pickDark();
             },
             onCancel: () => { this._dialog = null; this._quit(); },
         });
@@ -244,6 +249,7 @@ export class CChessCmd extends CmdBase {
     }
 
     _stopAsync() {
+        clearTimeout(this._darkTimer); this._darkTimer = null;
         this._epoch = (this._epoch ?? 0) + 1;
         this._cancelAnimation?.(); this._cancelAnimation = null;
         this._cancelWorker?.(); this._cancelWorker = null; this._worker = null;
@@ -256,16 +262,21 @@ export class CChessCmd extends CmdBase {
         if (data === '\x1B' || data === 27 || data === 'q' || data === 'Q') { this._confirmQuit(); return; }
         if (code === 3) { this._quit(); return; }
         if (data === 'n' || data === 'N') {
+            if (this._mode === 'dark') { this._pickDark(); return; }
             if (this._mode === 'endgame') this._pickEndgame(); else this._pickAI();
             return;
         }
-        if (data === 'r' || data === 'R') { if (this._initialFen) this._start(this._initialFen); return; }
+        if (data === 'r' || data === 'R') {
+            if (this._mode === 'dark') this._startDark(true);
+            else if (this._initialFen) this._start(this._initialFen);
+            return;
+        }
         if (this._busy || this._completed || !this._board) return;
         const arrows = { '\x1B[A': [-1,0], '\x1B[B': [1,0], '\x1B[C': [0,1], '\x1B[D': [0,-1] };
         if (arrows[data]) {
             const [dr, dc] = arrows[data];
-            this._cursorR = Math.max(0, Math.min(9, this._cursorR+dr));
-            this._cursorC = Math.max(0, Math.min(8, this._cursorC+dc));
+            this._cursorR = Math.max(0, Math.min(this._mode === 'dark' ? 3 : 9, this._cursorR+dr));
+            this._cursorC = Math.max(0, Math.min(this._mode === 'dark' ? 7 : 8, this._cursorC+dc));
             this._render(); return;
         }
         // All other escape sequences, including editing/navigation keys, are ignored.
@@ -274,7 +285,9 @@ export class CChessCmd extends CmdBase {
             this._selected = null; this._destinations.clear(); this._message = null;
             this._render(); return;
         }
-        if (code === 13 || code === 10) this._select();
+        if (code === 13 || code === 10) {
+            if (this._mode === 'dark') this._selectDark(); else this._select();
+        }
     }
 
     _confirmQuit(onContinue = () => this._render()) {
@@ -302,6 +315,6 @@ export class CChessCmd extends CmdBase {
     static get usage() { return META.usage; }
 }
 
-for (const [name, value] of Object.entries(renderMethods)) {
+for (const [name, value] of Object.entries({ ...renderMethods, ...darkMethods })) {
     Object.defineProperty(CChessCmd.prototype, name, { value, writable: true, configurable: true });
 }

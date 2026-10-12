@@ -1,5 +1,24 @@
 # Chinese chess engine and endgames
 
+The third mode, 休閒暗棋, is a local 4×8 dark-chess game in `dark.js`,
+independent of the upstream engine. All 32 pieces start face down as green
+`⬤` glyphs in the squares of the board's upper half. A setup dialog offers
+Easy/Medium/Hard and human first/second. The first flip assigns the first
+actor's color; the other actor receives the opposite color. Pieces move one square
+orthogonally. Captures use king > advisor > elephant > chariot > horse > cannon
+> soldier, with soldiers able to capture kings and kings unable to capture
+soldiers. Cannons capture any revealed enemy over exactly one occupied square;
+face-down pieces can be screens but cannot be captured. Equal ranks can capture.
+No remaining pieces or no legal action loses; 80 consecutive moves without a
+capture or flip draw. Easy prioritizes captures, then flips, then moves. Medium
+considers an opponent reply; Hard searches one further ply. Search uses revealed
+pieces only and evaluates flips as an unknown-information alternative, without
+inspecting hidden identities. Every computer action blinks its source (or the
+face-down piece to flip) twice, with 100ms off/on phases on a separate overlay,
+before committing. `r` restores the original hidden layout and settings;
+`n` reopens setup and shuffles a new game. Pending AI timers and blink overlays
+are cancelled on restart and exit.
+
 `cchess` uses a local adaptation of the DOM-free engine from
 <https://github.com/buffalobill-taiwan/cchess-endgame>, based on commit
 `741f8dea8debef74b5875fc465a734cb9e7cc1e4` (2026-10-01).

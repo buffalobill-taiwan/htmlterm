@@ -87,6 +87,7 @@ export const renderMethods = {
     },
 
     _render() {
+        if (this._mode === 'dark' && this._board) { this._renderDark(); return; }
         const root = this._rootVB, vb = this._boardVB;
         for (const row of root._buffer) row.fill(_blankCell);
         for (let r = 0; r < BOARD_H; r++) {
@@ -122,6 +123,42 @@ export const renderMethods = {
         const log = this._log ?? [], start = Math.max(0, log.length - 10);
         for (let i = start; i < log.length; i++) root.writeStr(12+i-start, SIDE_X, clip(log[i], SIDE_W));
         const footer = '←↑↓→ 移動  Enter 選棋/落子  Space 取消  [r]重來 [n]換局 [q]退出';
+        root.writeStr(23, Math.max(0, Math.floor((80-bufWidth(footer))/2)), fg(244)(footer));
+        term.writeVB(root);
+    },
+
+    _renderDark() {
+        const root = this._rootVB, vb = this._boardVB;
+        for (const row of root._buffer) row.fill(_blankCell);
+        for (let r = 0; r < BOARD_H; r++) for (let c = 0; c < BOARD_W; c++) {
+            vb.setCell(r, c, this._gridVB.getCell(r, c));
+        }
+        for (let r = 0; r < 4; r++) for (let c = 0; c < 8; c++) {
+            const y = boardY(r)+1, x = boardX(c)+1, piece = this._board[r][c];
+            const active = !this._busy && !this._completed;
+            let bg = this._lastMove && [this._lastMove.from, this._lastMove.to].some(p => p.row === r && p.col === c) ? 236 : 0;
+            if (active && this._destinations.has(r*8+c)) bg = 22;
+            if (active && this._cursorR === r && this._cursorC === c) bg = 24;
+            if (active && this._selected?.row === r && this._selected?.col === c) bg = 60;
+            // Clear palace diagonals as well as the previous occupant of each square.
+            vb.writeStr(y, x, `\x1B[48;5;${bg}m  \x1B[0m`);
+            if (piece?.hidden) vb.writeStr(y, x, `\x1B[38;5;10;48;5;${bg}m⬤\x1B[0m`);
+            else if (piece) this._putPiece(vb, y, x, piece, bg);
+        }
+        root.writeStr(0, SIDE_X, bold(cyan('中國象棋')));
+        root.writeStr(2, SIDE_X, bold(yellow(`休閒暗棋 ${(this._darkDifficulty || 'medium').toUpperCase()}`)));
+        root.writeStr(4, SIDE_X, this._human ? `玩家：${this._human === 'red' ? '紅' : '黑'}方` : '首顆翻棋決定先手陣營');
+        root.writeStr(5, SIDE_X, `玩家${this._darkFirst === 'computer' ? '後' : '先'}手`);
+        root.writeStr(7, SIDE_X, `玩家已走：${this._humanSteps} 步`);
+        root.writeStr(9, SIDE_X, yellow(clip(this._result || this._message || (this._busy ? '電腦思考中…' : '輪到玩家：翻棋或走棋'), SIDE_W)));
+        root.writeStr(11, SIDE_X, fg(244)('最近棋譜'));
+        const start = Math.max(0, this._log.length - 10);
+        for (let i = start; i < this._log.length; i++) root.writeStr(12+i-start, SIDE_X, clip(this._log[i], SIDE_W));
+        // Rules occupy the unused lower half of the board.
+        const rules = ['Enter 翻棋／選棋／落子', '上下左右走一格，大吃小', '帥將 > 仕士 > 相象 > 俥車', '     > 傌馬 > 炮砲 > 兵卒', '兵卒可吃帥將，帥將不可吃兵卒', '炮砲吃子須隔一子，不限大小', '蓋住的棋子不能移動或被吃', '80 步未吃子或翻棋即和局'];
+        for (let r = 11; r < BOARD_H; r++) vb._buffer[r].fill(_blankCell);
+        for (let i = 0; i < rules.length; i++) vb.writeStr(12+i, 1, fg(244)(rules[i]));
+        const footer = '←↑↓→ 移動  Enter 翻/選/走  Space 取消  [r]重來 [n]換局 [q]退出';
         root.writeStr(23, Math.max(0, Math.floor((80-bufWidth(footer))/2)), fg(244)(footer));
         term.writeVB(root);
     },

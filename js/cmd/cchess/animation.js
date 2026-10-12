@@ -1,6 +1,41 @@
 import { BLINK_MS, STEP_MS, BOARD_X, BOARD_Y, BOARD_W, BOARD_H, boardX, boardY } from './constants.js';
 import { RAFAnimationManager } from '../../system/RAFAnimationHelper.js';
 import { term } from '../../system/sys.js';
+import { _blankCell } from '../../util/VirtualBuffer.js';
+
+// Keep the board untouched until both off/on cycles have completed. Copy the
+// displayed cells once so a face-down piece never exposes its identity here.
+export function animateDarkAction(cmd, move) {
+    const origin = move.from || move.to;
+    const y = boardY(origin.row) + 1, x = boardX(origin.col) + 1;
+    const first = cmd._boardVB.getCell(y, x), second = cmd._boardVB.getCell(y, x+1);
+    const vb = cmd._animationVB;
+    let phase = 0, until = null, completed = false;
+    return new Promise(resolve => {
+        const manager = new RAFAnimationManager(cmd, {
+            x: BOARD_X, y: BOARD_Y, w: BOARD_W, h: BOARD_H,
+            hideCursor: false, holdBusy: false, frameDuration: 1,
+        });
+        manager.initOverlay((row, col) => vb.getCell(row, col));
+        const finish = () => {
+            vb.clearCells();
+            if (cmd._cancelAnimation === cancel) cmd._cancelAnimation = null;
+            resolve(completed);
+        };
+        const cancel = () => manager.stop(finish);
+        cmd._cancelAnimation = cancel;
+        manager.start(ts => {
+            if (until !== null && ts < until) return false;
+            if (phase === 4) { completed = true; return true; }
+            const visible = phase++ % 2 === 1;
+            vb.setCell(y, x, visible ? first : _blankCell);
+            vb.setCell(y, x+1, visible ? second : _blankCell);
+            term.markRowDirty(BOARD_Y+y);
+            until = ts + BLINK_MS;
+            return false;
+        }, finish);
+    });
+}
 
 // Pure timeline: each frame remains visible for `ms`, then advances.
 export function movementFrames(piece, move, blink = true) {
