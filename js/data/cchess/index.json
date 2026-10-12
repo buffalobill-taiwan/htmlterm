@@ -108,6 +108,12 @@
     "file": "endgame-020.json"
   },
   {
+    "id": "endgame-024",
+    "name": "齊聚一堂",
+    "step": 8,
+    "file": "endgame-024.json"
+  },
+  {
     "id": "endgame-018",
     "name": "奮不顧身",
     "step": 9,
@@ -121,7 +127,7 @@
   },
   {
     "id": "endgame-023",
-    "name": "避敵建功",
+    "name": "眾志成城",
     "step": 11,
     "file": "endgame-023.json"
   },
