@@ -3,7 +3,7 @@ import { WidgetBase } from '../WidgetBase.js';
 import { makeCell } from '../../util/sgr.js';
 import { isWide } from '../../util/unicode-width.js';
 
-const COLORS = [1, 2, 3, 4, 5, 6, 9, 10, 11, 12, 13, 14];
+const COLORS = [1, 2, 3, 4, 5, 6];
 
 export class DVDWidget extends WidgetBase {
     constructor(text = 'DVD') {
@@ -109,7 +109,7 @@ export class DVDWidget extends WidgetBase {
                 const nCols = isWide(ch) ? 4 : 2;
                 for (let r = 0; r < 2; r++) {
                     for (let c = 0; c < nCols; c++) {
-                        const cell = makeCell(ch, 7, color, false);
+                        const cell = makeCell(ch, 15, color, false);
                         cell.clip = true;
                         cell.clipOffX = -c;
                         cell.clipOffY = -r;
