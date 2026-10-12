@@ -38,7 +38,7 @@ contains shared dimensions, difficulty settings, and other fixed configuration.
 | [gweled](../js/cmd/gweled/index.js) | `GweledCmd` | `board.js`: matches, gravity, legal swaps, and chain scores |
 | [klotski](../js/cmd/klotski/index.js) | `KlotskiCmd` | `LevelSelectDialog.js`: level chooser; level data and solutions stay in `js/data/` |
 | [minesweeper](../js/cmd/minesweeper/index.js) | `MinesweeperCmd` | `solver.js`: seeded generation, first-reveal parsing, flood reveal, and logical solvability checks |
-| [nurikabe](../js/cmd/nurikabe/index.js) | `NurikabeCmd` | `analysis.js`: clue groups, pools, and sea connectivity; puzzle generation stays in `js/util/nurikabe-engine.js` |
+| [nurikabe](../js/cmd/nurikabe/index.js) | `NurikabeCmd` | `analysis.js`: clue groups, pools, and sea connectivity; `generation-worker.js`: runs seeded generation off the UI thread and is terminated on completion or cancellation; generation rules stay in `js/util/nurikabe-engine.js` |
 | [othello](../js/cmd/othello/index.js) | `OthelloCmd` | `board.js`: legal moves and flips; `ai.js`: evaluation and search |
 | [cchess](../js/cmd/cchess/index.js) | `CChessCmd` | `engine/`: adapted Chinese chess rules/search; `animation.js`: move overlays; `endgames.js`: response table validation; see [upstream integration](cchess-upstream.md) |
 | [puyo](../js/cmd/puyo/index.js) | `PuyoCmd` | `board.js`: group detection, gravity, and chain scores |

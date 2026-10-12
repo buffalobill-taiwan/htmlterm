@@ -4,7 +4,7 @@ import { term } from '../../system/sys.js';
 import { CURSOR_HIDE, yellow, bold, red, gray, green } from '../../util/sgr.js';
 import { FieldPickerDialog } from '../../dialog/FieldPickerDialog.js';
 import { _create2D, _analyzeClueColors, _analyzePools, _analyzeSeaConnectivity } from './analysis.js';
-import { WHITE, geom, generatePuzzle, BLACK, isSolved } from '../../util/nurikabe-engine.js';
+import { WHITE, geom, BLACK, isSolved } from '../../util/nurikabe-engine.js';
 import { _formatTime, renderMethods } from './render.js';
 import { GAME_META } from '../game-meta.js';
 const META = GAME_META.nurikabe;
@@ -127,11 +127,12 @@ class NurikabeCmd extends CmdBase {
         this._initVBs();
         this._renderGenerating();
 
-        const generation = { active: true, timer: null, resume: null };
+        const generation = { active: true, worker: null, resume: null };
         const cancel = () => {
             generation.active = false;
-            clearTimeout(generation.timer);
-            generation.resume?.();
+            generation.worker?.terminate();
+            generation.worker = null;
+            generation.resume?.(null);
             generation.resume = null;
         };
         this._cancelGeneration = cancel;
@@ -144,6 +145,9 @@ class NurikabeCmd extends CmdBase {
         } catch (err) {
             failure = 'Generation failed: ' + (err.message || String(err));
         } finally {
+            generation.worker?.terminate();
+            generation.worker = null;
+            generation.resume = null;
             removeCleanup();
         }
         if (!generation.active) return;
@@ -176,28 +180,23 @@ class NurikabeCmd extends CmdBase {
         this._startTimer();
     }
 
-    async _generateAsync(size, generation, seed = null) {
-        const maxAttempts = size <= 8 ? 300 : size <= 12 ? 600 : 1200;
+    _generateAsync(size, generation, seed = null) {
         const baseSeed = seed != null ? seed : (Date.now() & 0x7fffffff);
-        for (let attempt = 0; attempt < maxAttempts; attempt++) {
-            if (!generation.active) return null;
-            const puzzle = generatePuzzle(size, size, {
-                seed: baseSeed + attempt,
-                maxAttempts: 1,
-            });
-            if (puzzle) return { puzzle, seed: baseSeed + attempt };
-            // Yield to the UI thread every attempt so the browser never freezes.
-            // For large boards each attempt can take 10-100ms; batching would cause jank.
-            await new Promise(resolve => {
-                generation.resume = resolve;
-                generation.timer = setTimeout(() => {
-                    generation.timer = null;
-                    generation.resume = null;
-                    resolve();
-                }, 0);
-            });
-        }
-        return null;
+        return new Promise((resolve, reject) => {
+            const worker = new Worker(new URL('./generation-worker.js', import.meta.url), { type: 'module' });
+            generation.worker = worker;
+            generation.resume = resolve;
+            worker.onmessage = ({ data }) => {
+                if (data.error) reject(new Error(data.error));
+                else resolve(data.result);
+            };
+            worker.onerror = event => {
+                event.preventDefault();
+                reject(new Error(event.message || 'Could not load puzzle generator.'));
+            };
+            worker.onmessageerror = () => reject(new Error('Could not read generated puzzle.'));
+            worker.postMessage({ size, seed: baseSeed });
+        });
     }
 
     _updateClueColors() {
