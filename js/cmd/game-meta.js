@@ -12,7 +12,7 @@ export const GAME_META = {
     },
     cchess: {
         commandName: 'cchess',
-        help: 'Play Chinese chess or endgame puzzles',
+        help: 'Play Chinese chess, endgames, dark chess or chess mahjong',
         menu: '中國象棋',
         usage: 'cchess',
     },

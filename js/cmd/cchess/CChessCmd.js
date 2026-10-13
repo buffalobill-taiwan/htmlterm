@@ -13,6 +13,8 @@ import { CompactListDialog } from '../../dialog/CompactListDialog.js';
 import { FieldPickerDialog } from '../../dialog/FieldPickerDialog.js';
 import { renderMethods } from './render.js';
 import { darkMethods } from './dark.js';
+import { mahjongMethods } from './mahjong/game.js';
+import { mahjongRenderMethods } from './mahjong/render.js';
 import { EndgameSelectDialog } from './EndgameSelectDialog.js';
 import { GAME_META } from '../game-meta.js';
 const META = GAME_META.cchess;
@@ -29,6 +31,7 @@ export class CChessCmd extends CmdBase {
         this._index = null;
         this._board = null;
         this._mode = null;
+        this._mahjong = this._mahjongInitial = null;
         this._puzzle = null;
         this._log = [];
         this._difficulty = null;
@@ -46,16 +49,18 @@ export class CChessCmd extends CmdBase {
     _pickMode() {
         this._stopAsync();
         this._board = this._mode = null;
+        this._mahjong = this._mahjongInitial = null;
         this._render();
         this._dialog = this.openDialog(CompactListDialog, 'cchess-select', {
             title: '中國象棋',
-            options: ['傳統象棋', '殘局遊戲', '休閒暗棋'],
+            options: ['傳統象棋', '殘局遊戲', '休閒暗棋', '象棋麻將'],
             onSelect: i => {
                 this._dialog = null;
-                this._mode = ['ai', 'endgame', 'dark'][i];
+                this._mode = ['ai', 'endgame', 'dark', 'mahjong'][i];
                 if (i === 0) this._pickAI();
                 else if (i === 1) this._pickEndgame();
-                else this._pickDark();
+                else if (i === 2) this._pickDark();
+                else this._pickMahjong();
             },
             onCancel: () => { this._dialog = null; this._quit(); },
         });
@@ -249,6 +254,7 @@ export class CChessCmd extends CmdBase {
     }
 
     _stopAsync() {
+        clearTimeout(this._mahjongTimer); this._mahjongTimer = null;
         clearTimeout(this._darkTimer); this._darkTimer = null;
         this._epoch = (this._epoch ?? 0) + 1;
         this._cancelAnimation?.(); this._cancelAnimation = null;
@@ -258,6 +264,7 @@ export class CChessCmd extends CmdBase {
     }
 
     _onKey(data) {
+        if (this._mode === 'mahjong') { this._onMahjongKey(data); return; }
         const code = typeof data === 'string' ? data.charCodeAt(0) : data;
         if (data === '\x1B' || data === 27 || data === 'q' || data === 'Q') { this._confirmQuit(); return; }
         if (code === 3) { this._quit(); return; }
@@ -315,6 +322,6 @@ export class CChessCmd extends CmdBase {
     static get usage() { return META.usage; }
 }
 
-for (const [name, value] of Object.entries({ ...renderMethods, ...darkMethods })) {
+for (const [name, value] of Object.entries({ ...renderMethods, ...darkMethods, ...mahjongMethods, ...mahjongRenderMethods })) {
     Object.defineProperty(CChessCmd.prototype, name, { value, writable: true, configurable: true });
 }

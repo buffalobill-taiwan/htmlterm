@@ -1,5 +1,58 @@
 # Chinese chess engine and endgames
 
+## Chess mahjong
+
+The fourth mode, 象棋麻將, is a local four-player 32-piece game under
+`js/cmd/cchess/mahjong/`, independent of the upstream chess engine and `jpmj`.
+Setup offers Easy/Medium/Hard and a random or fixed East/South/West/North seat.
+All three difficulty labels deliberately use the same AI and 450ms action
+delay. Random seating is chosen afresh for each match; seats stay fixed until
+the next match. East deals first, and turns follow East → South → West → North.
+The human's seat is always displayed at the bottom of the table.
+
+The dealer receives five pieces and everyone else four. A winning hand is one
+meld and one pair: melds are same-color 帥仕相, 將士象, 俥傌炮, 車馬砲,
+three 兵 or three 卒. Pairs are identical pieces, with 帥將 also allowed.
+Five 兵 or five 卒 therefore wins. Only chi from the preceding seat is allowed;
+there is no pon or kan. A chi is exposed permanently and followed by a discard
+without drawing. Opening self-draw wins are allowed. There is no ready
+declaration or passed-win restriction.
+
+Discard wins are offered before chi, in turn order starting after the
+discarder. Only the first accepting player wins. Declining a win still permits
+a subsequent chi when eligible. The final discard can be claimed; drawing
+from an empty wall ends the hand in a draw. The winning discard remains in
+the source's discard pool and is referenced by the result rather than copied.
+
+Each match starts at zero points. A discard win transfers one point from the
+discarder; a self-draw transfers one point from each opponent. Draws do not
+change scores. Negative totals are allowed. Dealer wins and draws retain the
+dealer; otherwise the next seat deals. There are no bonus hands or dealer
+multipliers. Scores last only for the current in-memory match.
+
+Left/Right selects a tile and Enter discards. Action dialogs offer win/chi/pass;
+Escape passes. At settlement all hands are exposed and Enter begins the next
+round. `r` restores the round's original deal, seats and pre-round scores;
+`n` confirms abandoning the match and reopens setup, retaining the setting
+choices. `q`/Escape confirms exit and Ctrl+C cancels immediately during play.
+Action dialogs also accept `r`, `n`, `q`, and Ctrl+C. Confirmations pause AI;
+cancelling resumes the same decision. Epoch checks and timer cancellation
+prevent old actions from committing after restart, new match or exit.
+
+`rules.js` owns legal actions and state transitions; `game.js` connects these
+to the existing CChessCmd lifecycle and DialogFrame; `render.js` draws through
+the shared root VirtualBuffer with the chess-board child slot disabled.
+The single AI policy receives only its own hand and public information. It
+always wins when possible, otherwise minimizes missing tiles across legal
+completion patterns and favors more available effective tiles, breaking ties
+randomly. It accepts chi only if this evaluation improves after discarding.
+It never receives opponents' concealed hands or wall order.
+
+Run `node tools/test-cchess-mahjong.mjs` for rules, scoring, claim priority,
+hidden-information isolation and seeded full-round conservation checks.
+
+## Dark chess
+
 The third mode, 休閒暗棋, is a local 4×8 dark-chess game in `dark.js`,
 independent of the upstream engine. All 32 pieces start face down as green
 `⬤` glyphs in the squares of the board's upper half. A setup dialog offers
@@ -21,6 +74,8 @@ are cancelled on restart and exit.
 Below the dark-chess board, two fixed rows list red and black pieces in rank
 order. Hidden pieces have green backgrounds; revealed pieces have normal
 backgrounds. Captured pieces leave blank slots within their type's group.
+
+## Upstream engine and endgames
 
 `cchess` uses a local adaptation of the DOM-free engine from
 <https://github.com/buffalobill-taiwan/cchess-endgame>, based on commit

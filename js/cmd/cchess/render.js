@@ -28,6 +28,7 @@ export const renderMethods = {
         this._gridVB = new VirtualBuffer(BOARD_W, BOARD_H);
         this._animationVB = new VirtualBuffer(BOARD_W, BOARD_H);
         const slot = this._rootVB.addChildSlot();
+        this._boardSlot = slot;
         Object.assign(slot, { vb: this._boardVB, x: BOARD_X, y: BOARD_Y, active: true });
         this._pieceCells = new Map();
         this._pointCells = new Map();
@@ -91,6 +92,8 @@ export const renderMethods = {
     },
 
     _render() {
+        this._boardSlot.active = this._mode !== 'mahjong';
+        if (this._mode === 'mahjong') { this._renderMahjong(); return; }
         if (this._mode === 'dark' && this._board) { this._renderDark(); return; }
         const root = this._rootVB, vb = this._boardVB;
         for (const row of root._buffer) row.fill(_blankCell);
