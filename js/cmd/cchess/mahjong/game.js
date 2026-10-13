@@ -1,15 +1,31 @@
 import { FieldPickerDialog } from '../../../dialog/FieldPickerDialog.js';
 import { CompactListDialog } from '../../../dialog/CompactListDialog.js';
 import { ConfirmDialog } from '../../../dialog/ConfirmDialog.js';
+import { ShowDialog } from '../../../dialog/ShowDialog.js';
 import { CHARS } from '../engine/constants.js';
 import { WINDS, createRound, actor, legalActions, applyAction, publicView } from './rules.js';
 import { chooseAction } from './ai.js';
+
+const RULES = [
+    '32 子四人玩法：莊家五張，其餘四張，摸一張、打一張。',
+    '胡牌＝一組面子＋一對。莊家起手即可自摸。',
+    '順子：同色帥仕相、將士象、俥傌炮、車馬砲。',
+    '刻子：三兵或三卒。對子：同色同字，帥將也可配對。',
+    '只吃上家，不碰不槓；吃後打牌，不摸牌，面子不可拆。',
+    '胡優先於吃；多人能胡，由出牌者下家起先接受者胡。',
+    '不用宣告聽牌，過後仍可胡；無牌可摸時流局。',
+    '放槍付 1 分；自摸其餘三家各付 1 分；流局不計分。',
+    '莊家胡或流局連莊，否則輪下家；連莊不加分。',
+    '← → 選牌，Enter 出牌；吃胡視窗按 Esc 表示過。',
+    '結算後 Enter 下一局；r 重玩本局，恢復局前積分。',
+    'n 重新設定並清零積分；q 退出；Ctrl+C 立即退出。',
+].join('\n');
 
 // DialogFrame still owns routing; finish the dialog before invoking game controls.
 class ActionDialog extends CompactListDialog {
     constructor(term, opts) { super(term, opts); this._control = opts.onControl; }
     _onKey(data) {
-        if (data === '\x03' || /^[rnq]$/i.test(data)) return this.complete(this._control, data);
+        if (data === '\x03' || /^[hrnq]$/i.test(data)) return this.complete(this._control, data);
         return super._onKey(data);
     }
 }
@@ -30,7 +46,30 @@ class SetupDialog extends FieldPickerDialog {
     }
 }
 
+class RulesDialog extends ShowDialog {
+    constructor(term, opts) { super(term, opts); this._abort = opts.onAbort; }
+    _onKey(data) {
+        if (data === '\x03') return this.complete(this._abort);
+        return super._onKey(data);
+    }
+}
+
 export const mahjongMethods = {
+    _showMahjongRules() {
+        if (!this._mahjong || this._dialog) return;
+        this._stopAsync();
+        const state = this._mahjong, epoch = this._epoch;
+        this._dialog = this.openDialog(RulesDialog, 'cchess-mahjong-rules', {
+            title: '象棋麻將規則', width: 72, message: RULES,
+            footer: 'Enter / Esc 返回遊戲  Ctrl+C 退出',
+            onExit: () => {
+                this._dialog = null;
+                if (this._mahjong === state && this._epoch === epoch) this._mahjongPump();
+            },
+            onAbort: () => { this._dialog = null; this._quit(); },
+        });
+    },
+
     _pickMahjong() {
         this._stopAsync();
         this._mahjong = this._mahjongInitial = null;
@@ -143,6 +182,7 @@ export const mahjongMethods = {
     _onMahjongKey(data) {
         const code = typeof data === 'string' ? data.charCodeAt(0) : data;
         if (code === 3) { this._quit(); return; }
+        if (data === 'h' || data === 'H') { this._showMahjongRules(); return; }
         if (data === '\x1B' || data === 27 || data === 'q' || data === 'Q') { this._confirmMahjong(false); return; }
         if (data === 'n' || data === 'N') { this._confirmMahjong(true); return; }
         if (data === 'r' || data === 'R') {

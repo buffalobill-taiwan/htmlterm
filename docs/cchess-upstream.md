@@ -8,7 +8,14 @@ Setup offers Easy/Medium/Hard and a random or fixed East/South/West/North seat.
 All three difficulty labels deliberately use the same AI and 450ms action
 delay. Random seating is chosen afresh for each match; seats stay fixed until
 the next match. East deals first, and turns follow East → South → West → North.
-The human's seat is always displayed at the bottom of the table.
+The table occupies the left 54 columns, with a separate information panel on
+the right. The human sits at bottom right, the next seat at top right, the
+opposite seat at top left, and the preceding seat at bottom left. Each hand is
+centered within its corner; hidden pieces use green `⬤` glyphs. The information
+panel holds difficulty, round, dealer, wall count, scores and status/results.
+All discards share one central pool in discard order, eight per row without seat labels.
+Claimed chi tiles leave the pool; remaining tiles keep their relative order.
+The rules retain the original discarder for chi and win claims.
 
 The dealer receives five pieces and everyone else four. A winning hand is one
 meld and one pair: melds are same-color 帥仕相, 將士象, 俥傌炮, 車馬砲,
@@ -35,7 +42,11 @@ Escape passes. At settlement all hands are exposed and Enter begins the next
 round. `r` restores the round's original deal, seats and pre-round scores;
 `n` confirms abandoning the match and reopens setup, retaining the setting
 choices. `q`/Escape confirms exit and Ctrl+C cancels immediately during play.
-Action dialogs also accept `r`, `n`, `q`, and Ctrl+C. Confirmations pause AI;
+`h`/`H` opens the rules instead of permanently showing them below the table.
+Enter/Escape closes the rules and resumes play; Ctrl+C exits. Rules can be
+opened during AI waits, action prompts and settlement. Opening them pauses
+AI and closing them restores the pending decision without passing a claim.
+Action dialogs also accept `h`, `r`, `n`, `q`, and Ctrl+C. Confirmations pause AI;
 cancelling resumes the same decision. Epoch checks and timer cancellation
 prevent old actions from committing after restart, new match or exit.
 

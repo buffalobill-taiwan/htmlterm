@@ -30,6 +30,8 @@ function conservation(state) {
     assert.equal(all.length, 32);
     assert.equal(new Set(all.map(t => t.id)).size, 32);
     assert.deepEqual(SUPPLY.map((_, k) => all.filter(t => t.kind === k).length), SUPPLY);
+    assert.deepEqual(state.discards.map(t => t.id).sort((a,b) => a-b),
+        state.players.flatMap(p => p.discards.map(t => t.id)).sort((a,b) => a-b));
 }
 
 test('deck, four seats, initial dealer and round snapshots', () => {
@@ -174,13 +176,17 @@ test('seeded complete games terminate, conserve tiles and keep scores zero-sum',
     let wins = 0, draws = 0;
     for (let seed = 1; seed <= 100; seed++) {
         const random = mulberry32(seed), state = createRound({ deck: newDeck(random), dealer: seed % 4, human: seed % 4 });
+        const discardOrder = [];
         let steps = 0;
         while (state.phase !== 'done') {
             assert.ok(++steps < 150, `game ${seed} did not terminate`);
             const actions = legalActions(state);
             const action = chooseAction(publicView(state, actor(state)), actions, random);
             assert.ok(action);
+            if (action.type === 'discard') discardOrder.push(action.id);
+            if (action.type === 'chi') discardOrder.pop();
             applyAction(state, action);
+            assert.deepEqual(state.discards.map(t => t.id), discardOrder);
             conservation(state);
             for (const player of state.players) assert.ok(player.melds.length <= 1);
         }

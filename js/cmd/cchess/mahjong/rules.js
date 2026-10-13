@@ -47,6 +47,7 @@ export function createRound({ deck = newDeck(), dealer = 0, human = 0, scores = 
         wall: deck.slice(), players: Array.from({ length: 4 }, () => ({ hand: [], melds: [], discards: [] })),
         dealer, human, scores: scores.slice(), round, turn: dealer, phase: 'self', drawn: null,
         pending: null, responses: [], responseIndex: 0, result: null, last: '莊家先出牌',
+        discards: [], // Shared pool in play order; references the per-seat discarded tiles.
     };
     for (let n = 0; n < 4; n++) for (let offset = 0; offset < 4; offset++) {
         state.players[(dealer + offset) % 4].hand.push(state.wall.shift());
@@ -115,6 +116,7 @@ export function applyAction(state, action) {
         const tile = p.hand.splice(p.hand.findIndex(t => t.id === action.id), 1)[0];
         sortHand(p.hand);
         p.discards.push(tile); state.drawn = null;
+        state.discards.push(tile);
         state.pending = { seat, tile };
         state.responses = []; state.responseIndex = 0;
         state.last = `${WINDS[seat]}家出牌`;
@@ -134,6 +136,7 @@ export function applyAction(state, action) {
         sortHand(meld); p.melds.push(meld);
         p.hand = p.hand.filter(t => !action.ids.includes(t.id));
         state.players[source].discards.pop();
+        state.discards.pop();
         state.turn = seat; state.pending = null; state.responses = [];
         state.drawn = null; state.phase = 'discard';
         state.last = `${WINDS[seat]}家吃牌，請出牌`;
