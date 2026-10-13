@@ -9,7 +9,8 @@ const BACK = makeCell('⬤', 10, 0, false, 2);
 const BACK_CONT = makeCell(' ', 10, 0, false, 0);
 const TABLE_W = 54, SEAT_W = 24, INFO_X = 56, INFO_W = 24;
 const HAND_X = 4, DRAWN_X = 13;
-const DISCARD_X = 15, DISCARD_Y = 9, DISCARD_COLS = 8;
+const DISCARD_X = 15, DISCARD_Y = 11, DISCARD_COLS = 8;
+const WALL_Y = 6;
 const DIVIDER = makeCell('│', 244, 0, false, 1);
 const POSITIONS = [
     { x: 28, y: 17, label: '玩家' }, { x: 28, y: 2, label: '下家' },
@@ -43,7 +44,6 @@ export const mahjongRenderMethods = {
         }
         info(vb, 4, `第 ${state.round} 局`);
         info(vb, 5, `莊家：${WINDS[state.dealer]}`);
-        info(vb, 6, `餘牌：${state.wall.length}`);
         info(vb, 8, '四家積分', cyan);
         const done = state.phase === 'done';
         for (let seat = 0; seat < 4; seat++) {
@@ -76,7 +76,13 @@ export const mahjongRenderMethods = {
                 p.melds[0].forEach((tile, i) => this._putPiece(vb, y + 2, meldX + 3 + i * 3, tile, 0));
             }
         }
-        vb.writeStr(7, Math.floor((TABLE_W - bufWidth('棄牌')) / 2), fg(244)('棄牌'));
+        vb.writeStr(5, Math.floor((TABLE_W - bufWidth('餘牌')) / 2), fg(244)('餘牌'));
+        for (let i = 0; i < state.wall.length; i++) {
+            const row = WALL_Y + Math.floor(i / DISCARD_COLS), col = DISCARD_X + (i % DISCARD_COLS) * 3;
+            vb.setCell(row, col, BACK);
+            vb.setCell(row, col + 1, BACK_CONT);
+        }
+        vb.writeStr(9, Math.floor((TABLE_W - bufWidth('棄牌')) / 2), fg(244)('棄牌'));
         state.discards.forEach((tile, i) => this._putPiece(vb, DISCARD_Y + Math.floor(i / DISCARD_COLS), DISCARD_X + (i % DISCARD_COLS) * 3,
             tile, tile.id === state.pending?.tile.id ? 22 : 0));
         let message = state.last;
