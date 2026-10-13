@@ -6,6 +6,10 @@ import { CHARS } from './engine/constants.js';
 import { isInCheck } from './engine/rules.js';
 import { BOARD_X, BOARD_Y, BOARD_W, BOARD_H, SIDE_X, SIDE_W, boardX, boardY } from './constants.js';
 
+const DARK_STATUS_GROUPS = ['red', 'black'].flatMap((color, row) =>
+    Object.entries({ king: 1, advisor: 2, elephant: 2, chariot: 2, horse: 2, cannon: 2, soldier: 5 })
+        .map(([type, count]) => ({ color, type, count, row })));
+
 function clip(text, width) {
     let result = '', used = 0;
     for (const ch of text) {
@@ -154,10 +158,23 @@ export const renderMethods = {
         root.writeStr(11, SIDE_X, fg(244)('最近棋譜'));
         const start = Math.max(0, this._log.length - 10);
         for (let i = start; i < this._log.length; i++) root.writeStr(12+i-start, SIDE_X, clip(this._log[i], SIDE_W));
-        // Rules occupy the unused lower half of the board.
-        const rules = ['Enter 翻棋／選棋／落子', '上下左右走一格，大吃小', '帥將 > 仕士 > 相象 > 俥車', '     > 傌馬 > 炮砲 > 兵卒', '兵卒可吃帥將，帥將不可吃兵卒', '炮砲吃子須隔一子，不限大小', '蓋住的棋子不能移動或被吃', '80 步未吃子或翻棋即和局'];
+        // Fixed piece slots occupy the unused lower half of the board.
         for (let r = 11; r < BOARD_H; r++) vb._buffer[r].fill(_blankCell);
-        for (let i = 0; i < rules.length; i++) vb.writeStr(12+i, 1, fg(244)(rules[i]));
+        let statusX = 1;
+        for (const group of DARK_STATUS_GROUPS) {
+            if (group.type === 'king') statusX = 1;
+            let revealed = 0, hidden = 0;
+            for (const row of this._board) for (const piece of row) {
+                if (piece?.color !== group.color || piece.type !== group.type) continue;
+                if (piece.hidden) hidden++;
+                else revealed++;
+            }
+            const width = isWide(CHARS[group.color][group.type]) ? 2 : 1;
+            for (let i = 0; i < revealed + hidden; i++) {
+                this._putPiece(vb, 12 + group.row, statusX + i * width, group, i < revealed ? 0 : 22);
+            }
+            statusX += group.count * width;
+        }
         const footer = '←↑↓→ 移動  Enter 翻/選/走  Space 取消  [r]重來 [n]換局 [q]退出';
         root.writeStr(23, Math.max(0, Math.floor((80-bufWidth(footer))/2)), fg(244)(footer));
         term.writeVB(root);

@@ -18,6 +18,9 @@ face-down piece to flip) twice, with 100ms off/on phases on a separate overlay,
 before committing. `r` restores the original hidden layout and settings;
 `n` reopens setup and shuffles a new game. Pending AI timers and blink overlays
 are cancelled on restart and exit.
+Below the dark-chess board, two fixed rows list red and black pieces in rank
+order. Hidden pieces have green backgrounds; revealed pieces have normal
+backgrounds. Captured pieces leave blank slots within their type's group.
 
 `cchess` uses a local adaptation of the DOM-free engine from
 <https://github.com/buffalobill-taiwan/cchess-endgame>, based on commit
