@@ -5,6 +5,8 @@ import { CURSOR_HIDE } from '../../util/sgr.js';
 import { FieldPickerDialog } from '../../dialog/FieldPickerDialog.js';
 import { DIFFICULTY, generateMaze } from './board.js';
 import { initView, render } from './render.js';
+import { parseMazeArgs } from './args.js';
+import { SEED_MAX } from '../../util/random.js';
 
 const META = GAME_META.maze;
 const MOVES = {
@@ -15,15 +17,18 @@ const MOVES = {
 export class MazeCmd extends CmdBase {
     execute(args) {
         if (this.parseArgs(args).hasHelp) return this.showHelp();
-        const difficulties = args.map(a => a.replace(/^--/, ''));
-        if (difficulties.length > 1 || difficulties.some(d => !Object.hasOwn(DIFFICULTY, d))) {
-            this.error('Usage: maze [--easy|--medium|--hard]');
+        let options;
+        try {
+            options = parseMazeArgs(args);
+        } catch (err) {
+            this.error(err.message);
+            this.showHelp();
             return;
         }
         this._root = null;
         this.open();
         term.write('\x1B[2J\x1B[H' + CURSOR_HIDE);
-        if (difficulties.length) this._start(difficulties[0]);
+        if (options.difficulty) this._start(options.difficulty, options.seed);
         else this._pickDifficulty();
     }
 
@@ -44,10 +49,11 @@ export class MazeCmd extends CmdBase {
         });
     }
 
-    _start(difficulty) {
+    _start(difficulty, seed = null) {
         this._difficulty = difficulty;
+        this._seed = seed ?? Math.floor(Math.random() * (SEED_MAX + 1));
         [this._width, this._height] = DIFFICULTY[difficulty];
-        this._walls = generateMaze(this._width, this._height);
+        this._walls = generateMaze(this._width, this._height, this._seed);
         initView(this);
         this._restart();
     }

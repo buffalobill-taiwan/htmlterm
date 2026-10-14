@@ -38,7 +38,8 @@ export const GAME_META = {
         commandName: 'maze',
         help: 'Play a maze with wall-blocked, three-cell vision',
         menu: 'Maze 迷宮',
-        usage: 'maze [--easy|--medium|--hard]\n' +
+        usage: 'maze [seed] [--easy|--medium|--hard] [--seed N]\n' +
+            '         Seed: 0–2147483647; seed alone defaults to Medium.\n' +
             '         Easy 20x10, Medium 40x15, Hard 60x20; each tile is 2x1.\n' +
             '         Arrows/WASD: move; R: restart; N: new game; Q/Esc: quit.\n' +
             '         Reach the bottom-right exit from the top-left start.',

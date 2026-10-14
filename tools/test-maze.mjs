@@ -1,6 +1,9 @@
 #!/usr/bin/env node
 // Focused generation checks: node tools/test-maze.mjs
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
+import { bufWidth } from '../js/util/display-width.js';
+import { parseMazeArgs } from '../js/cmd/maze/args.js';
 import { generateMaze, DIFFICULTY } from '../js/cmd/maze/board.js';
 import { scoreMaze, isBetterMazeScore } from '../js/cmd/maze/generation-score.js';
 
@@ -57,16 +60,15 @@ function checkTree(walls, width, height) {
     assert.equal(neighbors(walls.length - 1).length, 1, 'exit has only one entrance');
 }
 
-// Repeatable sampling without adding a seed option to the game API.
+// Explicit seeds must not use ambient randomness.
 const originalRandom = Math.random;
-let seed = 0x6d617a65;
-Math.random = () => ((seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 4294967296);
+Math.random = () => { throw new Error('Unexpected ambient randomness'); };
 try {
     for (const [difficulty, [width, height]] of Object.entries(DIFFICULTY)) {
         let covered = 0, late = 0;
         const start = performance.now();
         for (let i = 0; i < 200; i++) {
-            const walls = generateMaze(width, height);
+            const walls = generateMaze(width, height, i);
             checkTree(walls, width, height);
             const score = scoreMaze(walls, width, height);
             if (score.coverage === 4) covered++;
@@ -80,3 +82,71 @@ try {
     Math.random = originalRandom;
 }
 console.log('Maze fixtures, ranking, connectivity, unique routes and branch distribution passed.');
+
+assert.deepEqual(parseMazeArgs([]), { seed: null, difficulty: null });
+assert.deepEqual(parseMazeArgs(['0']), { seed: 0, difficulty: 'medium' });
+assert.deepEqual(parseMazeArgs(['--hard', '--seed', '2147483647']), { seed: 2147483647, difficulty: 'hard' });
+assert.deepEqual(parseMazeArgs(['easy', '--seed=123']), { seed: 123, difficulty: 'easy' });
+for (const args of [['--seed'], ['--seed='], ['-1'], ['1.5'], ['2147483648'], ['wat'], ['1', '2'], ['--easy', '--hard'], ['--seed', '0', '1']]) {
+    assert.throws(() => parseMazeArgs(args));
+}
+for (const [difficulty, [width, height]] of Object.entries(DIFFICULTY)) {
+    for (const seed of [0, 123456, 2147483647]) {
+        const walls = generateMaze(width, height, seed);
+        assert.deepEqual(generateMaze(width, height, seed), walls, 'same seed reproduces maze');
+    }
+    assert.notDeepEqual(generateMaze(width, height, 0), generateMaze(width, height, 1));
+    const result = spawnSync(process.execPath, ['tools/maze-solve.mjs', '0', difficulty, '--puzzle', '--path'], { encoding: 'utf8' });
+    assert.equal(result.status, 0, result.stderr);
+    const rows = result.stdout.split('Puzzle:\n')[1].split('\n').slice(1, height + 1).map(row => row.slice(1, -1));
+    const walls = generateMaze(width, height, 0);
+    for (let y = 0; y < height; y++) {
+        assert.equal(bufWidth(rows[y]), width * 2);
+        const tiles = rows[y].match(/██|[ＳＥ　]/g);
+        assert.equal(tiles.length, width);
+        for (let x = 0; x < width; x++) assert.equal(tiles[x] === '██', !!walls[y * width + x]);
+    }
+    const path = result.stdout.split('Path (row,col; zero-based):\n')[1].trim().split(' ').map(p => p.split(',').map(Number));
+    assert.deepEqual(path[0], [0, 0]);
+    assert.deepEqual(path.at(-1), [height - 1, width - 1]);
+    for (let i = 0; i < path.length; i++) {
+        const [y, x] = path[i];
+        assert.equal(walls[y * width + x], 0);
+        if (i) assert.equal(Math.abs(y - path[i - 1][0]) + Math.abs(x - path[i - 1][1]), 1);
+    }
+}
+for (const args of [[], ['-1'], ['2147483648'], ['--seed'], ['0', '--unknown']]) {
+    assert.equal(spawnSync(process.execPath, ['tools/maze-solve.mjs', ...args]).status, 1);
+}
+assert.equal(spawnSync(process.execPath, ['tools/maze-solve.mjs', '--help']).status, 0);
+console.log('Seed parsing, reproducibility, offline maze and solution route checks passed.');
+
+for (const flags of [[], ['--ptt']]) {
+    const plain = spawnSync(process.execPath, ['tools/maze-solve.mjs', '0', 'easy', ...flags], { encoding: 'utf8' });
+    assert.equal(plain.status, 0, plain.stderr);
+    assert(!plain.stdout.includes('Solution:'));
+    assert(!plain.stdout.includes('Path ('));
+    const framed = plain.stdout.split('Maze:\n')[1].trimEnd().split('\n');
+    assert.equal(framed.length, 12);
+    const border = '─'.repeat(flags.length ? 20 : 40);
+    assert.equal(framed[0], '┌' + border + '┐');
+    assert.equal(framed.at(-1), '└' + border + '┘');
+    for (const row of framed.slice(1, -1)) assert(row.startsWith('│') && row.endsWith('│'));
+    if (!flags.length) for (const row of framed) assert.equal(bufWidth(row), 42);
+    const rows = framed.slice(1, -1).map(row => row.slice(1, -1));
+    assert.equal(rows.length, 10);
+    const walls = generateMaze(20, 10, 0);
+    for (let y = 0; y < 10; y++) {
+        const tiles = rows[y].match(flags.length ? /█|[ＳＥ　]/g : /██|[ＳＥ　]/g);
+        assert.equal(tiles.length, 20);
+        assert(!rows[y].includes('．'));
+        for (let x = 0; x < 20; x++) assert.equal(tiles[x].includes('█'), !!walls[y * 20 + x]);
+    }
+    assert(rows[0].startsWith('Ｓ'));
+    assert(rows[9].endsWith('Ｅ'));
+    const solved = spawnSync(process.execPath, ['tools/maze-solve.mjs', '0', 'easy', '--path', ...flags], { encoding: 'utf8' });
+    assert.equal(solved.status, 0);
+    assert(solved.stdout.includes('．'));
+    assert(solved.stdout.includes('Path (row,col; zero-based):'));
+}
+console.log('Fullwidth tiles, PTT output and opt-in solution checks passed.');

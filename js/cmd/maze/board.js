@@ -1,4 +1,5 @@
 import { scoreMaze, isBetterMazeScore } from './generation-score.js';
+import { mulberry32, parseSeed, SEED_MAX } from '../../util/random.js';
 
 export const DIFFICULTY = {
     easy: [20, 10], medium: [40, 15], hard: [60, 20],
@@ -8,10 +9,13 @@ const DIRECTIONS = [[1, 0], [0, 1], [-1, 0], [0, -1]];
 const CANDIDATE_COUNT = 24;
 
 // Prefer choices throughout the route, rather than large branches near the exit.
-export function generateMaze(width, height) {
+export function generateMaze(width, height, seed = Math.floor(Math.random() * (SEED_MAX + 1))) {
+    seed = parseSeed(seed);
+    if (seed === null) throw new RangeError('Seed must be an integer from 0 to 2147483647.');
+    const random = mulberry32(seed);
     let best = null, bestScore = null;
     for (let i = 0; i < CANDIDATE_COUNT; i++) {
-        const walls = growMaze(width, height);
+        const walls = growMaze(width, height, random);
         const score = scoreMaze(walls, width, height);
         if (bestScore === null || isBetterMazeScore(score, bestScore)) {
             best = walls;
@@ -23,13 +27,13 @@ export function generateMaze(width, height) {
 
 // Growing Tree: alternate depth-first growth with random active locations.
 // Only connect unvisited nodes, preserving a spanning tree of the passages.
-function growMaze(width, height) {
+function growMaze(width, height, random) {
     const walls = new Uint8Array(width * height).fill(1);
     const active = [0];
     walls[0] = 0;
     while (active.length) {
-        const index = Math.random() < 0.5 ? active.length - 1
-            : Math.floor(Math.random() * active.length);
+        const index = random() < 0.5 ? active.length - 1
+            : Math.floor(random() * active.length);
         const pos = active[index];
         const x = pos % width, y = Math.floor(pos / width);
         const choices = DIRECTIONS.filter(([dx, dy]) => {
@@ -38,7 +42,7 @@ function growMaze(width, height) {
         });
         // Preserve insertion order so the last entry remains the newest node.
         if (!choices.length) { active.splice(index, 1); continue; }
-        const [dx, dy] = choices[Math.floor(Math.random() * choices.length)];
+        const [dx, dy] = choices[Math.floor(random() * choices.length)];
         const next = (y + dy * 2) * width + x + dx * 2;
         walls[(y + dy) * width + x + dx] = 0;
         walls[next] = 0;

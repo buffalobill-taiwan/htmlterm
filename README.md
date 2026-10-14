@@ -139,7 +139,7 @@ more than once.
 | `quiz` | Math quiz challenge |
 | `sleep` | Wait for N seconds (default 1) |
 | `snake` | Play Snake (Nokia style) |
-| `maze` | 迷宮：左上走到右下，每格 2×1，牆壁遮擋三格視野；`--easy` 20×10、`--medium` 40×15、`--hard` 60×20。方向鍵/WASD 移動，R 重走，N 新局，Q/Esc 離開 |
+| `maze` | 迷宮：左上走到右下，每格 2×1，牆壁遮擋三格視野；`--easy` 20×10、`--medium` 40×15、`--hard` 60×20。`maze 123456 --hard` 可重現指定 seed（0–2147483647，只給 seed 預設 Medium）；R 重走保留 seed、N 新局隨機 seed。方向鍵/WASD 移動，Q/Esc 離開 |
 | `sudoku` | Play Sudoku puzzle (interactive cursor navigation, reproducible seed) |
 | `tetris` | Play Tetris (SRS rotation, T-Spin, ghost piece, hold, line-clear flash) |
 | `time` | Measure execution time of a command |

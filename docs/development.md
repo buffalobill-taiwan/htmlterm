@@ -131,6 +131,7 @@ input paths; replace them with your own files.
 | [nurikabe-solve.mjs](../tools/nurikabe-solve.mjs) | Node with ES-module support | Seed/size to generated solution, optional puzzle/debug stages/clue list on stdout |
 | [sudoku-solve.mjs](../tools/sudoku-solve.mjs) | Node with ES-module support | Seed/difficulty to the live game's solution, optional original puzzle and 81-digit clue string |
 | [minesw-solve.mjs](../tools/minesw-solve.mjs) | Node with ES-module support | Seed/difficulty/first reveal to the live minefield, optional opening and mine coordinate list |
+| [maze-solve.mjs](../tools/maze-solve.mjs) | Node with ES-module support | Seed/difficulty to the live maze and solution; optional full puzzle and ordered route coordinates |
 | [nurikabe-dupcheck.py](../tools/nurikabe-dupcheck.py) | Python 3; `ortools` installed in that environment | Dimensions and clue triplets to a full second-solution search; boards on stdout, status on stderr |
 | [compress-anime.js](../tools/compress-anime.js) | Node for its conversion code; currently incomplete reporting code | Reads and overwrites the fixed `js/cmd/art/anime.js` path; see limitations below |
 
@@ -206,6 +207,32 @@ Generation preserves the game's existing limit of 200 attempts, accepting the
 first board solved by its logical checker. If no attempt passes, both browser
 and tool use the last board. The tool reports this fallback explicitly; printing
 the minefield is not a guarantee that it can be solved without guessing.
+
+### Maze reproduction
+
+```sh
+node tools/maze-solve.mjs 123456 hard --puzzle --path
+```
+
+Replay with `maze 123456 --hard` or `maze --seed 123456 --hard`. Seeds include
+zero and range through 2147483647; seed alone defaults to Medium. With no
+arguments, the game opens its difficulty picker. Its header always displays
+the seed. R retains the maze and seed; confirming N starts a random seed,
+while cancelling the picker keeps the current game.
+
+The tool uses the same seeded generator and 24-candidate ranking as the browser.
+By default it prints only the maze (`██` walls, `Ｓ` start, `Ｅ` exit, fullwidth
+spaces for passages; two columns per tile). `--path` shows the solution with
+`．` and appends ordered zero-based `row,col` coordinates, including both
+endpoints. With `--path`, `--puzzle` also appends the maze without the answer.
+All maps have a box-drawing border. `--ptt` uses one `█` per wall tile and one
+`─` per column for PTT's fullwidth rendering; normal output uses two of each.
+Difficulty flags and `--seed N` / `--seed=N` are accepted. `--help` exits 0;
+missing/invalid seeds, unknown arguments and duplicate seed/difficulty inputs
+exit 1. Reproduction is tied to the current generation algorithm version.
+
+Validate with `node tools/test-maze.mjs`, then compare the browser map with the
+tool for seed 0 and 2147483647, all difficulties, restart and new-game flows.
 
 ### Animation compressor
 

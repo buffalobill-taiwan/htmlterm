@@ -34,7 +34,7 @@ export function render(game) {
         for (let x = 0; x < 80; x++) root.setCell(y, x, BLANK);
     const left = game._won ? game._revealLeft
         : Math.max(0, Math.min(width - game._viewWidth, px - Math.floor(game._viewWidth / 2)));
-    root.centerRow(0, `Maze 迷宮  ${game._difficulty} ${width}x${height}  步數 ${game._steps}`);
+    root.centerRow(0, `Maze 迷宮  ${game._difficulty} ${width}x${height}  Seed ${game._seed}  步數 ${game._steps}`);
     root.centerRow(1, `位置 (${px + 1},${py + 1}) → 終點 (${width},${height})  視窗 ${left + 1}–${left + game._viewWidth}`);
     for (let y = 0; y < height; y++) {
         for (let vx = 0; vx < game._viewWidth; vx++) {
