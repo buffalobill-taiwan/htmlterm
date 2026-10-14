@@ -3,7 +3,7 @@ import { VirtualBuffer } from '../../util/VirtualBuffer.js';
 import {
     SIDEBAR_W, BOARD_H, BOARD_W, SIDEBAR_X, BOARD_Y, BOARD_X, DIFFICULTY, ROWS, COLS,
 } from './constants.js';
-import { bold, cyan, gray } from '../../util/sgr.js';
+import { bold, cyan, gray, yellow } from '../../util/sgr.js';
 import { term } from '../../system/sys.js';
 import { buildStatRow as _buildDynRow, writeStatRow as _writeDynRow } from '../../util/stat-row.js';
 import { _ghostY } from './board.js';
@@ -223,7 +223,7 @@ const renderMethods = {
             this._gameOverInnerCells = _buildGameOverInner(14, 4);
             // Pre-build mutable cell rows for score/level/lines (avoid makeCell each update)
             this._dynScore = _buildDynRow(' Score  ');
-            this._dynLevel = _buildDynRow(' Level  ');
+            this._dynSpeed = _buildDynRow(' Speed  ');
             this._dynLines = _buildDynRow(' Lines  ');
         }
 
@@ -285,9 +285,15 @@ const renderMethods = {
         if (this._holdType)
             _drawPreviewVB(vb, 8, 1, this._holdType, 14, 4, this._previewCells[this._holdType]);
 
-        // Dynamic: Score / Level / Lines — always re-write (static restore nulls these rows)
+        // Dynamic: Score / Speed / Lines — always re-write (static restore nulls these rows)
         _writeDynRow(buf[14], this._dynScore, this._score);
-        _writeDynRow(buf[15], this._dynLevel, this._level);
+        let sp = this._speedLevel + 1;
+        if (sp >= 30) {
+            const text = ' Speed   30 (max)';
+            vb.writeStr(15, 1, yellow(text));
+        } else {
+            _writeDynRow(buf[15], this._dynSpeed, sp);
+        }
         _writeDynRow(buf[16], this._dynLines, this._lines);
     },
 
