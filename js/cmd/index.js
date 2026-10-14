@@ -37,6 +37,7 @@ export const PuyoCmd = defineLazy(G.puyo, () => import('./puyo/index.js').then(m
 export const GweledCmd = defineLazy(G.gweled, () => import('./gweled/index.js').then(m => m.GweledCmd));
 export const KlotskiCmd = defineLazy(G.klotski, () => import('./klotski/index.js').then(m => m.KlotskiCmd));
 export const MemoryCmd = defineLazy(G.memory, () => import('./memory.js').then(m => m.MemoryCmd));
+export const MazeCmd = defineLazy(G.maze, () => import('./maze/index.js').then(m => m.MazeCmd));
 export const OthelloCmd = defineLazy(G.othello, () => import('./othello/index.js').then(m => m.OthelloCmd));
 export const CChessCmd = defineLazy(G.cchess, () => import('./cchess/index.js').then(m => m.CChessCmd));
 export const JpmjCmd = defineLazy(G.jpmj, () => import('./jpmj/index.js').then(m => m.JpmjCmd));

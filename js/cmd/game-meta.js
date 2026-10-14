@@ -34,6 +34,15 @@ export const GAME_META = {
         menu: 'Klotski 華容道',
         usage: 'klotski',
     },
+    maze: {
+        commandName: 'maze',
+        help: 'Play a maze with wall-blocked, three-cell vision',
+        menu: 'Maze 迷宮',
+        usage: 'maze [--easy|--medium|--hard]\n' +
+            '         Easy 20x10, Medium 40x15, Hard 60x20; each tile is 2x1.\n' +
+            '         Arrows/WASD: move; R: restart; N: new game; Q/Esc: quit.\n' +
+            '         Reach the bottom-right exit from the top-left start.',
+    },
     memory: {
         commandName: 'memory',
         help: 'Play a card-matching Memory game',
