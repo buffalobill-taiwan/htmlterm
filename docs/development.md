@@ -48,6 +48,7 @@ not a promised minimum version. Browser source files use ES modules; some offlin
 ./tools/check-syntax.sh     # ESM parse of every js/ module and ESM tool
 node tools/import-check.mjs # dynamic import: paths, syntax, module side effects
 node tools/test-headless.mjs # Parser/Screen, VirtualBuffer, seeds, lazy commands
+node tools/test-maze.mjs     # Maze scoring fixtures, tree topology, branch distribution
 git diff --check
 ```
 

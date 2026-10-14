@@ -43,7 +43,7 @@ contains shared dimensions, difficulty settings, and other fixed configuration.
 | [cchess](../js/cmd/cchess/index.js) | `CChessCmd` | `engine/`: adapted Chinese chess rules/search; `animation.js`: move overlays; `endgames.js`: response table validation; `mahjong/`: local chess-mahjong rules, AI, flow and rendering; see [upstream integration](cchess-upstream.md) |
 | [puyo](../js/cmd/puyo/index.js) | `PuyoCmd` | `board.js`: group detection, gravity, and chain scores |
 | [snake](../js/cmd/snake/index.js) | `SnakeCmd` | Movement and food placement stay with the command |
-| [maze](../js/cmd/maze/index.js) | `MazeCmd` | `board.js`: random connected maze generation and wall-blocked three-tile visibility; `render.js`: 2×1 tiles and horizontal camera |
+| [maze](../js/cmd/maze/index.js) | `MazeCmd` | `board.js`: mixed Growing Tree generation and wall-blocked three-tile visibility; `generation-score.js`: ranks 24 candidates by early route branch coverage, late branch share, then early junction count; `render.js`: 2×1 tiles and horizontal camera |
 | [sudoku](../js/cmd/sudoku/index.js) | `SudokuCmd` | `solver.js`: solving, uniqueness checks, seed validation, and deterministic puzzle generation |
 | [tetris](../js/cmd/tetris/index.js) | `TetrisCmd` | `board.js`: collisions, ghost landing, T-spins, and line clearing; `pieces.js`: shapes, wall kicks, and colors |
 
