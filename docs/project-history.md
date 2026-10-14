@@ -79,8 +79,12 @@ the agent guide and development guide, not inferred from older plans.
 | Date | Commit | Change |
 |---|---|---|
 | 2026-10-08 | `6d215f6` | Terminal hardening: code-point decoding, insert mode (IRM), `DEL` ignore, `CAN`/`SUB` abort, CSI length cap, mouse event-type/encoding split, resize refit, wide-glyph erase repair, region-only dirty for cursor movement, render-loop error isolation, busy-depth counter, queued-input replay, bare-ESC-only cancel in games/dialogs, lazy Wordle dictionary, offline syntax/import checkers, and README/doc/license sync |
+| 2026-10-13 | `531b355` | Show chess-mahjong remaining wall tiles in the table center above discards |
+| 2026-10-14 | `d1ec73a` | Replace Tetris sidebar Level with Speed 1–30 and a maximum-speed indicator |
+| 2026-10-14 | `4cac084`, `ee3969f` | Add Maze with wall-blocked visibility, completion trail and candidate ranking that spreads branches along the solution route |
+| 2026-10-14 | `38d039a` | Add reproducible Maze seeds and a shared-generator offline solver with route and PTT output |
 
-Use `git show 6d215f6` for the exact implementation.
+Use `git show <commit>` for the exact implementation.
 
 ## Detailed 2026 record
 

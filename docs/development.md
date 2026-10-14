@@ -99,6 +99,7 @@ automated suite or CI pipeline; focused scripts can supplement these checks.
 | Game cursor | Run `minesw --easy`, move with arrows, then Escape | Cursor follows the board and shell prompt returns below the layout |
 | Sudoku seeds | Run `sudoku 123456 --hard`, compare with `node tools/sudoku-solve.mjs 123456 hard --puzzle` in a host terminal; try Restart, New, seed 0, and invalid seeds | Browser/tool clues and answer match; seed is visible; Restart retains it, New generates a random puzzle; invalid seeds report an error |
 | Minesweeper seeds | Run `minesw 123456 --hard --start 0,0`, press Enter, and compare with `node tools/minesw-solve.mjs 123456 hard --start 0,0 --puzzle`; try flags before revealing, New, seed 0, and invalid coordinates | Same seed/difficulty/first reveal gives the same minefield; opening is safe; seed/start remain visible; New stops the old timer and chooses a random seed |
+| Maze seeds and visibility | Run `maze 123456 --hard`; compare with `node tools/maze-solve.mjs 123456 hard --puzzle --path`; try walls, corners, R, N then cancel, and finish | Matching maze; wall-blocked three-tile vision; camera follows player; R retains seed and clears trail; cancelled N preserves game; completion reveals visited trail and permits horizontal inspection |
 | Overlays/widgets | Toggle `clock` and `dvd`; drag them, open/close menu, then toggle them off | Overlay order stays stable and underlying screen content is preserved |
 | Rendering | Run `ascii`, `echo --big 中文`, and `anime`; resize the browser, then cancel animation | Indexed colors, wide/enlarged glyphs and scaling remain consistent; animation releases its overlay |
 | Teardown | In browser Console run `window.system.dispose(); window.term.dispose();` twice, then reload | Teardown is idempotent; reload creates a working terminal |
@@ -113,9 +114,9 @@ work, use the [measurement procedure](rendering-performance.md#measuring-changes
 Chinese chess: run `cchess`, select a mode, and exercise both human colors and
 all three difficulties. Use arrows and Enter to select/move; Space deselects,
 `r` restarts, `n` opens difficulty/level selection, and `q` exits. Verify two
-blinks before every move, 50ms rook/cannon steps, instant cannon captures,
+blinks before computer moves only, 50ms rook/cannon steps, instant cannon captures,
 horse-leg/elephant-eye pauses, and immediate restart/exit during animation or
-AI search. Verify both bundled endgames, red wins, black wins and cycles;
+AI search. Verify bundled endgames, red wins, black wins and cycles;
 inspect Network to confirm only the selected puzzle JSON loads. Details and
 the offline importer are in [Chinese chess integration](cchess-upstream.md).
 
@@ -133,7 +134,7 @@ input paths; replace them with your own files.
 | [minesw-solve.mjs](../tools/minesw-solve.mjs) | Node with ES-module support | Seed/difficulty/first reveal to the live minefield, optional opening and mine coordinate list |
 | [maze-solve.mjs](../tools/maze-solve.mjs) | Node with ES-module support | Seed/difficulty to the live maze and solution; optional full puzzle and ordered route coordinates |
 | [nurikabe-dupcheck.py](../tools/nurikabe-dupcheck.py) | Python 3; `ortools` installed in that environment | Dimensions and clue triplets to a full second-solution search; boards on stdout, status on stderr |
-| [compress-anime.js](../tools/compress-anime.js) | Node for its conversion code; currently incomplete reporting code | Reads and overwrites the fixed `js/cmd/art/anime.js` path; see limitations below |
+| [compress-anime.js](../tools/compress-anime.js) | Node with ES-module support | Raw animation module/JSON to RLE0 + diffs; explicit input/output paths, or inspection of bundled compressed data |
 
 Artwork and frame conversion:
 
@@ -240,3 +241,15 @@ tool for seed 0 and 2147483647, all difficulties, restart and new-game flows.
 `--input <file>` and `--output <file>` arguments (defaulting to inspection when
 given already-compressed files like `js/data/anime.json`), calculates gzip savings
 using Node's built-in zlib, and generates diffs for animation playback.
+
+
+```sh
+node tools/compress-anime.js
+node tools/compress-anime.js --input /tmp/example-anime.js --output /tmp/example-anime.json
+```
+
+With no arguments, the tool reports the bundled `js/data/anime.json` dimensions,
+frame count and compressed sizes without writing. Already-compressed input is
+always inspected, even when an output path is supplied. For raw input, omitting
+`--output` replaces a JSON input in place or writes a sibling `.json` for a
+`.js`/`.mjs` input. Specify an output path to preserve the raw JSON.

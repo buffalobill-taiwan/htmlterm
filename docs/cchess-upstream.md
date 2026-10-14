@@ -12,7 +12,9 @@ The table occupies the left 54 columns, with a separate information panel on
 the right. The human sits at bottom right, the next seat at top right, the
 opposite seat at top left, and the preceding seat at bottom left. Each hand is
 centered within its corner; hidden pieces use green `⬤` glyphs. The information
-panel holds difficulty, round, dealer, wall count, scores and status/results.
+panel holds difficulty, round, dealer, scores and status/results. Remaining
+wall tiles appear as green backs in the center above the discard pool, eight
+per row.
 All discards share one central pool in discard order, eight per row without seat labels.
 Claimed chi tiles leave the pool; remaining tiles keep their relative order.
 The rules retain the original discarder for chi and win claims.

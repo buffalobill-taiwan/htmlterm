@@ -52,6 +52,8 @@ supported control sequences, and current rendering limitations.
 | Task | Reference |
 |---|---|
 | Run locally, validate a change, or use offline tools | [Development guide](docs/development.md) |
+| Locate or split command modules | [Command modules](docs/command-modules.md) |
+| Update Chinese chess rules, AI, or endgames | [Chinese chess integration](docs/cchess-upstream.md) |
 | Understand modules, lifecycle, and terminal compatibility | [Architecture](docs/architecture.md) |
 | Add a command, dialog, or widget | [Command authoring](docs/command-authoring.md) |
 | Work on rendering, animation, or character widths | [Rendering performance](docs/rendering-performance.md) |
@@ -139,9 +141,9 @@ more than once.
 | `quiz` | Math quiz challenge |
 | `sleep` | Wait for N seconds (default 1) |
 | `snake` | Play Snake (Nokia style) |
-| `maze` | 迷宮：左上走到右下，每格 2×1，牆壁遮擋三格視野；`--easy` 20×10、`--medium` 40×15、`--hard` 60×20。`maze 123456 --hard` 可重現指定 seed（0–2147483647，只給 seed 預設 Medium）；R 重走保留 seed、N 新局隨機 seed。方向鍵/WASD 移動，Q/Esc 離開 |
+| `maze` | Play Maze (wall-blocked three-tile vision, three difficulties, reproducible seeds, completion trail) |
 | `sudoku` | Play Sudoku puzzle (interactive cursor navigation, reproducible seed) |
-| `tetris` | Play Tetris (SRS rotation, T-Spin, ghost piece, hold, line-clear flash) |
+| `tetris` | Play Tetris (SRS rotation, T-Spin, ghost piece, hold, line-clear flash, Speed 1–30 display) |
 | `time` | Measure execution time of a command |
 | `wordle` | Play Wordle (fullwidth grid, big-glyph keyboard, 16k guess dictionary) |
 
@@ -175,6 +177,26 @@ the generated board; placing a flag does not generate it.
 From a host terminal, run
 `node tools/minesw-solve.mjs 123456 hard --start 0,0 --puzzle` to print the matching
 minefield and opening. Add `--mines` for a list of mine coordinates.
+
+### Maze seeds
+
+Run `maze` to choose Easy (20×10), Medium (40×15), or Hard (60×20), or run
+`maze 123456 --hard` to reproduce a maze. `maze --seed 123456 --hard` is
+equivalent. Seeds range from 0 to 2147483647; a seed alone defaults to Medium.
+The same seed and difficulty reproduce the maze with the current generator.
+
+Move from the top-left to the bottom-right with arrows or WASD. Each tile uses
+two terminal columns; walls block vision within a three-tile Manhattan radius.
+Hard scrolls horizontally to follow the player. R resets position, steps and
+visited tiles while keeping the maze and seed. N opens the difficulty picker;
+confirming generates a random seed, while cancelling preserves the current game.
+Q/Escape exits. Finishing reveals the maze and visited trail; use Left/Right or
+A/D to inspect the completed Hard maze.
+
+From a host terminal, `node tools/maze-solve.mjs 123456 hard --puzzle --path`
+prints the solution, ordered zero-based `row,col` route and original maze.
+Add `--ptt` for PTT fullwidth output. The game's position display instead uses
+one-based `(x,y)` coordinates. See [Maze reproduction](docs/development.md#maze-reproduction).
 
 ### Keyboard shortcuts
 
