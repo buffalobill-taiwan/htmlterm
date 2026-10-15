@@ -2,6 +2,9 @@ import { FieldPickerDialog } from '../../../dialog/FieldPickerDialog.js';
 import { CompactListDialog } from '../../../dialog/CompactListDialog.js';
 import { ConfirmDialog } from '../../../dialog/ConfirmDialog.js';
 import { ShowDialog } from '../../../dialog/ShowDialog.js';
+import { term } from '../../../system/sys.js';
+import { makeOverlayGetCell } from '../../../util/sgr.js';
+import { buildCallEffectBuffer } from '../../../util/call-effect.js';
 import { CHARS } from '../engine/constants.js';
 import { WINDS, createRound, actor, legalActions, applyAction, publicView } from './rules.js';
 import { chooseAction } from './ai.js';
@@ -54,7 +57,45 @@ class RulesDialog extends ShowDialog {
     }
 }
 
+const CALL_BUFFERS = new Map();
+
 export const mahjongMethods = {
+    _applyMahjongAction(action) {
+        const state = this._mahjong, seat = actor(state);
+        const text = action.type === 'chi' ? '吃牌'
+            : action.type === 'win' ? state.phase === 'self' ? '自摸' : '胡牌' : null;
+        applyAction(state, action);
+        if (text) {
+            this._render();
+            const relative = (seat - state.human + 4) % 4;
+            if (!CALL_BUFFERS.has(text)) CALL_BUFFERS.set(text, buildCallEffectBuffer(text));
+            const buffer = CALL_BUFFERS.get(text);
+            const overlay = {
+                x: relative < 2 ? 35 : 9, y: relative === 0 || relative === 3 ? 17 : 2,
+                w: 10, h: 4, owner: this,
+                getCell: makeOverlayGetCell(buffer, 10, 4),
+            };
+            this._mahjongCallOverlay = overlay;
+            term.addOverlay(overlay);
+            for (let row = overlay.y; row < overlay.y + overlay.h; row++) term.markRowDirty(row);
+            const epoch = this._epoch;
+            this._mahjongTimer = setTimeout(() => {
+                this._mahjongTimer = null;
+                this._removeMahjongCallEffect();
+                if (epoch === this._epoch && this._mahjong === state) this._mahjongPump();
+            }, 500);
+        }
+        this._mahjongPump();
+    },
+
+    _removeMahjongCallEffect() {
+        const overlay = this._mahjongCallOverlay;
+        if (!overlay) return;
+        term.removeOverlay(overlay);
+        for (let row = overlay.y; row < overlay.y + overlay.h; row++) term.markRowDirty(row);
+        this._mahjongCallOverlay = null;
+    },
+
     _showMahjongRules() {
         if (!this._mahjong || this._dialog) return;
         this._stopAsync();
@@ -130,8 +171,7 @@ export const mahjongMethods = {
                 if (epoch !== this._epoch || this._mahjong !== state || this._dialog) return;
                 try {
                     const action = chooseAction(publicView(state, seat), actions);
-                    applyAction(state, action);
-                    this._mahjongPump();
+                    this._applyMahjongAction(action);
                 } catch (error) { this._mahjongFail(error); }
             }, 450);
         } catch (error) { this._mahjongFail(error); }
@@ -142,9 +182,8 @@ export const mahjongMethods = {
         const select = index => {
             this._dialog = null;
             if (epoch !== this._epoch || this._mahjong !== state) return;
-            applyAction(state, actions[index]);
             this._mahjongCursor = 0;
-            this._mahjongPump();
+            this._applyMahjongAction(actions[index]);
         };
         const tile = state.pending?.tile;
         this._dialog = this.openDialog(ActionDialog, 'cchess-mahjong-action', {
@@ -190,7 +229,7 @@ export const mahjongMethods = {
             return;
         }
         const state = this._mahjong;
-        if (!state || this._mahjongError) return;
+        if (!state || this._mahjongError || this._mahjongCallOverlay) return;
         if (state.phase === 'done') {
             if (code === 13 || code === 10) this._startMahjongRound(createRound({
                 dealer: state.result.nextDealer, human: state.human, scores: state.scores, round: state.round + 1,

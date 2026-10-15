@@ -254,6 +254,7 @@ export class CChessCmd extends CmdBase {
     }
 
     _stopAsync() {
+        this._removeMahjongCallEffect();
         clearTimeout(this._mahjongTimer); this._mahjongTimer = null;
         clearTimeout(this._darkTimer); this._darkTimer = null;
         this._epoch = (this._epoch ?? 0) + 1;
