@@ -217,7 +217,10 @@ node tools/maze-solve.mjs 123456 hard --puzzle --path
 
 Replay with `maze 123456 --hard` or `maze --seed 123456 --hard`. Seeds include
 zero and range through 2147483647; seed alone defaults to Medium. With no
-arguments, the game opens its difficulty picker. Its header always displays
+arguments, the game opens its difficulty and breadcrumbs picker. Breadcrumbs
+default to off; enabling them keeps visited tiles marked during play, even
+outside the current field of view. Completion always reveals the visited trail.
+Its header always displays
 the seed. R retains the maze and seed; confirming N starts a random seed,
 while cancelling the picker keeps the current game.
 

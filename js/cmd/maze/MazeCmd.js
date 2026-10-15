@@ -36,11 +36,14 @@ export class MazeCmd extends CmdBase {
         this._dialog = this.openDialog(FieldPickerDialog, 'maze-diff', {
             title: 'Maze 迷宮',
             fields: [{ key: 'difficulty', label: '難度', options: [
-                ['Easy 20x10', 'easy'], ['Medium 40x15', 'medium'], ['Hard 60x20', 'hard'],
-            ] }],
-            onConfirm: ({ difficulty }) => {
+                ['Easy', 'easy'], ['Medium', 'medium'], ['Hard', 'hard'],
+            ] }, {
+                key: 'breadcrumbs', label: '麵包屑', default: false,
+                options: [['關閉', false], ['開啟', true]],
+            }],
+            onConfirm: ({ difficulty, breadcrumbs }) => {
                 this._dialog = null;
-                this._start(difficulty);
+                this._start(difficulty, null, breadcrumbs);
             },
             onCancel: () => {
                 this._dialog = null;
@@ -49,8 +52,9 @@ export class MazeCmd extends CmdBase {
         });
     }
 
-    _start(difficulty, seed = null) {
+    _start(difficulty, seed = null, breadcrumbs = false) {
         this._difficulty = difficulty;
+        this._breadcrumbs = breadcrumbs;
         this._seed = seed ?? Math.floor(Math.random() * (SEED_MAX + 1));
         [this._width, this._height] = DIFFICULTY[difficulty];
         this._walls = generateMaze(this._width, this._height, this._seed);

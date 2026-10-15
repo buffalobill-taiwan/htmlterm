@@ -47,7 +47,7 @@ export function render(game) {
             const exit = x === width - 1 && y === height - 1;
             if (start) tile = TILES.start;
             if (exit) tile = TILES.exit;
-            if (game._won && game._visited[y * width + x]) tile = start ? TILES.trailStart : TILES.trail;
+            if ((game._won || game._breadcrumbs) && game._visited[y * width + x]) tile = start ? TILES.trailStart : TILES.trail;
             if (x === px && y === py) tile = start ? TILES.playerStart : exit ? TILES.playerExit : TILES.player;
             board.setCell(y, vx * 2, tile[0]);
             board.setCell(y, vx * 2 + 1, tile[1]);
