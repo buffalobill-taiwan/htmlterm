@@ -1,10 +1,10 @@
 import { CmdBase } from '../CmdBase.js';
 import { term } from '../../system/sys.js';
 import { CURSOR_HIDE, yellow, bold, green, red, gray } from '../../util/sgr.js';
-import { FieldPickerDialog } from '../../dialog/FieldPickerDialog.js';
 import { DIFFICULTY } from './constants.js';
 import { _create2D, generatePuzzle, parseStart, revealCells } from './solver.js';
-import { parseSeed, SEED_MAX } from '../../util/random.js';
+import { seedFromArgs } from '../../util/seed-args.js';
+import { SEED_MAX } from '../../util/random.js';
 import { _formatTime, renderMethods } from './render.js';
 import { GAME_META } from '../game-meta.js';
 const META = GAME_META.minesw;
@@ -15,16 +15,11 @@ class MinesweeperCmd extends CmdBase {
             flags: { '--easy': Boolean, '--medium': Boolean, '--hard': Boolean, '--seed': String, '--start': String },
         });
         if (p.hasHelp) return this.showHelp();
-        const flagSeed = p.flag('--seed');
-        const posSeed = p.rest.length ? parseSeed(p.rest[0]) : undefined;
-        const unknownFlag = args.some(arg => arg.startsWith('-') &&
-            !['--easy', '--medium', '--hard', '--seed', '--start'].includes(arg.split('=')[0]));
-        if (unknownFlag || p.rest.length > 1 || posSeed === null ||
-            (flagSeed !== null && parseSeed(flagSeed) === null)) {
-            this.error('invalid arguments: seed must be an integer from 0 to 2147483647');
+        const { seed, error } = seedFromArgs(args, p);
+        if (error) {
+            this.error(error);
             return this.showHelp();
         }
-        const seed = flagSeed !== null ? parseSeed(flagSeed) : posSeed;
         let diff = null;
         if (p.flag('--easy'))   diff = 'easy';
         if (p.flag('--medium')) diff = 'medium';
@@ -57,18 +52,10 @@ class MinesweeperCmd extends CmdBase {
         term.write('\x1B[2J\x1B[1;1H');
         term.write(CURSOR_HIDE);
 
-        this._difficultyDialog = this.openDialog(FieldPickerDialog, 'minesweeper-diff', {
+        this.openDifficultyDialog({
+            key: 'minesweeper-diff',
             title: 'Minesweeper',
-            fields: [{ key: 'difficulty', label: '難度',
-                options: [['Easy', 'easy'], ['Medium', 'medium'], ['Hard', 'hard']] }],
-            onConfirm: ({ difficulty }) => {
-                this._difficultyDialog = null;
-                this._startGame(difficulty);
-            },
-            onCancel: () => {
-                this._difficultyDialog = null;
-                this._quit();
-            },
+            onConfirm: ({ difficulty }) => this._startGame(difficulty),
         });
     }
 

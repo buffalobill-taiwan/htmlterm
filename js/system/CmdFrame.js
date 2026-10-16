@@ -48,7 +48,12 @@ export class SyncCmdFrame extends CmdFrame {
 
     start() {
         try {
-            const handler = system.commands[this.cmdName];
+            // Prefer the instance the frame carries (dialog menus push a
+            // frame directly); otherwise the system lookup resolves eager
+            // and lazy entries through one path.
+            const handler = this.cmd
+                ? this.cmd.execute.bind(this.cmd)
+                : system.commandHandler(this.cmdName, this);
             if (handler) {
                 const result = handler(this.args);
                 if (result && typeof result.then === 'function') {
@@ -87,9 +92,17 @@ export class SyncCmdFrame extends CmdFrame {
         }
     }
 
-    handleInput(data) {
-        if (system.readLineState) return false;
+    handleInput(data, routing) {
+        if (routing && routing.readLineState) return false;
         if (this.cmd && !this.cmd.closed && typeof this.cmd.handleKey === 'function') {
+            // While command-owned output is still animating, typed text must
+            // not vanish into an unhandled _onKey(): an open frame whose
+            // command has not reached an interactive phase hands the input
+            // back to the system queue instead of consuming it. Select-style
+            // flows declare their interest while awaiting output
+            // (_awaitingTypewriterDrain / _selectState abort that output).
+            const eager = this.cmd._awaitingTypewriterDrain || this.cmd._selectState;
+            if (routing && routing.typewriterActive && !eager) return false;
             this.cmd.handleKey(data);
             if (!this.blocked) this.finish();
             return true;
@@ -189,8 +202,8 @@ export class ShellFrame extends CmdFrame {
         this.cmd.start();
     }
 
-    handleInput(data) {
-        if (system.readLineState) return false;
+    handleInput(data, routing) {
+        if (routing && routing.readLineState) return false;
         this.cmd.handleKey(data);
         return true;
     }

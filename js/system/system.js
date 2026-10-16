@@ -46,7 +46,6 @@ export class SystemManager {
         this._cmdInstances = registry.instances;
         this._cmdLoaders = registry.loaders;
         this._cmdLoading = Object.create(null);
-        this._wireLazyCommands();
         this.prompt = '$ ';
         this.running = false;
 
@@ -62,21 +61,20 @@ export class SystemManager {
         this.start();
     }
 
-    // Lazy game modules register metadata only; the first run loads the class,
-    // attaches the instance to the SyncCmdFrame, then calls execute().
-    _wireLazyCommands() {
-        for (const name of Object.keys(this._cmdLoaders)) {
-            this.commands[name] = async (args) => {
-                const inst = await this._ensureCmdInstance(name);
-                const frame = this.cmdStack.slice().reverse().find(
-                    f => f.cmdName === name && !f.done
-                );
-                if (!frame || frame.done) return;
-                frame.cmd = inst;
-                this.commands[name] = inst.execute.bind(inst);
-                return inst.execute(args);
-            };
-        }
+    // Runtime lookup shared by eager and lazy entries, so the registry's
+    // command map is never rewritten at runtime. Eager entries return their
+    // bound execute; lazy entries resolve through _ensureCmdInstance on the
+    // first run and attach the loaded instance to the running frame.
+    commandHandler(name, frame) {
+        const bound = this.commands[name];
+        if (!bound) return null;
+        if (!this._cmdLoaders[name]) return bound;
+        return async (args) => {
+            const inst = await this._ensureCmdInstance(name);
+            if (!frame || frame.done) return;
+            frame.cmd = inst;
+            return inst.execute(args);
+        };
     }
 
     async _ensureCmdInstance(name) {
@@ -302,14 +300,23 @@ export class SystemManager {
         this._queuedInput.push(data);
     }
 
+    // === Input routing ===
+    // One gate owns the delivery priority so frames do not probe global
+    // state: they receive the current routing decision in the second
+    // handleInput argument. Priority: top frame handler → active readLine
+    // → blocked frame (Ctrl+C abort stays available) → shell editor.
     handleInput(data) {
         if (!this.running || this._disposed) return;
 
         const top = this.cmdStack[this.cmdStack.length - 1];
+        const routing = {
+            readLineState: this.readLineState,
+            typewriterActive: this.typewriter.isActive(),
+        };
 
         if (top) {
             if (top.handleInput) {
-                const handled = top.handleInput(data);
+                const handled = top.handleInput(data, routing);
                 if (top.done) this.tick();
                 if (handled) return;
             }

@@ -1,7 +1,6 @@
 import { CmdBase } from '../CmdBase.js';
 import { term } from '../../system/sys.js';
 import { CURSOR_HIDE } from '../../util/sgr.js';
-import { FieldPickerDialog } from '../../dialog/FieldPickerDialog.js';
 import {
     DIFFICULTY, COLS, ROWS, TAIL, KICKS, FALL_STEP_MS, FLASH_CYCLES, FLASH_STEP_MS, FALL_DELAY,
     LOCK_DELAY, BOARD_Y, BOARD_H,
@@ -34,18 +33,10 @@ class PuyoCmd extends CmdBase {
         this.open();
         term.write('\x1B[2J\x1B[1;1H');
         term.write(CURSOR_HIDE);
-        this._difficultyDialog = this.openDialog(FieldPickerDialog, 'puyo-diff', {
+        this.openDifficultyDialog({
+            key: 'puyo-diff',
             title: 'Puyo Puyo',
-            fields: [{ key: 'difficulty', label: '難度',
-                options: [['Easy', 'easy'], ['Medium', 'medium'], ['Hard', 'hard']] }],
-            onConfirm: ({ difficulty }) => {
-                this._difficultyDialog = null;
-                this._startGame(difficulty);
-            },
-            onCancel: () => {
-                this._difficultyDialog = null;
-                this._quit();
-            },
+            onConfirm: ({ difficulty }) => this._startGame(difficulty),
         });
     }
 

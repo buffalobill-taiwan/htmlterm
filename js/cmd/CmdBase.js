@@ -2,9 +2,14 @@ import { system, term } from '../system/sys.js';
 import { red, bold, yellow, CURSOR_SHOW, CURSOR_HIDE } from '../util/sgr.js';
 import { ShowDialog } from '../dialog/ShowDialog.js';
 import { InputDialog } from '../dialog/InputDialog.js';
+import { FieldPickerDialog } from '../dialog/FieldPickerDialog.js';
 import { defaultGridMove, defaultGridRender } from '../util/select-grid.js';
 
 function isDigit(ch) { return ch >= '0' && ch <= '9'; }
+
+// Default labels for openDifficultyDialog(): the picker's display value and
+// the difficulty key the onConfirm callback receives.
+const DIFFICULTY_OPTIONS = [['Easy', 'easy'], ['Medium', 'medium'], ['Hard', 'hard']];
 
 export class CmdBase {
     constructor() {
@@ -73,6 +78,7 @@ export class CmdBase {
         const result = { hasHelp: false, rest: [] };
         const flags = {};
         const flagTypes = opts.flags || {};
+        result.declared = Object.keys(flagTypes);
         result.flag = (long, short) =>
             flags[long] !== undefined ? flags[long] :
             (flags[short] !== undefined ? flags[short] : null);
@@ -303,5 +309,33 @@ export class CmdBase {
      */
     openDialog(DialogClass, key, opts, ...ctorArgs) {
         return system.createDialog(DialogClass, key, opts, ...ctorArgs);
+    }
+
+    /**
+     * Opens the standard difficulty picker shared by board games: a single
+     * "難度" FieldPickerDialog (default Easy/Medium/Hard) that owns the
+     * this._difficultyDialog reference lifecycle. Commands only describe the
+     * picker and react to the confirmed values, so the dialog-nulling
+     * boilerplate stays in one place. `extraFields` appends more picker
+     * fields (othello's 先後手, etc.); they arrive in onConfirm as well.
+     * Cancel defaults to this._quit(); pass onCancel to change that.
+     */
+    openDifficultyDialog({
+        key, title, label = '難度', options = DIFFICULTY_OPTIONS,
+        extraFields = [], onConfirm, onCancel,
+    }) {
+        return this._difficultyDialog = this.openDialog(FieldPickerDialog, key, {
+            title,
+            fields: [{ key: 'difficulty', label, options }, ...extraFields],
+            onConfirm: (values) => {
+                this._difficultyDialog = null;
+                onConfirm(values);
+            },
+            onCancel: () => {
+                this._difficultyDialog = null;
+                if (onCancel) onCancel();
+                else this._quit();
+            },
+        });
     }
 }

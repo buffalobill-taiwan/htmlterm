@@ -1,7 +1,6 @@
 import { CmdBase } from '../CmdBase.js';
 import { term } from '../../system/sys.js';
 import { CURSOR_HIDE, yellow, bold, green, red, fg } from '../../util/sgr.js';
-import { FieldPickerDialog } from '../../dialog/FieldPickerDialog.js';
 import { idx, isValid, applyMove, other, getValidMoves, countPieces } from './board.js';
 import { BLACK, WHITE, N, FLIP_MS, PASS_MS, THINK_MS, BLINK_MS, CLEAR_ROW } from './constants.js';
 import { aiMoveEasy, aiMoveMedium, aiMoveHard } from './ai.js';
@@ -33,22 +32,14 @@ class OthelloCmd extends CmdBase {
         this.open();
         term.write('\x1B[2J\x1B[1;1H');
         term.write(CURSOR_HIDE);
-        this._difficultyDialog = this.openDialog(FieldPickerDialog, 'othello-diff', {
+        this.openDifficultyDialog({
+            key: 'othello-diff',
             title: 'Othello',
-            fields: [
-                { key: 'difficulty', label: '難度',
-                  options: [['Easy', 'easy'], ['Medium', 'medium'], ['Hard', 'hard']] },
+            extraFields: [
                 { key: 'human', label: '先後手',
                   options: [['先手（黑方）', 'black'], ['後手（白方）', 'white']] },
             ],
-            onConfirm: ({ difficulty, human }) => {
-                this._difficultyDialog = null;
-                this._startGame(difficulty, human);
-            },
-            onCancel: () => {
-                this._difficultyDialog = null;
-                this._quit();
-            },
+            onConfirm: ({ difficulty, human }) => this._startGame(difficulty, human),
         });
     }
 

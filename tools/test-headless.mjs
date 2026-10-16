@@ -23,6 +23,8 @@ import { _generate as generateSudoku } from '../js/cmd/sudoku/solver.js';
 import { generatePuzzle as generateMinesweeper } from '../js/cmd/minesweeper/solver.js';
 import { generatePuzzle as generateNurikabe } from '../js/util/nurikabe-engine.js';
 import { CommandRegistry } from '../js/system/CommandRegistry.js';
+import { CmdBase } from '../js/cmd/CmdBase.js';
+import { seedFromArgs } from '../js/util/seed-args.js';
 import * as cmdModule from '../js/cmd/index.js';
 
 let passed = 0;
@@ -343,6 +345,35 @@ queue.push(test('Lazy load: tetris meta resolves to Cmd class', async () => {
     assert(typeof Cls === 'function', 'load() should return a class');
     assert(Cls.commandName === 'tetris', 'loaded class commandName');
     assert(Cls.help === cmdModule.TetrisCmd.help, 'loaded help matches meta');
+}));
+
+queue.push(test('SeedArgs: flag wins, positional fallback, shared error', () => {
+    const cmd = new CmdBase();
+    const parse = (args, flags) => cmd.parseArgs(args, { flags });
+
+    // --seed flag wins over the positional seed.
+    let p = parse(['3', '--seed', '7'], { '--seed': String });
+    assert(seedFromArgs(['3', '--seed', '7'], p).seed === 7, 'flag seed wins');
+
+    // A lone positional seed is the fallback.
+    p = parse(['5'], {});
+    assert(seedFromArgs(['5'], p).seed === 5, 'positional seed fallback');
+
+    // SEED_MAX boundary accepted, one past it rejected.
+    p = parse(['2147483647'], {});
+    assert(seedFromArgs(['2147483647'], p).seed === 2147483647, 'SEED_MAX accepted');
+    p = parse(['2147483648'], {});
+    assert(seedFromArgs(['2147483648'], p).error, 'SEED_MAX+1 rejected');
+
+    // Invalid flag seed, invalid positional, unknown flag, extra rest.
+    p = parse(['5', '--seed', 'abc'], { '--seed': String });
+    assert(seedFromArgs(['5', '--seed', 'abc'], p).error, 'bad flag seed rejected');
+    p = parse(['abc'], {});
+    assert(seedFromArgs(['abc'], p).error, 'bad positional seed rejected');
+    p = parse(['5', '--nope'], {});
+    assert(seedFromArgs(['5', '--nope'], p).error, 'unknown flag rejected');
+    p = parse(['5', '6'], {});
+    assert(seedFromArgs(['5', '6'], p).error, 'second rest arg rejected');
 }));
 
     await Promise.all(queue);

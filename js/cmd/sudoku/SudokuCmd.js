@@ -1,10 +1,10 @@
 import { CmdBase } from '../CmdBase.js';
-import { _createEmpty, _generate, _copyGrid, parseSeed } from './solver.js';
+import { _createEmpty, _generate, _copyGrid } from './solver.js';
 import { SIZE } from './constants.js';
 import { term, system } from '../../system/sys.js';
 import { CURSOR_HIDE, yellow, bold, red, gray, green } from '../../util/sgr.js';
-import { FieldPickerDialog } from '../../dialog/FieldPickerDialog.js';
 import { ConfirmDialog } from '../../dialog/ConfirmDialog.js';
+import { seedFromArgs } from '../../util/seed-args.js';
 import { _formatTime, renderMethods } from './render.js';
 import { GAME_META } from '../game-meta.js';
 const META = GAME_META.sudoku;
@@ -15,16 +15,11 @@ class SudokuCmd extends CmdBase {
             flags: { '--easy': Boolean, '--medium': Boolean, '--hard': Boolean, '--seed': String },
         });
         if (p.hasHelp) return this.showHelp();
-        const flagSeed = p.flag('--seed');
-        const posSeed = p.rest.length ? parseSeed(p.rest[0]) : undefined;
-        const unknownFlag = args.some(arg => arg.startsWith('-') &&
-            !['--easy', '--medium', '--hard', '--seed'].includes(arg.split('=')[0]));
-        if (unknownFlag || p.rest.length > 1 || posSeed === null ||
-            (flagSeed !== null && parseSeed(flagSeed) === null)) {
-            this.error('invalid arguments: seed must be an integer from 0 to 2147483647');
+        const { seed, error } = seedFromArgs(args, p);
+        if (error) {
+            this.error(error);
             return this.showHelp();
         }
-        const seed = flagSeed !== null ? parseSeed(flagSeed) : posSeed;
         let diff = null;
         if (p.flag('--easy'))   diff = 'easy';
         if (p.flag('--medium')) diff = 'medium';
@@ -53,18 +48,10 @@ class SudokuCmd extends CmdBase {
         term.write(CURSOR_HIDE);
         this._initVBs();
         this._render();
-        this._difficultyDialog = this.openDialog(FieldPickerDialog, 'sudoku-diff', {
+        this.openDifficultyDialog({
+            key: 'sudoku-diff',
             title: 'Sudoku',
-            fields: [{ key: 'difficulty', label: '難度',
-                options: [['Easy', 'easy'], ['Medium', 'medium'], ['Hard', 'hard']] }],
-            onConfirm: ({ difficulty }) => {
-                this._difficultyDialog = null;
-                this._startGame(difficulty);
-            },
-            onCancel: () => {
-                this._difficultyDialog = null;
-                this._quit();
-            },
+            onConfirm: ({ difficulty }) => this._startGame(difficulty),
         });
     }
 

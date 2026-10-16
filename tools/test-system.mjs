@@ -21,6 +21,7 @@ import { Parser } from '../js/terminal/Parser.js';
 import { SystemManager } from '../js/system/system.js';
 import { CmdBase } from '../js/cmd/CmdBase.js';
 import { Echo } from '../js/cmd/echo.js';
+import { defineLazy } from '../js/cmd/lazy.js';
 import { wrapInteractiveFlow } from '../js/system/InteractiveCommandHelper.js';
 import { ConfirmDialog } from '../js/dialog/ConfirmDialog.js';
 
@@ -181,9 +182,66 @@ class AbortProbeCmd extends CmdBase {
 
 const testCmdModule = { ProbeCmd, BusyProbeCmd, AbortProbeCmd, Echo };
 
-function makeHarness() {
+// Lazy descriptor module: first execution must load the class without
+// rewriting the system's command map.
+class LazyProbeCmd extends CmdBase {
+    static get commandName() { return 'lazyp'; }
+    static get help() { return 'Lazy probe'; }
+    static get usage() { return 'lazyp'; }
+    static get menu() { return null; }
+
+    execute() {
+        this.print('lazy-ok\n');
+    }
+}
+
+const lazyCmdModule = {
+    Echo,
+    LazyProbe: defineLazy({
+        commandName: 'lazyp',
+        help: 'Lazy probe',
+        usage: 'lazyp',
+        menu: null,
+    }, () => Promise.resolve(LazyProbeCmd)),
+};
+
+// Difficulty-picker probe: exercises CmdBase.openDifficultyDialog() wiring
+// without any board rendering. The picker closes with Enter (confirm, via
+// default Easy/Medium/Hard labels) or a lone Escape (cancel → _quit).
+class DiffProbeCmd extends CmdBase {
+    static get commandName() { return 'diffp'; }
+    static get help() { return 'Difficulty picker probe'; }
+    static get usage() { return 'diffp'; }
+    static get menu() { return null; }
+
+    constructor() {
+        super();
+        this.picked = null;
+        this.quit = false;
+    }
+
+    execute() {
+        this.openDifficultyDialog({
+            key: 'diffp-diff',
+            title: 'DiffProbe',
+            extraFields: [{
+                key: 'human', label: '先後手',
+                options: [['先手', 'black'], ['後手', 'white']],
+            }],
+            onConfirm: ({ difficulty, human }) => {
+                this.picked = [difficulty, human];
+            },
+        });
+    }
+
+    _quit() { this.quit = true; }
+}
+
+const diffCmdModule = { Echo, DiffProbeCmd };
+
+function makeHarness(cmdModule = testCmdModule) {
     const term = new FakeTerm();
-    const system = new SystemManager(term, testCmdModule);
+    const system = new SystemManager(term, cmdModule);
     return { term, system, screen: term.screen };
 }
 
@@ -259,16 +317,17 @@ async function run() {
         H.system.dispose();
     });
 
-    await record('System: sequential readLine receives each line in order', async () => {
+    await record('System: input typed during command output replays, never vanishes', async () => {
         const H = makeHarness();
         H.system.execute('probe');
         await new Promise((resolve) => setTimeout(resolve, 2));
-        // Feed the first line once readLine is live; input delivered while a
-        // readLine is active reaches the editor immediately.
-        assert(await waitFor(() => H.system.readLineState !== null),
-            'first readLine becomes active');
+        // Typed while the frame is open and output is still flowing: the
+        // command has not reached its interactive phase, so the queue owns
+        // the line and replays it when readLine() opens. (This input used
+        // to vanish into the open frame's no-op _onKey.)
+        assert(H.system.typewriter.isActive(), 'typewriter active after execute');
         H.system.handleInput('one\r');
-        assert(await waitText(H.screen, 'Got:one'), 'first line reached readLine');
+        assert(await waitText(H.screen, 'Got:one'), 'first line replays to readLine');
         assert(await waitFor(() => H.system.readLineState !== null),
             'second readLine becomes active');
         H.system.handleInput('two\r');
@@ -332,6 +391,74 @@ async function run() {
         H.system.handleInput('\r');
         await settle();
         assert(confirmed === 1, 'result stays delivered-once');
+        H.system.dispose();
+    });
+
+    await record('System: lazy command loads once without registry mutation', async () => {
+        const H = makeHarness(lazyCmdModule);
+        // Boot output uses the same typewriter queue; drive commands only
+        // after the boot prompt has landed.
+        assert(await waitFor(() => countPrompts(screenText(H.screen)) >= 1),
+            'boot prompt appears');
+        const mapEntryBefore = H.system.commands.lazyp;
+        H.system.execute('lazyp');
+        assert(await waitText(H.screen, 'lazy-ok'), 'first run loads and runs');
+        await settle();
+        assert(H.system._cmdInstances.lazyp instanceof LazyProbeCmd,
+            'instance cached after first run');
+        assert(H.system.commands.lazyp === mapEntryBefore,
+            'command map entry is never rewritten');
+        H.system.execute('lazyp');
+        assert(await waitText(H.screen, 'lazy-ok'), 'second run reuses instance');
+        await settle();
+        const text = screenText(H.screen);
+        let occurrences = 0;
+        for (const line of text.split('\n')) if (line.includes('lazy-ok')) occurrences++;
+        assert(occurrences === 2, 'exactly two lazy-ok outputs, got '
+            + occurrences + '\n' + text);
+        H.system.dispose();
+    });
+
+    await record('System: unknown command reports and keeps the prompt', async () => {
+        const H = makeHarness();
+        assert(await waitFor(() => countPrompts(screenText(H.screen)) >= 1),
+            'boot prompt appears');
+        H.system.execute('nosuchcmd');
+        assert(await waitText(H.screen, 'Command not found'),
+            'unknown command reports');
+        await settle();
+        const lines = screenText(H.screen).split('\n')
+            .filter((line) => line.trim() !== '');
+        assert(lines[lines.length - 1].trim() === '$',
+            'prompt re-arms after the report, last line was: '
+            + lines[lines.length - 1]);
+        H.system.dispose();
+    });
+
+    await record('System: openDifficultyDialog wires confirm and cancel', async () => {
+        const H = makeHarness(diffCmdModule);
+        assert(await waitFor(() => countPrompts(screenText(H.screen)) >= 1),
+            'boot prompt appears');
+        const inst = H.system._cmdInstances.diffp;
+        H.system.execute('diffp');
+        await settle();
+        assert(inst && inst._difficultyDialog, 'helper stores the dialog reference');
+        assert(H.screen.overlays.length === 1, 'picker owns one overlay');
+        H.system.handleInput('\r');
+        assert(await waitFor(() => inst.picked), 'confirm delivers picker values');
+        assert(inst.picked[0] === 'easy' && inst.picked[1] === 'black',
+            'defaults pick first option of each field');
+        assert(inst._difficultyDialog === null, 'reference nulled on confirm');
+        await settle();
+        assert(H.screen.overlays.length === 0, 'overlay removed after confirm');
+        // Escape runs the default onCancel path: this._quit().
+        H.system.execute('diffp');
+        await settle();
+        assert(inst._difficultyDialog, 'second picker opens');
+        H.system.handleInput('\x1b');
+        assert(await waitFor(() => inst.quit), 'escape reaches the default cancel');
+        assert(inst._difficultyDialog === null, 'reference nulled on cancel');
+        await settle();
         H.system.dispose();
     });
 

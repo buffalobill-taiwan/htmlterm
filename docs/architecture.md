@@ -91,14 +91,22 @@ through command modules.
 registration metadata; [WidgetManager](../js/system/WidgetManager.js) owns widget
 lifecycle and receives its system explicitly. Eager commands are instantiated at
 startup. Lazy game descriptors supply metadata and a `load()` function;
-`SystemManager` fetches the class on first use, attaches the instance to the
-`SyncCmdFrame`, then calls `execute()`. Each registered command instance is
+`SystemManager.commandHandler()` resolves both eager and lazy entries through one
+path — the registry's command map is never rewritten at runtime. On first use the
+lazy class is fetched, its (then cached) instance is attached to the running
+`SyncCmdFrame`, and `execute()` is called. Each registered command instance is
 reused across executions; initialize per-run state in `execute()` or its helpers.
 
 The frame stack always contains a persistent `ShellFrame`. Commands add a
 `SyncCmdFrame`; dialogs add a `DialogFrame` above it. A frame controls input
 while it is topmost and blocks while output, async work, busy state, or its
-interactive command remains active.
+interactive command remains active. Input delivery priority lives in one place:
+`SystemManager.handleInput()` passes the current routing decision
+(`readLineState`, typewriter activity) to `frame.handleInput(data, routing)` so
+frames never probe global state. Open command frames that have not reached an
+interactive phase hand typed text back during command-owned output, letting the
+system queue replay it (select-style flows declare their interest via
+`_awaitingTypewriterDrain` / `_selectState` instead).
 
 ```
 ShellFrame → command SyncCmdFrame → optional DialogFrame

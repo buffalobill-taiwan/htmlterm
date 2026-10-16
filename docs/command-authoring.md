@@ -149,6 +149,27 @@ this._diffDialog = this.openDialog(FieldPickerDialog, 'mycmd-diff', {
 });
 ```
 
+When the picker is a plain difficulty selection, prefer the shared
+`CmdBase.openDifficultyDialog()` helper, which owns the
+`this._difficultyDialog` reference lifecycle and the default cancel →
+`this._quit()` path:
+
+```js
+this.openDifficultyDialog({
+    key: 'mycmd-diff',
+    title: 'MyCmd',
+    // extraFields appends more picker fields (see othello's 先後手 row);
+    // values of every field arrive in the onConfirm object.
+    onConfirm: ({ difficulty }) => this._startGame(difficulty),
+});
+```
+
+For seed arguments (`sudoku`, `minesw`), resolve the positional seed and the
+`--seed` flag through `seedFromArgs(args, p)` from `js/util/seed-args.js`:
+it expects the raw argv array and the `parseArgs()` result, wins with the
+flag, enforces the 0–2147483647 range, and returns either `{ seed }` or
+`{ error }` for the shared help message.
+
 On quit/abort, still `close()` any held dialog reference before nulling it:
 `DialogFrame` removes the overlay, but a command-owned reference must not outlive
 a closed dialog. Null-check child-dialog references after callbacks that clear
