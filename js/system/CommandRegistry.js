@@ -32,7 +32,9 @@ export class CommandRegistry {
         const name = desc.commandName;
         if (this.commands[name]) throw new Error('Duplicate command: ' + name);
         this.loaders[name] = desc.load;
-        // Placeholder: SystemManager replaces this with a frame-binding wrapper.
+        // Placeholder that throws if called directly; SystemManager never
+        // calls it — commandHandler() resolves lazy entries through the
+        // loader list in _ensureCmdInstance and stays off this entry.
         this.commands[name] = () => {
             throw new Error('Lazy command not wired: ' + name);
         };

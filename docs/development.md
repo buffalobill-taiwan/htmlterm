@@ -47,8 +47,8 @@ not a promised minimum version. Browser source files use ES modules; some offlin
 ```sh
 ./tools/check-syntax.sh     # ESM parse of every js/ module and ESM tool
 node tools/import-check.mjs # dynamic import: paths, syntax, module side effects
-node tools/test-headless.mjs # Parser/Screen, VirtualBuffer, seeds, lazy commands
-node tools/test-system.mjs  # frame stack: prompts, input replay, busy, dialogs
+node tools/test-headless.mjs # Parser/Screen, VirtualBuffer, seeds, seed args, lazy commands
+node tools/test-system.mjs  # frame stack: prompts, input replay, busy, dialogs, lazy, errors
 node tools/test-maze.mjs     # Maze scoring fixtures, tree topology, branch distribution
 git diff --check
 ```
@@ -70,14 +70,16 @@ smoke test.
 
 `tools/test-headless.mjs` exercises Screen/Parser compatibility (SGR, IRM, wide
 glyphs, mouse modes, resize), VirtualBuffer composition, pixel-codec roundtrips,
-seeded puzzle generators, and command registration including lazy game
-descriptors.
+seeded puzzle generators, seed-argument validation, and command registration
+including lazy game descriptors and lazy directory loads.
 
 `tools/test-system.mjs` drives a fake term through the real SystemManager, so
 frame-stack regressions (prompt gating, queued input, busy depth, Ctrl+C
-cancellation, dialog results) are caught without a browser. It does not drive
-the DOM renderer; keep using the [manual validation](#manual-validation) table
-for browser-facing behavior. Prefer both as fast gates before those checks.
+cancellation, dialog results, lazy command resolution, the shared difficulty
+picker, and the unified error format) are caught without a browser. It does not
+drive the DOM renderer; keep using the [manual validation](#manual-validation)
+table for browser-facing behavior. Prefer both as fast gates before those
+checks.
 
 For documentation changes, check relative links and heading anchors, confirm
 referenced paths exist, and run complete code samples through the same ESM

@@ -145,7 +145,8 @@ Frames own cleanup callbacks registered with `CmdBase.addCleanup(fn)`. Completio
 cancellation, and failure run them once. Cancellation finishes frames from top to
 bottom; `_processStack()` still owns popping and prompt activation. Async command
 rejections and synchronous exceptions enter `failFrame()`, which cancels that
-frame and its descendants, reports the error, and resumes the stack. Late promise
+frame and its subtree, reports one shared red `Error: …` line (the exception
+type and stack stay on the console), and resumes the stack. Late promise
 settlements from finished frames cannot wake a disposed system.
 
 Busy state is a depth counter (`_busyDepth`), not a boolean, so nested

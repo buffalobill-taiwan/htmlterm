@@ -7,7 +7,9 @@
  * Covers frame-stack behavior that development.md otherwise validates only
  * by hand: typed-ahead input replay, busy-depth blocking, Ctrl+C
  * cancellation, dialog result delivery, drag rerouting, overlay hit
- * testing, prompt gating after output, and disposal.
+ * testing, prompt gating after output, lazy command resolution without
+ * registry mutation, unknown-command reporting, the shared difficulty
+ * picker helper, the unified failFrame error format, and disposal.
  *
  * Each behavioral test runs on its own harness so one test's leftover
  * command state cannot leak into the next.

@@ -34,8 +34,9 @@ Read the document that matches the work being done before changing that area.
 - Do not commit or push unless the user's message literally contains the word "commit".
 - There is no automated-test or CI requirement. Validate browser-facing changes
   manually and run appropriate syntax/static checks: `./tools/check-syntax.sh`,
-  `node tools/import-check.mjs`, `node tools/test-headless.mjs`, and
-  `node tools/test-system.mjs`. Plain `node --check file.js` is not reliable here
+  `node tools/import-check.mjs`, `node tools/test-headless.mjs`,
+  `node tools/test-system.mjs`, and `node tools/test-maze.mjs` when touching
+  maze logic. Plain `node --check file.js` is not reliable here
   — with no `package.json` the file is parsed as CommonJS, which accepts a
   top-level `return`.
 - Do not add `jsconfig.json`, `tsconfig.json`, `.editorconfig`, `.vscode/`, or

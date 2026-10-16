@@ -32,7 +32,8 @@ dialogs, and TSR-style widgets.
 
 - Frame-stack command runner with rAF-based Typewriter output
 - Built-in commands (games, widgets, interactive tests — see below)
-- Dialog framework (`MenuDialog`, `InputDialog`, `ShowDialog`) with overlay compositing
+- Dialog framework (`MenuDialog`, `ConfirmDialog`, `InputDialog`, `ShowDialog`,
+  `FieldPickerDialog`, `SettingsDialog`, and more) with overlay compositing
 - VirtualBuffer compositing abstraction for nested UI layout
 - TSR widgets (clock, DVD logo) — draggable, position remembered
 - Tab completion for command names; command history (Up/Down)

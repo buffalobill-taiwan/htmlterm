@@ -83,6 +83,11 @@ the agent guide and development guide, not inferred from older plans.
 | 2026-10-14 | `d1ec73a` | Replace Tetris sidebar Level with Speed 1–30 and a maximum-speed indicator |
 | 2026-10-14 | `4cac084`, `ee3969f` | Add Maze with wall-blocked visibility, completion trail and candidate ranking that spreads branches along the solution route |
 | 2026-10-14 | `38d039a` | Add reproducible Maze seeds and a shared-generator offline solver with route and PTT output |
+| 2026-10-14 | `588156c` | Update game and offline tool documentation |
+| 2026-10-15 | `251c56b` | Add optional maze breadcrumbs and simplify difficulty labels |
+| 2026-10-15 | `a4aed5c` | Add framed call effects to chess mahjong via the shared `js/util/call-effect.js` buffer |
+| 2026-10-16 | `38905fb` | Add headless frame-stack tests (`tools/test-system.mjs`), fix terminal dirty delegation, and share the overlay hit test via `Screen.topOverlayAt()` |
+| 2026-10-16 | `9af9cea`, `9207389` | Architecture refactor tier 2–3: input routing centralized in `SystemManager.handleInput()` with a routing argument (typed text during command output is queued, not swallowed), eager/lazy commands resolved through `commandHandler()` without registry mutation, `CmdBase.openDifficultyDialog()` and `js/util/seed-args.js` shared helpers, one `reportError()` outlet with failFrame detail on the console, proxy hot-path policy documented, `memory` moved into a directory with placement rules in command-modules |
 
 Use `git show <commit>` for the exact implementation.
 

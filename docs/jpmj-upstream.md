@@ -25,6 +25,9 @@ This is a comparison baseline, not a claim that both implementations are identic
   `lastDraw` references. Its AI riichi path also explicitly rejects open melds.
   Round results record score deltas; `commitRoundEnd()` applies them on Enter.
   Final riichi-stick allocation lives in the engine rather than browser UI.
+  Claim-call visuals render the framed cue through the shared
+  `js/util/call-effect.js` buffer instead of inline loop drawing (commit
+  `a4aed5c`; chess mahjong shares the same helper).
 - Upstream `main.js` / HTML / CSS are replaced by `JpmjCmd.js` and its input,
   loop, render, and palette modules. Result rendering and held-Tab discard
   inspection belong to this terminal UI.

@@ -40,7 +40,8 @@ dealer; otherwise the next seat deals. There are no bonus hands or dealer
 multipliers. Scores last only for the current in-memory match.
 
 Left/Right selects a tile and Enter discards. Action dialogs offer win/chi/pass;
-Escape passes. At settlement all hands are exposed and Enter begins the next
+Escape passes; accepting a call shows its framed cue around the claimed tile
+(see below). At settlement all hands are exposed and Enter begins the next
 round. `r` restores the round's original deal, seats and pre-round scores;
 `n` confirms abandoning the match and reopens setup, retaining the setting
 choices. `q`/Escape confirms exit and Ctrl+C cancels immediately during play.
@@ -54,7 +55,10 @@ prevent old actions from committing after restart, new match or exit.
 
 `rules.js` owns legal actions and state transitions; `game.js` connects these
 to the existing CChessCmd lifecycle and DialogFrame; `render.js` draws through
-the shared root VirtualBuffer with the chess-board child slot disabled.
+the shared root VirtualBuffer with the chess-board child slot disabled. Win and
+chi claims flash a boxed cue around the claimed tile via the shared
+`js/util/call-effect.js` (buildCallEffectBuffer, commit `a4aed5c`), the same
+buffer the mahjong terminal (`jpmj`) now uses instead of its inline loop code.
 The single AI policy receives only its own hand and public information. It
 always wins when possible, otherwise minimizes missing tiles across legal
 completion patterns and favors more available effective tiles, breaking ties
