@@ -40,7 +40,14 @@ export class Terminal {
     get curY() { return this.screen.curY; }
     set curY(v) { this.screen.curY = v; }
     get viewOffset() { return this.screen.viewOffset; }
-    set viewOffset(v) { this.screen.viewOffset = v; this.renderer.markAllDirty(); }
+    // A viewOffset change rewires every rendered row, so it is a global change.
+    // Dirty only when the value moves; callers that re-assign the current
+    // value (e.g. every _send) do not trigger a redundant full dirty pass.
+    set viewOffset(v) {
+        if (v === this.screen.viewOffset) return;
+        this.screen.viewOffset = v;
+        this.screen.markAllDirty();
+    }
     get overlays() { return this.screen.overlays; }
     addOverlay(ov, group) { this.screen.addOverlay(ov, group); }
     removeOverlay(ov) { this.screen.removeOverlay(ov); }
@@ -55,6 +62,7 @@ export class Terminal {
     set mouseEncoding(v) { this.screen.mouseEncoding = v; }
     markRowDirty(r) { this.screen.markRowDirty(r); }
     markAllDirty() { this.screen.markAllDirty(); }
+    topOverlayAt(col, row, skipFn) { return this.screen.topOverlayAt(col, row, skipFn); }
     isWide(ch) { return this.screen.isWide(ch); }
 
     write(data) { this.parser.write(data); }
@@ -105,10 +113,7 @@ export class Terminal {
     }
 
     _send(data) {
-        if (this.viewOffset > 0) {
-            this.viewOffset = 0;
-            this.screen.markAllDirty();
-        }
+        if (this.viewOffset > 0) this.viewOffset = 0;
         if (this.onData) this.onData(data);
     }
 
@@ -181,12 +186,10 @@ export class Terminal {
 
         if (ctrl && shift && (key === '+' || key === '=')) {
             this.viewOffset = Math.max(0, this.viewOffset - 1);
-            this.screen.markAllDirty();
             e.preventDefault(); return;
         }
         if (ctrl && key === '-') {
             this.viewOffset = Math.min(this.screen.maxViewOffset(), this.viewOffset + 1);
-            this.screen.markAllDirty();
             e.preventDefault(); return;
         }
     }

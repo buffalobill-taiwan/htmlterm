@@ -87,6 +87,25 @@ export class Screen {
         return r ? r[col] : null;
     }
 
+    /**
+     * Topmost overlay whose bounding box covers (col, row), or null. This is
+     * the canonical overlay hit test for input routing. Unlike getCellAt,
+     * coverage is decided by the bounding box only: a transparent cell does
+     * not fall through to overlays below. skipFn(ov) vetoes overlays whose
+     * topmost coverage should be ignored (e.g. peek-transparent dialogs).
+     */
+    topOverlayAt(col, row, skipFn) {
+        const ovs = this.overlays;
+        for (let i = ovs.length - 1; i >= 0; i--) {
+            const ov = ovs[i];
+            if (skipFn && skipFn(ov)) continue;
+            if (row >= ov.y && row < ov.y + ov.h && col >= ov.x && col < ov.x + ov.w) {
+                return ov;
+            }
+        }
+        return null;
+    }
+
     isWide(ch) {
         return isWide(ch);
     }

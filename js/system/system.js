@@ -396,20 +396,15 @@ export class SystemManager {
     handleMouse(type, info) {
         if (this._disposed) return false;
         if (type === 'mousedown') {
-            const ovs = this.term.overlays;
-            for (let i = ovs.length - 1; i >= 0; i--) {
-                const ov = ovs[i];
-                if (ov.owner?._peekHeld) continue;
-                if (info.col >= ov.x && info.col < ov.x + ov.w &&
-                    info.row >= ov.y && info.row < ov.y + ov.h) {
-                    const owner = ov.owner;
-                    if (owner && typeof owner.startDrag === 'function') {
-                        this._dragTarget = owner;
-                        owner.startDrag(info.col, info.row);
-                        return true;
-                    }
-                    break;
-                }
+            // Shared overlay hit test; peek-transparent dialogs (owner holding
+            // Tab) are skipped rather than blocking the drag below them.
+            const ov = this.term.topOverlayAt(info.col, info.row, o => o.owner?._peekHeld);
+            if (!ov) return false;
+            const owner = ov.owner;
+            if (owner && typeof owner.startDrag === 'function') {
+                this._dragTarget = owner;
+                owner.startDrag(info.col, info.row);
+                return true;
             }
             return false;
         }
