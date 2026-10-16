@@ -7,7 +7,7 @@ import { getSystem, setSystem } from './sys.js';
 import { CommandRegistry } from './CommandRegistry.js';
 import { WidgetManager } from './WidgetManager.js';
 export { WidgetManager } from './WidgetManager.js';
-import { bold, green, yellow, gray, warn, CURSOR_SHOW } from '../util/sgr.js';
+import { bold, green, yellow, gray, red, warn, CURSOR_SHOW } from '../util/sgr.js';
 import { MenuDialog } from '../dialog/MenuDialog.js';
 
 export class SystemManager {
@@ -120,6 +120,14 @@ export class SystemManager {
     print(text) {
         if (this._disposed) return;
         this.typewriter.enqueue(text);
+    }
+
+    // Single user-error outlet. Commands reach it through CmdBase.error();
+    // frame paths (failFrame, unknown command) route through it too, so
+    // every user-facing error renders the same red 'Error: …' line.
+    // Internal exceptions keep their full detail only on console (failFrame).
+    reportError(text) {
+        this.print(red('Error: ' + text) + '\n');
     }
 
     tick() {
@@ -277,7 +285,10 @@ export class SystemManager {
         const index = this.cmdStack.indexOf(frame);
         if (index < 0 || frame.done || this._disposed) return;
         this._cancelFrames(index);
-        this.print('\x1B[31mError: ' + String(err) + '\x1B[0m\n');
+        // User-facing line keeps the shared 'Error: …' format; the exception
+        // itself (stack, type) goes to the console for debugging.
+        this.reportError((err && err.message) ? err.message : String(err));
+        if (typeof console !== 'undefined') console.error(err);
         this.tick();
     }
 

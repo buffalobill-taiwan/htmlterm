@@ -2,11 +2,24 @@
 
 Small commands remain single files under `js/cmd/`. Larger games use a directory
 with an explicit `index.js` entry, following the existing Wordle and Japanese
-Mahjong layout.
+Mahjong layout. Rules:
+
+- A command earns a directory when it splits into more than one module (own
+  board/solver/render/args), or when the class file grows past a screenful of
+  game logic (~200+ lines); `/lib`-style catch-alls are out of scope.
+- Inside a directory the class is `<Name>Cmd.js`; `index.js` re-exports exactly
+  the public class (static data helpers stay behind a direct import from the
+  class file or live in `js/data/`).
+- Data files always live in `js/data/`, never in a data-shim module inside a
+  `js/cmd/` subfolder. Commands that need dynamic JSON import it directly from
+  `js/data/` (anime imports `../data/anime.json` on first use).
+- Keep sibling names unambiguous: `art.js` is the command, and no folder may
+  shadow another command's flat module name (the historical `js/cmd/art/`
+  data shim was removed for this reason).
 
 `js/cmd/index.js` registers small commands by exporting their classes eagerly.
-Large games (and `memory`) are registered as lazy descriptors via
-`defineLazy()` from [lazy.js](../js/cmd/lazy.js): startup only loads
+Large games are registered as lazy descriptors via `defineLazy()` from
+[lazy.js](../js/cmd/lazy.js): startup only loads
 [game-meta.js](../js/cmd/game-meta.js) for help/menu/Tab metadata, and the game
 module is fetched on first run. Keep `GAME_META` and each command's static
 getters in sync by importing `GAME_META` from the Cmd class.
@@ -46,6 +59,7 @@ contains shared dimensions, difficulty settings, and other fixed configuration.
 | [maze](../js/cmd/maze/index.js) | `MazeCmd` | `board.js`: seeded mixed Growing Tree generation and wall-blocked three-tile visibility; `generation-score.js`: ranks 24 candidates by early route branch coverage, late branch share, then early junction count; `args.js`: shared game/offline seed parsing; `render.js`: seed header, 2×1 tiles and horizontal camera |
 | [sudoku](../js/cmd/sudoku/index.js) | `SudokuCmd` | `solver.js`: solving, uniqueness checks, seed validation, and deterministic puzzle generation |
 | [tetris](../js/cmd/tetris/index.js) | `TetrisCmd` | `board.js`: collisions, ghost landing, T-spins, and line clearing; `pieces.js`: shapes, wall kicks, and colors |
+| [memory](../js/cmd/memory/index.js) | `MemoryCmd` | Everything stays in the class file; difficulty selections come from `CmdBase.openDifficultyDialog()` |
 
 The command class installs `renderMethods` on its prototype once, at module
 initialization. These methods use the same `this` as before; they do not create

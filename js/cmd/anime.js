@@ -27,7 +27,7 @@ export class AnimeCmd extends CmdBase {
 
     async execute(args) {
         const isActive = this.executionGuard();
-        const { default: data } = await import('./art/anime.js');
+        const { default: data } = await import('../data/anime.json', { with: { type: 'json' } });
         if (!isActive()) return;
         const { cols, rows, frames: numFrames, rle0, diffs } = data;
         const termRows = rows / 2;

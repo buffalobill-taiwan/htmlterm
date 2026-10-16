@@ -239,6 +239,25 @@ bufWidth('\x1B[31mA中文\x1B[0m');     // 5: SGR does not occupy cells
 styled text; it is not a simulator for cursor movement or every ANSI control.
 Do not use JavaScript string length for terminal layout.
 
+## Error reporting
+
+User errors and command bugs take different paths; keep the split. Every
+user-facing error renders one red `Error: …` line through
+`SystemManager.reportError()` — the single outlet that `CmdBase.error()`,
+`failFrame()`, and the unknown-command path in `SyncCmdFrame.start()` all
+route through. Do not print red escape sequences by hand.
+
+- **User errors** (bad arguments, missing input, fetch failures the user can
+  retry): call `this.error(message)` yourself, optionally followed by
+  `this.showHelp()`. Catch parser/engine exceptions at the command boundary
+  and convert them (see `maze`'s `parseMazeArgs` try/catch).
+- **Internal exceptions** (broken invariant, programming error): let them
+  throw. `failFrame()` cancels the frame's subtree, prints the shared
+  `Error: <message>` line (no exception type or stack on the terminal), and
+  logs the full exception to the console.
+- Never leave a throw without a frame; it flows to `failFrame()` and the
+  shell keeps running.
+
 ## Complete command examples
 
 Run the app with the [local HTTP server](../README.md#usage). The following are

@@ -87,6 +87,21 @@ marks rows itself, do not combine overlay updates with a blanket dirty pass.
 method `this` binding. Property assignments are forwarded to the live instance.
 The runtime binding in `sys.js` does not import SystemManager, avoiding a cycle
 through command modules.
+
+Hot-path policy for the proxies:
+
+- Importing `system`/`term` at module top level is always safe: they are
+  proxies, not singleton captures, and re-resolve the live system on every
+  access.
+- Never cache a resolved singleton property in a module-scope `let`/`const`
+  (`system.editor`, `term.screen`, …). The instance is constructed after the
+  module is imported and disposed/rebuilt across sessions; a file-level
+  capture outlives it.
+- In animation or render loops, method-local capture is the accepted pattern
+  (see `js/cmd/anime.js`): capture `term.screen` and bind `markRowDirty` once
+  per execution, before the loop that would otherwise pay per-call proxy
+  method allocation.
+
 [CommandRegistry](../js/system/CommandRegistry.js) owns command instances and
 registration metadata; [WidgetManager](../js/system/WidgetManager.js) owns widget
 lifecycle and receives its system explicitly. Eager commands are instantiated at

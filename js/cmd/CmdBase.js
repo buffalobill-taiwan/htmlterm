@@ -1,5 +1,5 @@
 import { system, term } from '../system/sys.js';
-import { red, bold, yellow, CURSOR_SHOW, CURSOR_HIDE } from '../util/sgr.js';
+import { bold, yellow, CURSOR_SHOW, CURSOR_HIDE } from '../util/sgr.js';
 import { ShowDialog } from '../dialog/ShowDialog.js';
 import { InputDialog } from '../dialog/InputDialog.js';
 import { FieldPickerDialog } from '../dialog/FieldPickerDialog.js';
@@ -71,7 +71,7 @@ export class CmdBase {
     }
 
     error(text) {
-        this.print(red('Error: ' + text) + '\n');
+        system.reportError(text);
     }
 
     parseArgs(args, opts = {}) {

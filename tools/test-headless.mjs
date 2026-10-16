@@ -347,6 +347,13 @@ queue.push(test('Lazy load: tetris meta resolves to Cmd class', async () => {
     assert(Cls.help === cmdModule.TetrisCmd.help, 'loaded help matches meta');
 }));
 
+queue.push(test('Lazy load: memory resolves from its directory entry', async () => {
+    const Cls = await cmdModule.MemoryCmd.load();
+    assert(typeof Cls === 'function' && Cls.commandName === 'memory',
+        'memory directory index re-exports MemoryCmd');
+    assert(Cls.help === cmdModule.MemoryCmd.help, 'memory loaded help matches meta');
+}));
+
 queue.push(test('SeedArgs: flag wins, positional fallback, shared error', () => {
     const cmd = new CmdBase();
     const parse = (args, flags) => cmd.parseArgs(args, { flags });

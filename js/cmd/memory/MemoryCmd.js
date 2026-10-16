@@ -1,9 +1,9 @@
-import { term } from '../system/sys.js';
-import { CmdBase } from './CmdBase.js';
-import { bold, red, green, yellow, cyan, gray, CURSOR_HIDE, makeCell } from '../util/sgr.js';
-import { isWide } from '../util/unicode-width.js';
-import { VirtualBuffer, _blankCell } from '../util/VirtualBuffer.js';
-import { GAME_META } from './game-meta.js';
+import { term } from '../../system/sys.js';
+import { CmdBase } from '../CmdBase.js';
+import { bold, red, green, yellow, cyan, gray, CURSOR_HIDE, makeCell } from '../../util/sgr.js';
+import { isWide } from '../../util/unicode-width.js';
+import { VirtualBuffer, _blankCell } from '../../util/VirtualBuffer.js';
+import { GAME_META } from '../game-meta.js';
 const META = GAME_META.memory;
 
 const DIFFICULTY = {

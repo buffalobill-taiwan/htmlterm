@@ -182,6 +182,21 @@ class AbortProbeCmd extends CmdBase {
 
 const testCmdModule = { ProbeCmd, BusyProbeCmd, AbortProbeCmd, Echo };
 
+// Throwing probe: documents failFrame semantics — the user sees the shared
+// red 'Error: …' line, the full exception lands on the console.
+class ThrowProbeCmd extends CmdBase {
+    static get commandName() { return 'throwp'; }
+    static get help() { return 'Throws a RangeError'; }
+    static get usage() { return 'throwp'; }
+    static get menu() { return null; }
+
+    execute() {
+        throw new RangeError('boom');
+    }
+}
+
+const throwCmdModule = { Echo, ThrowProbeCmd };
+
 // Lazy descriptor module: first execution must load the class without
 // rewriting the system's command map.
 class LazyProbeCmd extends CmdBase {
@@ -458,6 +473,31 @@ async function run() {
         H.system.handleInput('\x1b');
         assert(await waitFor(() => inst.quit), 'escape reaches the default cancel');
         assert(inst._difficultyDialog === null, 'reference nulled on cancel');
+        await settle();
+        H.system.dispose();
+    });
+
+    await record('System: exception reports share one Error format', async () => {
+        const H = makeHarness(throwCmdModule);
+        assert(await waitFor(() => countPrompts(screenText(H.screen)) >= 1),
+            'boot prompt appears');
+        const seen = [];
+        const origError = console.error;
+        console.error = (err) => { seen.push(err); };  // swallow debug detail
+        try {
+            H.system.execute('throwp');
+            // Shared format: 'Error: boom' without the RangeError type prefix.
+            assert(await waitText(H.screen, 'Error: boom'),
+                'failFrame prints the shared Error format');
+            await settle();
+        } finally {
+            console.error = origError;
+        }
+        assert(seen.some(e => e instanceof RangeError), 'console.error gets the exception');
+        assert(!screenText(H.screen).includes('RangeError'),
+            'stack detail stays off the terminal');
+        H.system.handleInput('echo alive\r');
+        assert(await waitText(H.screen, 'alive'), 'shell still accepts commands');
         await settle();
         H.system.dispose();
     });

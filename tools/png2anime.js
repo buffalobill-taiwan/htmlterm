@@ -3,7 +3,10 @@
  * png2anime — Convert a directory of frame PNGs to an anime data module.
  *
  * Usage:
- *   node tools/png2anime.js /tmp/anime js/cmd/art/anime.js
+ *   node tools/png2anime.js /tmp/anime /tmp/opencode/anime-raw.js
+ *
+ * The generated module is a build artifact; bake it into js/data/anime.json
+ * with tools/compress-anime.js before the app can use it.
  *
  * Expects frame1.png … frameN.png (sorted numerically).
  * Output: ES module exporting default { cols, rows, frames }
