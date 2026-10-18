@@ -187,7 +187,8 @@ equivalent. Seeds range from 0 to 2147483647; a seed alone defaults to Medium.
 The same seed and difficulty reproduce the maze with the current generator.
 
 Move from the top-left to the bottom-right with arrows or WASD. Each tile uses
-two terminal columns; walls block vision within a three-tile Manhattan radius.
+two terminal columns; walls block vision within a three-tile Manhattan radius,
+and a doorway beside a visible corridor end shows even around the bend.
 Hard scrolls horizontally to follow the player. R resets position, steps and
 visited tiles while keeping the maze and seed. N opens the difficulty picker;
 confirming generates a random seed, while cancelling preserves the current game.

@@ -56,13 +56,16 @@ function growMaze(width, height, random) {
     return walls;
 }
 
-// Reveal wall faces beside visible passages, even when the wall's center is
-// occluded (for example, the side wall two steps along a straight corridor).
-// Three tiles means horizontal plus vertical distance, including wall tiles.
+// Reveal cells that hang off sight-visible passages: a wall face beside a
+// visible passage (even when the wall's center is occluded, for example the
+// side wall two steps along a straight corridor), and the doorway passage at
+// a visible corridor's end. Manhattan distance ≤ 3, counting wall tiles.
 export function isVisible(walls, width, px, py, tx, ty) {
     if (Math.abs(tx - px) + Math.abs(ty - py) > 3) return false;
     if (hasSightline(walls, width, px, py, tx, ty)) return true;
-    if (!walls[ty * width + tx]) return false;
+    // One-hop face/doorway reveal: some passage neighbor owes its own center
+    // sightline. Center sightlines still do not propagate around bends, so
+    // cells past this neighbor stay hidden (no cascading reveals).
     const height = walls.length / width;
     for (const [dx, dy] of DIRECTIONS) {
         const x = tx + dx, y = ty + dy;

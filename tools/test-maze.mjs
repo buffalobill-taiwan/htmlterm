@@ -4,8 +4,8 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { bufWidth } from '../js/util/display-width.js';
 import { parseMazeArgs } from '../js/cmd/maze/args.js';
-import { generateMaze, DIFFICULTY } from '../js/cmd/maze/board.js';
 import { scoreMaze, isBetterMazeScore } from '../js/cmd/maze/generation-score.js';
+import { generateMaze, DIFFICULTY, isVisible } from '../js/cmd/maze/board.js';
 
 // A known 20-step solution: across the top, then down the right edge.
 const fixture = new Uint8Array(121).fill(1);
@@ -35,6 +35,25 @@ assert(isBetterMazeScore({ ...best, lateFraction: 0.1, junctions: 1 }, best));
 assert(!isBetterMazeScore({ ...best, lateFraction: 0.3, junctions: 100 }, best));
 assert(isBetterMazeScore({ ...best, junctions: 6 }, best));
 assert(!isBetterMazeScore({ ...best }, best));
+
+// Vision: a straight corridor east of the spawn, matching the opening layout
+// (player at (0,0), corridor (1,0)–(4,0), a cell one row below corridor end).
+const vWidth = 8, vHeight = 4;
+const corridor = new Uint8Array(vWidth * vHeight).fill(1);
+for (const [x, y] of [[0, 0], [1, 0], [2, 0], [3, 0], [4, 0]]) corridor[y * vWidth + x] = 0;
+const doorway = new Uint8Array(corridor);
+doorway[1 * vWidth + 2] = 0; // (2,1) is a passage leaving the corridor south
+// Corridor tiles along the sightline are visible; distance 4 is not.
+assert(isVisible(corridor, vWidth, 0, 0, 2, 0), 'corridor end visible');
+assert(isVisible(corridor, vWidth, 0, 0, 1, 0), 'corridor step visible');
+assert(!isVisible(corridor, vWidth, 0, 0, 4, 0), 'three-tile vision caps at distance 3');
+// The cell past the corridor end must look the same whether sealed or open:
+// the wall shows its face, the doorway shows the passage. No cascade either.
+assert(isVisible(doorway, vWidth, 0, 0, 2, 1), 'doorway passage beside visible corridor visible');
+assert(isVisible(corridor, vWidth, 0, 0, 2, 1), 'same cell as wall shows its face');
+assert(!isVisible(doorway, vWidth, 0, 0, 2, 2), 'reveal is a single hop, no cascade');
+// Corner posts still block: the L walk from the spawn falls on a wall cell.
+assert(!isVisible(corridor, vWidth, 0, 0, 3, 1), 'occluded side wall stays hidden without a sight-visible neighbor');
 
 function checkTree(walls, width, height) {
     assert(walls instanceof Uint8Array);
