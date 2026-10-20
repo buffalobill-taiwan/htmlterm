@@ -78,6 +78,12 @@
     "file": "endgame-016.json"
   },
   {
+    "id": "endgame-026",
+    "name": "小兵立功",
+    "step": 6,
+    "file": "endgame-026.json"
+  },
+  {
     "id": "endgame-011",
     "name": "前仆後繼",
     "step": 7,
