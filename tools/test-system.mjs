@@ -22,6 +22,7 @@ import { Screen } from '../js/terminal/Screen.js';
 import { Parser } from '../js/terminal/Parser.js';
 import { SystemManager } from '../js/system/system.js';
 import { CmdBase } from '../js/cmd/CmdBase.js';
+import { FiveWillow } from '../js/cmd/5willow.js';
 import { Echo } from '../js/cmd/echo.js';
 import { defineLazy } from '../js/cmd/lazy.js';
 import { wrapInteractiveFlow } from '../js/system/InteractiveCommandHelper.js';
@@ -182,7 +183,7 @@ class AbortProbeCmd extends CmdBase {
     }
 }
 
-const testCmdModule = { ProbeCmd, BusyProbeCmd, AbortProbeCmd, Echo };
+const testCmdModule = { ProbeCmd, BusyProbeCmd, AbortProbeCmd, Echo, FiveWillow };
 
 // Throwing probe: documents failFrame semantics — the user sees the shared
 // red 'Error: …' line, the full exception lands on the console.
@@ -528,6 +529,43 @@ async function run() {
 
         H.system.dispose();
         assert(SystemManager.instance === null, 'singleton released');
+    });
+
+    await record('System: scaled echo aliases, limits, baseline and cancellation', async () => {
+        const H = makeHarness();
+        await settle();
+        for (const flag of ['--big', '--x2', '--x3', '--x10']) {
+            H.system.handleInput(`echo ${flag} 中 tail\r`);
+            await settle();
+            assert(H.screen.attr.scale === 1, 'scale restored');
+            assert(countPrompts(screenText(H.screen)) === 1, 'one prompt after scaled output');
+            assert(screenText(H.screen).includes('tail'), 'normal suffix rendered');
+        }
+        H.system.handleInput('echo --x11 中\r');
+        await settle();
+        assert(screenText(H.screen).includes('Text scale must'), 'out of range reports error');
+        H.system.handleInput('echo --x10 中中中中中中中中中中\r');
+        pumpRAF();
+        H.system.handleInput('\x03');
+        await settle();
+        assert(H.screen.attr.scale === 1, 'cancel restores normal scale');
+        H.system.handleInput('echo ready\r');
+        await settle();
+        assert(screenText(H.screen).includes('ready'), 'shell works after cancel');
+        H.system.dispose();
+    });
+
+    await record('System: scaled article scrolling and last flag wins', async () => {
+        const H = makeHarness();
+        await settle();
+        H.system.typewriter._speed = { wide: 0, half: 0 };
+        H.system.handleInput('5willow --big --x10\r');
+        await settle();
+        assert(H.screen.attr.scale === 1, 'article restores scale');
+        assert(H.screen.buffer.some(row => row.some(c => c.clipScale === 10)), 'article uses final flag');
+        assert(H.screen.scrollback.length > 0, 'long article scrolls');
+        assert(countPrompts(screenText(H.screen)) === 1, 'one normal prompt after article');
+        H.system.dispose();
     });
 
     if (failed > 0) {

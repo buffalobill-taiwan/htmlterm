@@ -118,14 +118,14 @@ more than once.
 | `art` | Render pixel art from a random artwork |
 | `ascii` | Show ANSI color chart (16-color + 256-color cube) |
 | `astrology` | Today's horoscope for your zodiac sign |
-| `5willow` | Print 五柳先生傳 (with `--big` for enlarged text) |
+| `5willow` | Print 五柳先生傳 (with `--x2`–`--x10` for enlarged text; `--big` aliases `--x2`) |
 | `calc` | Evaluate arithmetic expression |
 | `clear` | Clear screen |
 | `clock` | Toggle TSR clock widget |
 | `cowsay` | Let a cow speak |
 | `date` | Show current date/time |
 | `dvd` | Toggle bouncing DVD logo widget |
-| `echo` | Print arguments |
+| `echo` | Print arguments (with leading `--x2`–`--x10` or `--big` to enlarge the next argument) |
 | `flash` | Flash the screen N times (default 1). `--border` for border flash, `--art` for random artwork flash |
 | `gweled` | Play Gweled (Bejeweled match-3, space-select then arrow-swap, chain cascade, 5-7 colors) |
 | `help` | Show command list; `help <cmd>` for details and usage |

@@ -406,3 +406,12 @@ restored before the command runs. Do not defer transitions with an unowned
 - `jpmj/`: Japanese Mahjong UI, engine, yaku evaluation, wall/tiles, and AI.
   Consult the [upstream synchronization guide](jpmj-upstream.md) before
   re-deriving Mahjong scoring or rule behavior.
+
+## Enlarged text options
+
+`echo --xN text` enlarges only the next argument (quote text containing spaces).
+Trailing arguments use normal size, aligned with the enlarged text's bottom row.
+`5willow --xN` enlarges the entire article; if multiple scale flags occur, the last
+wins. Both accept integer scales 2–10, with `--big` as an alias for `--x2`.
+Invalid `--x…` options in the scale-option position report an error. An empty
+scaled `echo` prints a newline. Existing unrelated argument handling is unchanged.

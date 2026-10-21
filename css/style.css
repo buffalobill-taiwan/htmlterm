@@ -150,21 +150,17 @@ html, body {
     display: inline-block;
     width: var(--char-w);
     height: var(--char-h);
-    font-size: calc(2 * var(--char-h));
-    line-height: calc(2 * var(--char-h));
+    font-size: calc(var(--glyph-scale, 2) * var(--char-h));
+    line-height: calc(var(--glyph-scale, 2) * var(--char-h));
     overflow: hidden;
     vertical-align: top;
 }
 
 .clip-cell > span {
     position: absolute;
+    left: calc(var(--glyph-x, 0) * var(--char-w));
+    top: calc(var(--glyph-y, 0) * var(--char-h));
 }
-.clip-cell[data-ox="0"] > span { left: 0px; }
-.clip-cell[data-ox="-1"] > span { left: calc(-1 * var(--char-w)); }
-.clip-cell[data-ox="-2"] > span { left: calc(-2 * var(--char-w)); }
-.clip-cell[data-ox="-3"] > span { left: calc(-3 * var(--char-w)); }
-.clip-cell[data-oy="0"] > span { top: 0px; }
-.clip-cell[data-oy="-1"] > span { top: calc(-1 * var(--char-h)); }
 
 @keyframes cursor-blink {
     0%, 50% { opacity: 1; }

@@ -24,8 +24,9 @@ updates. Reuse instance scratch objects, arrays, cells, buffers, and palettes.
 
 Renderer pre-creates `cellEls[25][80]`. Standard cells compare text, class, and
 clip state before a write. Clip cells use `clip-right`, `clip-left`, and
-`clip-cell` classes and keep `_clipText`, `_ox`, and `_oy` on the span to avoid
-per-frame style-string churn. Cursor rendering uses a reusable ping-pong pair.
+`clip-cell` classes and keep `_clipText`, `_ox`, `_oy`, and `_clipScale` on the span to avoid
+per-frame style-string churn. Scaled glyphs use CSS variables for size and offsets, reusing existing inner
+spans on updates. Cursor rendering uses a reusable ping-pong pair.
 
 Overlay blending normally returns direct buffer cell references. It can create a
 temporary clip cell only when overlay coverage splits a wide character; this is

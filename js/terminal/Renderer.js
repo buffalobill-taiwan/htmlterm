@@ -196,17 +196,23 @@ export class Renderer {
 
             if (cell.clip) {
                 cls += ' clip-cell';
+                const scale = cell.clipScale || 2;
                 const offX = cell.clipOffX || 0;
                 const offY = cell.clipOffY || 0;
                 const ox = offX * this.charWidth;
                 const oy = offY * this.charHeight;
-                if (span.className === cls && span._clipText === text && span._ox === ox && span._oy === oy) continue;
-                span.dataset.ox = offX;
-                span.dataset.oy = offY;
-                const clipSpan = document.createElement('span');
+                if (span.className === cls && span._clipText === text && span._ox === ox && span._oy === oy && span._clipScale === scale) continue;
+                span.style.setProperty('--glyph-scale', scale);
+                span.style.setProperty('--glyph-x', offX);
+                span.style.setProperty('--glyph-y', offY);
+                let clipSpan = span.firstElementChild;
+                if (!clipSpan) {
+                    clipSpan = document.createElement('span');
+                    span.textContent = '';
+                    span.appendChild(clipSpan);
+                }
                 clipSpan.textContent = text;
-                span.textContent = '';
-                span.appendChild(clipSpan);
+                span._clipScale = scale;
                 span.className = cls;
                 span._clipText = text;
                 span._ox = ox;
@@ -268,7 +274,7 @@ export class Renderer {
                             underline: ovCell.underline, blink: ovCell.blink,
                             inverse: ovCell.inverse, conceal: ovCell.conceal,
                             crossedOut: ovCell.crossedOut,
-                            clip: ovCell.clip, clipOffX: ovCell.clipOffX, clipOffY: ovCell.clipOffY,
+                            clip: ovCell.clip, clipScale: ovCell.clipScale, clipOffX: ovCell.clipOffX, clipOffY: ovCell.clipOffY,
                             width: 1, _clipRight: true,
                         };
                         if (c + 1 < baseRow.length) {

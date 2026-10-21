@@ -64,6 +64,34 @@ function makeParser(onSend = () => {}) {
 
 console.log('--- htmlterm Headless Test Suite ---\n');
 
+test('Scaled text: all sizes, CJK slices, wrap, reset and bottom scrolling', () => {
+    for (let scale = 2; scale <= 10; scale++) {
+        const { screen, parser } = makeParser();
+        parser.write(`\x1B[${500 + scale}m中A`);
+        assert(screen.curX === scale * 3, 'scaled advance');
+        const cell = screen.buffer[scale - 1][scale * 2 - 1];
+        assert(cell.ch === '中' && cell.clipScale === scale, 'CJK footprint');
+        assert(cell.clipOffX === -(scale * 2 - 1) && cell.clipOffY === -(scale - 1), 'slice offsets');
+        parser.write('\x1B[501m\nnormal');
+        assert(screen.curY === scale && screen.buffer[scale][0].ch === 'n', 'newline clears full glyph');
+        parser.write(`\x1B[25;79H\x1B[${500 + scale}m中\x1B[0m\n>`);
+        assert(screen.curY === 24 && screen.curX === 1, 'prompt stays below glyph at bottom');
+        assert(screen.buffer[23][0].ch === '中', 'bottom glyph retained above prompt');
+        assert(screen.attr.scale === 1, 'SGR reset');
+    }
+});
+
+test('Scaled text: mixed heights, legacy SGR and short scroll regions', () => {
+    const { screen, parser } = makeParser();
+    parser.write('\x1B[510mA\x1B[503mB\x1B[501m\nC');
+    assert(screen.curY === 10, 'mixed line uses tallest glyph');
+    parser.write('\x1B[500mD\x1B[501m');
+    assert(screen.buffer[10][1].clipScale === 2, 'legacy SGR stays twofold');
+    parser.write('\x1B[2;4r\x1B[2;1H\x1B[510m中\n中');
+    assert(screen.buffer.length === 25 && screen.curY >= 1 && screen.curY <= 3, 'short region remains bounded');
+});
+
+
 const queue = [];
 
 async function run() {

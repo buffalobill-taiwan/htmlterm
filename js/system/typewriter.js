@@ -1,4 +1,4 @@
-import { CURSOR_HIDE, CURSOR_SHOW, skipEscapeSeq, warn } from '../util/sgr.js';
+import { CURSOR_HIDE, CURSOR_SHOW, skipEscapeSeq, warn, defaultAttr, applySGR } from '../util/sgr.js';
 
 export class Typewriter {
     constructor(term) {
@@ -12,6 +12,7 @@ export class Typewriter {
         this._speed = { wide: 2, half: 1 };
         this._lastFrameTime = 0;
         this._accumulator = 0;
+        this._sgrAttr = defaultAttr();
     }
 
     isActive() { return this._active; }
@@ -21,18 +22,16 @@ export class Typewriter {
         const tokens = this._tokenize(text);
 
         const expanded = [];
-        let big = false;
         for (const t of tokens) {
             if (t.type === 'seq') {
-                const d = this._sgrBig(t.text);
-                if (d === true || d === false) big = d;
+                this._trackSGR(t.text);
                 expanded.push(t);
             } else if (t.type === 'nl') {
-                expanded.push({ type: 'char', ch: '\n', wide: false, big: false });
+                expanded.push({ type: 'char', ch: '\n', wide: false, scale: 1 });
             } else {
                 for (const ch of t.text) {
                     const wide = this.term.isWide(ch);
-                    expanded.push({ type: 'char', ch, wide, big });
+                    expanded.push({ type: 'char', ch, wide, scale: this._sgrAttr.scale });
                 }
             }
         }
@@ -75,7 +74,8 @@ export class Typewriter {
         this._head = 0;
         this._active = false;
         this._accumulator = 0;
-        this.term.write(CURSOR_SHOW);
+        this._sgrAttr.scale = 1;
+        this.term.write('\x1B[501m' + CURSOR_SHOW);
     }
 
     onDrain(callback) {
@@ -131,17 +131,9 @@ export class Typewriter {
         return tokens;
     }
 
-    _sgrBig(text) {
+    _trackSGR(text) {
         const m = /^\x1B\[([0-9;]*)m$/.exec(text);
-        if (!m) return null;
-        const params = m[1] === '' ? ['0'] : m[1].split(';');
-        let out;
-        for (const p of params) {
-            if (p === '0') out = false;
-            else if (p === '500') out = true;
-            else if (p === '501') out = false;
-        }
-        return out === undefined ? undefined : out;
+        if (m) applySGR(this._sgrAttr, m[1] === '' ? [0] : m[1].split(';').map(Number));
     }
 
     _start() {
@@ -167,7 +159,7 @@ export class Typewriter {
             const item = this._queue[this._head];
             const delay = item.type === 'seq' ? 0
                 : (item.wide ? this._speed.wide : this._speed.half)
-                    * (item.big ? 4 : 1);
+                    * (item.scale * item.scale);
 
             if (delay > this._accumulator) break;
 

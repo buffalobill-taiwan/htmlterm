@@ -1,7 +1,8 @@
+import { MAX_TEXT_SCALE } from './text-scale.js';
 import { DEFAULT_FG, DEFAULT_BG, CSI_INTRODUCER } from './constants.js';
 
 export function defaultAttr() {
-    return { fg: DEFAULT_FG, bg: DEFAULT_BG, bold: false, dim: false, italic: false, underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, big: false };
+    return { fg: DEFAULT_FG, bg: DEFAULT_BG, bold: false, dim: false, italic: false, underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, scale: 1 };
 }
 
 /** Reset an existing attr object to defaults in-place — zero allocation. */
@@ -16,7 +17,7 @@ export function resetAttr(attr) {
     attr.inverse = false;
     attr.conceal = false;
     attr.crossedOut = false;
-    attr.big = false;
+    attr.scale = 1;
 }
 
 export const ANSI_PALETTE_256 = [
@@ -94,8 +95,9 @@ export function applySGR(attr, params) {
         else if (p === 27) attr.inverse = false;
         else if (p === 28) attr.conceal = false;
         else if (p === 29) attr.crossedOut = false;
-        else if (p === 500) attr.big = true;
-        else if (p === 501) attr.big = false;
+        else if (p === 500) attr.scale = 2;
+        else if (p === 501) attr.scale = 1;
+        else if (p >= 502 && p <= 500 + MAX_TEXT_SCALE) attr.scale = p - 500;
         else if (p === 38 && params[i + 1] === 5 && i + 2 < params.length) { attr.fg = params[i + 2]; i += 2; }
         else if (p === 38 && params[i + 1] === 2 && i + 4 < params.length) {
             attr.fg = rgbToAnsi256(params[i + 2], params[i + 3], params[i + 4]);

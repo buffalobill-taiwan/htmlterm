@@ -167,9 +167,7 @@ export class Screen {
         if (this.curY < this.scrollTop) this.curY = this.scrollTop;
         this.markRowDirty(this.curY);
 
-        const curHasBig = this._rowHasBigChar(this.curY);
-        const nextHasBig = this.curY + 1 < this.rows && this._rowHasBigChar(this.curY + 1);
-        const step = (curHasBig && nextHasBig) ? 2 : 1;
+        const step = this._rowRemainingHeight(this.curY);
 
         const target = this.curY + step;
         if (target > this.scrollBottom) {
@@ -191,7 +189,7 @@ export class Screen {
     }
 
     writeChar(ch) {
-        if (this.attr.big) {
+        if (this.attr.scale > 1) {
             return this._writeBigChar(ch);
         }
         const cell = this._makeCell(ch);
@@ -262,38 +260,50 @@ export class Screen {
     }
 
     _writeBigChar(ch) {
-        const nCols = this.isWide(ch) ? 4 : 2;
+        const scale = this.attr.scale;
+        const nCols = (this.isWide(ch) ? 2 : 1) * scale;
+        // Small scroll regions still render safely, clipping the lower slices.
+        const height = Math.min(scale, this.scrollBottom - this.scrollTop + 1);
+        if (this.curY < this.scrollTop) this.curY = this.scrollTop;
 
         if (this.curX + nCols > this.cols) {
             this.curX = 0;
             this.lineFeedEdge();
         }
 
-        if (this.curY + 1 > this.scrollBottom) {
-            this._scrollUp(1);
-            this.curY = Math.max(this.scrollTop, this.scrollBottom - 1);
+        const overflow = this.curY + height - 1 - this.scrollBottom;
+        if (overflow > 0) {
+            this._scrollUp(overflow);
+            this.curY -= overflow;
         }
 
-        for (let r = 0; r < 2; r++) {
-            for (let c = 0; c < nCols; c++) {
+        for (let r = 0; r < height; r++) {
+            for (let c = 0; c < nCols && this.curX + c < this.cols; c++) {
                 const cell = makeCell(ch, this.attr, 1);
                 cell.clip = true;
+                cell.clipScale = scale;
                 cell.clipOffX = -c;
                 cell.clipOffY = -r;
                 this.buffer[this.curY + r][this.curX + c] = cell;
             }
+            this._repairWideAt(this.buffer[this.curY + r], this.curX);
+            this._repairWideAt(this.buffer[this.curY + r], Math.min(this.cols - 1, this.curX + nCols - 1));
             this.markRowDirty(this.curY + r);
         }
-        this.curX += nCols;
+        this.curX += Math.min(nCols, this.cols);
     }
 
-    _rowHasBigChar(rowIdx) {
+    _rowRemainingHeight(rowIdx) {
         const row = this.buffer[rowIdx];
-        if (!row) return false;
+        let height = 1;
+        if (!row) return height;
         for (let c = 0; c < this.cols; c++) {
-            if (row[c] && row[c].clip) return true;
+            const cell = row[c];
+            if (cell && cell.clip) {
+                height = Math.max(height, (cell.clipScale || 2) + (cell.clipOffY || 0));
+            }
         }
-        return false;
+        return Math.min(height, this.scrollBottom - rowIdx + 1);
     }
 
     clearBuffer() {
