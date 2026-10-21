@@ -75,6 +75,8 @@ test('Typewriter: timed column reveal, lifecycle and parser ordering', () => {
         const writer = new Typewriter({
             isWide: ch => screen.isWide(ch),
             write: text => parser.write(text),
+            beginTypewriterLineFeed: () => parser.beginTypewriterLineFeed(),
+            advanceScroll: (op, rows) => screen.advanceScroll(op, rows),
             beginScaledChar: ch => parser.beginScaledChar(ch),
             revealScaledChar: (glyph, n) => screen.revealScaledChar(glyph, n),
         });
@@ -121,10 +123,100 @@ test('Typewriter: timed column reveal, lifecycle and parser ordering', () => {
             reference.parser.write(input);
             h.writer.enqueue(input);
             h.writer._lastFrameTime = 0;
-            h.writer._tick(10000);
+            for (let t = 10000; h.writer.isActive() && t < 100000; t += 1000) h.writer._tick(t);
             assert(JSON.stringify(h.screen.buffer) === JSON.stringify(reference.screen.buffer), 'progressive buffer matches immediate output');
             assert(h.screen.curX === reference.screen.curX && h.screen.curY === reference.screen.curY, 'cursor matches after scrolling');
         }
+        for (const input of [
+            '\x1B[25;1H\x1B[510m中中中中中\x1B[501m\nend',
+            '\x1B[25;1H\x1B[503m中\x1B[501m\nend',
+            '\x1B[25;1H\x1B[503m中\x1B[501m\n',
+            '\x1B[2;4r\x1B[4;1H\x1B[510m中\n文\x1B[501m',
+        ]) {
+            const h = harness();
+            const reference = makeParser();
+            reference.parser.write(input);
+            h.writer.enqueue(input);
+            h.writer._lastFrameTime = 0;
+            for (let t = 1000; h.writer.isActive() && t < 100000; t += 1000) {
+                h.writer._tick(t);
+            }
+            assert(!h.writer.isActive(), 'scrolling output drains');
+            assert(JSON.stringify(h.screen.buffer) === JSON.stringify(reference.screen.buffer), 'scrolling result equals synchronous output');
+            assert(JSON.stringify(h.screen.scrollback) === JSON.stringify(reference.screen.scrollback), 'scrollback equals synchronous output');
+            assert(h.screen.curX === reference.screen.curX && h.screen.curY === reference.screen.curY, 'final cursor matches');
+        }
+        {
+            const h = harness();
+            h.writer.enqueue('\x1B[25;1H\x1B[510m中\x1B[501m');
+            h.writer._lastFrameTime = 0;
+            h.writer._tick(20);
+            const glyph = h.writer._glyph;
+            assert(glyph.scrollRemaining === 8 && glyph.shown === 2, 'scrolling and column reveal advance together');
+            assert(h.screen.buffer[23][0].ch === '中' && h.screen.buffer[24][1].clipOffY === -1, 'visible slices appear before full height fits');
+            assert(!h.screen.buffer[22][0].clip, 'glyph has not jumped to final position');
+            const cell = h.screen.buffer[23][0];
+            h.writer._tick(40);
+            assert(h.screen.buffer[22][0] === cell, 'existing slices move with scroll without being rebuilt');
+            assert(h.screen.buffer[24][0].clipOffY === -2, 'new bottom slices fill already revealed columns');
+            assert(h.screen.buffer[22][3].ch === '中', 'new columns appear during same scroll frame');
+            h.writer.abort();
+            assert(h.screen.buffer[24][19].clipOffY === -9, 'flush finishes missing bottom slices');
+        }
+
+        // The viewport edge must not change horizontal timing, even at low or
+        // irregular frame rates. Check both automatic wrap and explicit LF.
+        for (const frameMs of [8, 16, 33, 100]) {
+            for (const scale of [2, 3, 8, 10]) {
+                const top = harness();
+                const bottom = harness();
+                bottom.parser.write('\x1B[25;1H');
+                const input = `\x1B[${500 + scale}m中AB文中AB文中AB文\n中AB文\x1B[501m`;
+                top.writer.enqueue(input);
+                bottom.writer.enqueue(input);
+                top.writer._lastFrameTime = bottom.writer._lastFrameTime = 0;
+                for (let t = frameMs; (top.writer.isActive() || bottom.writer.isActive()) && t < 10000; t += frameMs) {
+                    top.writer._tick(t);
+                    bottom.writer._tick(t);
+                    assert(top.writer._head === bottom.writer._head, 'scrolling adds no queue delay');
+                    assert(top.writer._glyph?.shown === bottom.writer._glyph?.shown, 'same horizontal progress at every frame');
+                    assert(top.writer._accumulator === bottom.writer._accumulator, 'scrolling preserves typing credit');
+                    const g = bottom.writer._glyph;
+                    if (g) assert(g.scrollRemaining === g.scrollTotal - Math.ceil(g.scrollTotal * g.shown / g.width), 'scroll progress follows reveal');
+                }
+                assert(!top.writer.isActive() && !bottom.writer.isActive(), 'both positions finish on same frame');
+            }
+        }
+        {
+            const h = harness();
+            h.parser.write('\x1B[25;1H');
+            h.writer.enqueue('\x1B[508m中文');
+            h.writer._lastFrameTime = 0;
+            h.writer._tick(136); // 128ms for 中, then one 8ms column of 文.
+            assert(h.writer._glyph.cells[0].ch === '文' && h.writer._glyph.shown === 1, 'x8 starts next glyph without an extra frame');
+            assert(h.screen.buffer[24][15].ch === '中', 'first glyph fully scrolled when printing finishes');
+            h.writer.abort();
+        }
+
+        for (const action of ['abort', 'cancel', 'dispose']) {
+            const h = harness();
+            h.writer.enqueue('\x1B[25;1H\x1B[510m中後\x1B[501m');
+            h.writer._lastFrameTime = 0;
+            h.writer._tick(40);
+            assert(h.writer._glyph.scrollRemaining === 7, 'glyph layout is waiting for scroll');
+            h.writer[action]();
+            assert(!h.writer.isActive(), 'interruption stops scheduling');
+            if (action === 'dispose') {
+                const before = JSON.stringify(h.screen.buffer);
+                h.writer._tick(2000);
+                assert(before === JSON.stringify(h.screen.buffer), 'disposed scroll cannot resume');
+            } else {
+                assert(h.screen.buffer[24][19].ch === '中', 'interruption completes current layout and glyph');
+                assert(h.screen.buffer[15][20].ch === (action === 'abort' ? '後' : ' '), 'only abort prints queued glyph');
+                assert(h.screen.attr.scale === 1, 'interruption restores scale');
+            }
+        }
+
         const h = harness();
         h.writer.enqueue('\x1B[510m中後');
         h.writer._lastFrameTime = 0;

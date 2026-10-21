@@ -164,17 +164,27 @@ export class Screen {
     }
 
     lineFeedEdge() {
+        const move = this.beginLineFeed();
+        this.advanceScroll(move, move.scrollRemaining);
+    }
+
+    beginLineFeed() {
         if (this.curY < this.scrollTop) this.curY = this.scrollTop;
         this.markRowDirty(this.curY);
+        const target = this.curY + this._rowRemainingHeight(this.curY);
+        const scrollRemaining = Math.max(0, target - this.scrollBottom);
+        this.curY = Math.min(target, this.scrollBottom);
+        return { scrollRemaining };
+    }
 
-        const step = this._rowRemainingHeight(this.curY);
-
-        const target = this.curY + step;
-        if (target > this.scrollBottom) {
-            this._scrollUp(target - this.scrollBottom);
-            this.curY = this.scrollBottom;
-        } else {
-            this.curY = target;
+    advanceScroll(operation, rows = 1) {
+        const count = Math.min(rows, operation.scrollRemaining);
+        if (count > 0) this._scrollUp(count);
+        operation.scrollRemaining -= count;
+        // Already revealed columns gain their lower slices as rows enter view.
+        if (count > 0 && operation.cells && operation.shown > 0) {
+            this._paintScaledColumns(operation, 0, operation.shown,
+                Math.max(this.scrollTop, this.scrollBottom - count + 1));
         }
     }
 
@@ -264,26 +274,27 @@ export class Screen {
         this.revealScaledChar(glyph, glyph.width);
     }
 
-    beginScaledChar(ch) {
+    beginScaledChar(ch, deferScroll = false) {
         const scale = this.attr.scale;
         const nCols = (this.isWide(ch) ? 2 : 1) * scale;
         // Small scroll regions still render safely, clipping the lower slices.
         const height = Math.min(scale, this.scrollBottom - this.scrollTop + 1);
         if (this.curY < this.scrollTop) this.curY = this.scrollTop;
 
+        let scrollRemaining = 0;
         if (this.curX + nCols > this.cols) {
             this.curX = 0;
-            this.lineFeedEdge();
+            scrollRemaining = this.beginLineFeed().scrollRemaining;
         }
 
         const overflow = this.curY + height - 1 - this.scrollBottom;
         if (overflow > 0) {
-            this._scrollUp(overflow);
+            scrollRemaining += overflow;
             this.curY -= overflow;
         }
 
         const width = Math.min(nCols, this.cols);
-        const glyph = { x: this.curX, y: this.curY, width, height, scale, shown: 0, cells: [] };
+        const glyph = { x: this.curX, y: this.curY, width, height, scale, scrollTotal: scrollRemaining, scrollRemaining, shown: 0, cells: [] };
         for (let c = 0; c < width; c++) {
             for (let r = 0; r < height; r++) {
                 const cell = makeCell(ch, this.attr, 1);
@@ -295,22 +306,36 @@ export class Screen {
             }
         }
         this.curX += width;
+        if (!deferScroll) this.advanceScroll(glyph, glyph.scrollRemaining);
         return glyph;
     }
 
     revealScaledChar(glyph, columns) {
         const end = Math.min(glyph.width, glyph.shown + columns);
+        // Use the same progress as horizontal reveal, rather than a frame limit.
+        // A delayed frame can catch up both axes without stalling the next glyph.
+        const targetScroll = Math.ceil(glyph.scrollTotal * end / glyph.width);
+        const completedScroll = glyph.scrollTotal - glyph.scrollRemaining;
+        this.advanceScroll(glyph, Math.max(0, targetScroll - completedScroll));
+        this._paintScaledColumns(glyph, glyph.shown, end);
+        glyph.shown = end;
+    }
+
+    _paintScaledColumns(glyph, start, end, firstRow = this.scrollTop) {
+        if (start >= end) return;
+        const top = glyph.y + glyph.scrollRemaining;
         for (let r = 0; r < glyph.height; r++) {
-            const row = this.buffer[glyph.y + r];
+            const y = top + r;
+            if (y < firstRow || y > this.scrollBottom) continue;
+            const row = this.buffer[y];
             if (!row) continue;
-            for (let c = glyph.shown; c < end; c++) {
+            for (let c = start; c < end; c++) {
                 if (glyph.x + c >= this.cols) break;
                 row[glyph.x + c] = glyph.cells[c * glyph.height + r];
                 this._repairWideAt(row, glyph.x + c);
             }
-            this.markRowDirty(glyph.y + r);
+            this.markRowDirty(y);
         }
-        glyph.shown = end;
     }
 
     _rowRemainingHeight(rowIdx) {

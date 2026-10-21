@@ -118,6 +118,8 @@ class FakeTerm {
     markAllDirty() { this.screen.markAllDirty(); }
     isWide(ch) { return this.screen.isWide(ch); }
     write(data) { this.parser.write(data); }
+    beginTypewriterLineFeed() { return this.parser.beginTypewriterLineFeed(); }
+    advanceScroll(operation, rows) { this.screen.advanceScroll(operation, rows); }
     beginScaledChar(ch) { return this.parser.beginScaledChar(ch); }
     revealScaledChar(glyph, columns) { this.screen.revealScaledChar(glyph, columns); }
 

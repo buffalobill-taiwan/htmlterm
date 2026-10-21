@@ -14,6 +14,7 @@ export class Typewriter {
         this._accumulator = 0;
         this._sgrAttr = defaultAttr();
         this._glyph = null;
+        this._scroll = null;
     }
 
     isActive() { return this._active; }
@@ -93,6 +94,7 @@ export class Typewriter {
 
     dispose() {
         this._glyph = null;
+        this._scroll = null;
         if (this._rafId !== null) cancelAnimationFrame(this._rafId);
         this._rafId = null;
         this._queue = [];
@@ -160,7 +162,13 @@ export class Typewriter {
 
         let out = '';
         try {
-            while (this._glyph || this._head < this._queue.length) {
+            while (this._scroll || this._glyph || this._head < this._queue.length) {
+                if (this._scroll) {
+                    // LF moves at most one physical row; do not insert a pause
+                    // between this move and the next glyph's synchronized reveal.
+                    this.term.advanceScroll(this._scroll, this._scroll.scrollRemaining);
+                    this._scroll = null;
+                }
                 if (this._glyph) {
                     const columns = Math.min(this._glyph.width - this._glyph.shown,
                         Math.floor(this._accumulator / this._glyph.scale));
@@ -171,7 +179,16 @@ export class Typewriter {
                     this._glyph = null;
                     continue;
                 }
+                if (this._head >= this._queue.length) break;
                 const item = this._queue[this._head];
+                if (item.type === 'char' && item.ch === '\n') {
+                    if (out) { this.term.write(out); out = ''; }
+                    this._scroll = this.term.beginTypewriterLineFeed();
+                    if (this._scroll) {
+                        this._head++;
+                        continue;
+                    }
+                }
                 if (item.type === 'char' && item.scale > 1 && item.ch.codePointAt(0) >= 0x20 && item.ch !== '\x7F') {
                     if (out) { this.term.write(out); out = ''; }
                     this._glyph = this.term.beginScaledChar(item.ch);
@@ -192,7 +209,7 @@ export class Typewriter {
             warn('typewriter write failed: ' + (err && err.stack ? err.stack : err));
         }
 
-        if (this._glyph || this._head < this._queue.length) {
+        if (this._scroll || this._glyph || this._head < this._queue.length) {
             this._rafId = requestAnimationFrame(t => this._tick(t));
         } else {
             this._queue = [];
@@ -204,7 +221,12 @@ export class Typewriter {
     }
 
     _finishGlyph() {
+        if (this._scroll) {
+            this.term.advanceScroll(this._scroll, this._scroll.scrollRemaining);
+            this._scroll = null;
+        }
         if (!this._glyph) return;
+        this.term.advanceScroll(this._glyph, this._glyph.scrollRemaining);
         this.term.revealScaledChar(this._glyph, this._glyph.width - this._glyph.shown);
         this._glyph = null;
     }

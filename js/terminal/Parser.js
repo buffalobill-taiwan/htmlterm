@@ -77,7 +77,14 @@ export class Parser {
     beginScaledChar(ch) {
         if (this._state !== 'ground' || this.screen.attr.scale <= 1 ||
             ch.codePointAt(0) < 0x20 || ch === '\x7F') return null;
-        return this.screen.beginScaledChar(ch);
+        return this.screen.beginScaledChar(ch, true);
+    }
+
+    beginTypewriterLineFeed() {
+        if (this._state !== 'ground') return null;
+        if (this.screen.attr.scale <= 1 && this.screen._rowRemainingHeight(this.screen.curY) <= 1) return null;
+        this.screen.carriageReturn();
+        return this.screen.beginLineFeed();
     }
 
     _feedGround(ch) {

@@ -201,12 +201,27 @@ CmdBase.print → system.print → Typewriter.enqueue
 
 The Typewriter's rAF credit model charges normal wide glyphs two credits and
 half-width glyphs one. Enlarged glyphs reveal one full-height terminal column
-every N ms for scale ×N (×2: 2ms, ×10: 10ms), finishing each glyph before the next. Screen prepares layout once;
-Parser gates this path to printable text in ground state. Terminal exposes
-`beginScaledChar` / `revealScaledChar` for Typewriter; direct writes stay immediate.
-Cancelling output completes the current glyph, discards queued text and restores
-normal scale; flushing completes both the current glyph and the remaining queue. Shell prompts, dialog/widget buffers, and intentionally immediate
-terminal writes bypass it.
+every N ms for scale ×N (×2: 2ms, ×10: 10ms), finishing each glyph before the next.
+Screen prepares layout once; Parser gates this path to printable text in ground
+state. Terminal exposes `beginScaledChar` / `revealScaledChar` for Typewriter;
+direct writes stay immediate.
+
+Scaled glyph layout defers required scrolling. Screen records the total scroll
+distance and advances it proportionally to revealed columns, rounding up to whole
+rows. Horizontal reveal and scrolling share one clock: there is no fixed rows-per-
+frame cap, lost typing credit or extra frame between glyphs. If a frame is late,
+both axes catch up together; a completed glyph never waits for scrolling.
+A glyph's visible position is its final row plus the remaining scroll distance;
+only on-screen slices are painted. Newly exposed lower rows gain the previously
+revealed columns without rebuilding existing cells. Enlarged-line LF recognizes
+existing glyph height even after SGR 501 and applies its remaining single-row
+scroll without delaying the following glyph.
+
+Abort/cancel completes a pending layout before finishing the current glyph;
+disposal drops pending work. Cancelling discards queued text and restores normal
+scale; flushing completes both the current glyph and the remaining queue. Shell
+prompts, dialog/widget buffers, and intentionally immediate terminal writes
+bypass Typewriter.
 
 ## Dialogs and VirtualBuffer
 
