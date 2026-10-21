@@ -199,9 +199,13 @@ Normal command output flows through:
 CmdBase.print → system.print → Typewriter.enqueue
 ```
 
-The Typewriter's rAF credit model charges wide glyphs two credits and half-width
-glyphs one, multiplied by the square of the active text scale. Cancelling output
-restores normal text scale. Shell prompts, dialog/widget buffers, and intentionally immediate
+The Typewriter's rAF credit model charges normal wide glyphs two credits and
+half-width glyphs one. Enlarged glyphs reveal one full-height terminal column
+every N ms for scale ×N (×2: 2ms, ×10: 10ms), finishing each glyph before the next. Screen prepares layout once;
+Parser gates this path to printable text in ground state. Terminal exposes
+`beginScaledChar` / `revealScaledChar` for Typewriter; direct writes stay immediate.
+Cancelling output completes the current glyph, discards queued text and restores
+normal scale; flushing completes both the current glyph and the remaining queue. Shell prompts, dialog/widget buffers, and intentionally immediate
 terminal writes bypass it.
 
 ## Dialogs and VirtualBuffer

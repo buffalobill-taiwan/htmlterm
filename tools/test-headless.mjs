@@ -14,6 +14,7 @@
  *   node tools/test-headless.mjs
  */
 
+import { Typewriter } from '../js/system/typewriter.js';
 import { Screen } from '../js/terminal/Screen.js';
 import { Parser } from '../js/terminal/Parser.js';
 import { VirtualBuffer } from '../js/util/VirtualBuffer.js';
@@ -63,6 +64,92 @@ function makeParser(onSend = () => {}) {
 }
 
 console.log('--- htmlterm Headless Test Suite ---\n');
+
+test('Typewriter: timed column reveal, lifecycle and parser ordering', () => {
+    const oldRAF = globalThis.requestAnimationFrame;
+    const oldCancel = globalThis.cancelAnimationFrame;
+    globalThis.requestAnimationFrame = () => 1;
+    globalThis.cancelAnimationFrame = () => {};
+    const harness = () => {
+        const { screen, parser } = makeParser();
+        const writer = new Typewriter({
+            isWide: ch => screen.isWide(ch),
+            write: text => parser.write(text),
+            beginScaledChar: ch => parser.beginScaledChar(ch),
+            revealScaledChar: (glyph, n) => screen.revealScaledChar(glyph, n),
+        });
+        return { screen, parser, writer };
+    };
+    try {
+        const { screen, writer } = harness();
+        writer.enqueue('\x1B[502m中');
+        writer.enqueue('文\x1B[501m\n');
+        writer._lastFrameTime = 0;
+        let drained = false;
+        writer.onDrain(() => { drained = true; });
+        writer._tick(1);
+        assert(!screen.buffer[0][0].clip, 'no column before 2ms');
+        for (let col = 0; col < 4; col++) {
+            writer._tick(2 * (col + 1));
+            assert(screen.buffer[0][col].ch === '中' && screen.buffer[1][col].ch === '中', 'entire column appears together');
+            if (col < 3) assert(!screen.buffer[0][col + 1].clip, 'next column stays hidden');
+        }
+        assert(!screen.buffer[0][4].clip && !drained, 'next glyph has not appeared');
+        writer._tick(10);
+        assert(screen.buffer[1][4].ch === '文', 'second glyph starts after first');
+        writer.abort();
+        assert(drained && screen.curY === 2 && screen.curX === 0, 'abort completes without duplicate glyph');
+
+        for (let scale = 2; scale <= 10; scale++) {
+            const timed = harness();
+            timed.writer.enqueue(`\x1B[${500 + scale}m中`);
+            timed.writer._lastFrameTime = 0;
+            timed.writer._tick(scale - 1);
+            assert(!timed.screen.buffer[0][0].clip, 'no column before scale milliseconds');
+            for (let col = 0; col < 2 * scale; col++) {
+                timed.writer._tick(scale * (col + 1));
+                assert(timed.screen.buffer[scale - 1][col].ch === '中', 'column timing follows scale');
+                if (col + 1 < 2 * scale) assert(!timed.screen.buffer[0][col + 1].clip, 'later column stays hidden');
+            }
+            assert(!timed.writer.isActive(), 'glyph finishes after width times scale milliseconds');
+        }
+
+        for (const scale of [2, 3, 10]) {
+            const h = harness();
+            const reference = makeParser();
+            const input = `\x1B[25;79H\x1B[${500 + scale}m中A\x1B[31m文\x1B[501m\nend`;
+            reference.parser.write(input);
+            h.writer.enqueue(input);
+            h.writer._lastFrameTime = 0;
+            h.writer._tick(10000);
+            assert(JSON.stringify(h.screen.buffer) === JSON.stringify(reference.screen.buffer), 'progressive buffer matches immediate output');
+            assert(h.screen.curX === reference.screen.curX && h.screen.curY === reference.screen.curY, 'cursor matches after scrolling');
+        }
+        const h = harness();
+        h.writer.enqueue('\x1B[510m中後');
+        h.writer._lastFrameTime = 0;
+        h.writer._tick(20);
+        h.writer.cancel();
+        assert(h.screen.buffer[9][19].ch === '中' && !h.screen.buffer[0][20].clip, 'cancel finishes only current glyph');
+        assert(h.screen.attr.scale === 1 && !h.writer.isActive(), 'cancel resets state');
+        h.writer.enqueue('\x1B[503m文');
+        h.writer._lastFrameTime = 0;
+        h.writer._tick(20);
+        h.writer.dispose();
+        const before = JSON.stringify(h.screen.buffer);
+        h.writer._tick(500);
+        assert(before === JSON.stringify(h.screen.buffer), 'dispose prevents later painting');
+        const split = harness();
+        split.writer.enqueue('\x1B[503m\x1B[');
+        split.writer.enqueue('31m中');
+        split.writer._lastFrameTime = 0;
+        split.writer._tick(1000);
+        assert(split.screen.buffer[0][0].ch === '中' && split.screen.buffer[0][0].fg === 1, 'split CSI stays in parser');
+    } finally {
+        globalThis.requestAnimationFrame = oldRAF;
+        globalThis.cancelAnimationFrame = oldCancel;
+    }
+});
 
 test('Scaled text: all sizes, CJK slices, wrap, reset and bottom scrolling', () => {
     for (let scale = 2; scale <= 10; scale++) {

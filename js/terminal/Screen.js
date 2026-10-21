@@ -260,6 +260,11 @@ export class Screen {
     }
 
     _writeBigChar(ch) {
+        const glyph = this.beginScaledChar(ch);
+        this.revealScaledChar(glyph, glyph.width);
+    }
+
+    beginScaledChar(ch) {
         const scale = this.attr.scale;
         const nCols = (this.isWide(ch) ? 2 : 1) * scale;
         // Small scroll regions still render safely, clipping the lower slices.
@@ -277,20 +282,35 @@ export class Screen {
             this.curY -= overflow;
         }
 
-        for (let r = 0; r < height; r++) {
-            for (let c = 0; c < nCols && this.curX + c < this.cols; c++) {
+        const width = Math.min(nCols, this.cols);
+        const glyph = { x: this.curX, y: this.curY, width, height, scale, shown: 0, cells: [] };
+        for (let c = 0; c < width; c++) {
+            for (let r = 0; r < height; r++) {
                 const cell = makeCell(ch, this.attr, 1);
                 cell.clip = true;
                 cell.clipScale = scale;
                 cell.clipOffX = -c;
                 cell.clipOffY = -r;
-                this.buffer[this.curY + r][this.curX + c] = cell;
+                glyph.cells.push(cell);
             }
-            this._repairWideAt(this.buffer[this.curY + r], this.curX);
-            this._repairWideAt(this.buffer[this.curY + r], Math.min(this.cols - 1, this.curX + nCols - 1));
-            this.markRowDirty(this.curY + r);
         }
-        this.curX += Math.min(nCols, this.cols);
+        this.curX += width;
+        return glyph;
+    }
+
+    revealScaledChar(glyph, columns) {
+        const end = Math.min(glyph.width, glyph.shown + columns);
+        for (let r = 0; r < glyph.height; r++) {
+            const row = this.buffer[glyph.y + r];
+            if (!row) continue;
+            for (let c = glyph.shown; c < end; c++) {
+                if (glyph.x + c >= this.cols) break;
+                row[glyph.x + c] = glyph.cells[c * glyph.height + r];
+                this._repairWideAt(row, glyph.x + c);
+            }
+            this.markRowDirty(glyph.y + r);
+        }
+        glyph.shown = end;
     }
 
     _rowRemainingHeight(rowIdx) {

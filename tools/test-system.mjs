@@ -118,6 +118,8 @@ class FakeTerm {
     markAllDirty() { this.screen.markAllDirty(); }
     isWide(ch) { return this.screen.isWide(ch); }
     write(data) { this.parser.write(data); }
+    beginScaledChar(ch) { return this.parser.beginScaledChar(ch); }
+    revealScaledChar(glyph, columns) { this.screen.revealScaledChar(glyph, columns); }
 
     writeVB(vb, x = 0, y = 0) {
         vb.blit(this.screen.buffer, x, y);
@@ -560,6 +562,8 @@ async function run() {
         await settle();
         H.system.typewriter._speed = { wide: 0, half: 0 };
         H.system.handleInput('5willow --big --x10\r');
+        await settle();
+        H.system.typewriter.abort();
         await settle();
         assert(H.screen.attr.scale === 1, 'article restores scale');
         assert(H.screen.buffer.some(row => row.some(c => c.clipScale === 10)), 'article uses final flag');

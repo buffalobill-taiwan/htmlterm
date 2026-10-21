@@ -66,6 +66,8 @@ export class Terminal {
     isWide(ch) { return this.screen.isWide(ch); }
 
     write(data) { this.parser.write(data); }
+    beginScaledChar(ch) { return this.parser.beginScaledChar(ch); }
+    revealScaledChar(glyph, columns) { this.screen.revealScaledChar(glyph, columns); }
 
     writeVB(vb, x = 0, y = 0) {
         vb.blit(this.screen.buffer, x, y);

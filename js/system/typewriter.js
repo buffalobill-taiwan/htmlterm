@@ -13,6 +13,7 @@ export class Typewriter {
         this._lastFrameTime = 0;
         this._accumulator = 0;
         this._sgrAttr = defaultAttr();
+        this._glyph = null;
     }
 
     isActive() { return this._active; }
@@ -47,6 +48,7 @@ export class Typewriter {
             cancelAnimationFrame(this._rafId);
             this._rafId = null;
         }
+        this._finishGlyph();
         let out = '';
         for (let i = this._head; i < this._queue.length; i++) {
             const item = this._queue[i];
@@ -68,6 +70,7 @@ export class Typewriter {
 
     // Discard output without running completion callbacks or destroying the writer.
     cancel() {
+        this._finishGlyph();
         if (this._rafId !== null) cancelAnimationFrame(this._rafId);
         this._rafId = null;
         this._queue.length = 0;
@@ -89,6 +92,7 @@ export class Typewriter {
     }
 
     dispose() {
+        this._glyph = null;
         if (this._rafId !== null) cancelAnimationFrame(this._rafId);
         this._rafId = null;
         this._queue = [];
@@ -155,30 +159,40 @@ export class Typewriter {
         this._accumulator += elapsed;
 
         let out = '';
-        while (this._head < this._queue.length) {
-            const item = this._queue[this._head];
-            const delay = item.type === 'seq' ? 0
-                : (item.wide ? this._speed.wide : this._speed.half)
-                    * (item.scale * item.scale);
-
-            if (delay > this._accumulator) break;
-
-            this._accumulator -= delay;
-            this._head++;
-            if (item.type === 'seq') out += item.text;
-            else out += item.ch;
-        }
-
-        if (out) {
-            try {
-                this.term.write(out);
-            } catch (err) {
-                // A throw here would drop the rAF chain and freeze all output.
-                warn('typewriter write failed: ' + (err && err.stack ? err.stack : err));
+        try {
+            while (this._glyph || this._head < this._queue.length) {
+                if (this._glyph) {
+                    const columns = Math.min(this._glyph.width - this._glyph.shown,
+                        Math.floor(this._accumulator / this._glyph.scale));
+                    if (!columns) break;
+                    this.term.revealScaledChar(this._glyph, columns);
+                    this._accumulator -= columns * this._glyph.scale;
+                    if (this._glyph.shown < this._glyph.width) break;
+                    this._glyph = null;
+                    continue;
+                }
+                const item = this._queue[this._head];
+                if (item.type === 'char' && item.scale > 1 && item.ch.codePointAt(0) >= 0x20 && item.ch !== '\x7F') {
+                    if (out) { this.term.write(out); out = ''; }
+                    this._glyph = this.term.beginScaledChar(item.ch);
+                    if (this._glyph) {
+                        this._head++;
+                        continue;
+                    }
+                }
+                const delay = item.type === 'seq' ? 0
+                    : (item.wide ? this._speed.wide : this._speed.half);
+                if (delay > this._accumulator) break;
+                this._accumulator -= delay;
+                this._head++;
+                out += item.type === 'seq' ? item.text : item.ch;
             }
+            if (out) this.term.write(out);
+        } catch (err) {
+            warn('typewriter write failed: ' + (err && err.stack ? err.stack : err));
         }
 
-        if (this._head < this._queue.length) {
+        if (this._glyph || this._head < this._queue.length) {
             this._rafId = requestAnimationFrame(t => this._tick(t));
         } else {
             this._queue = [];
@@ -187,6 +201,12 @@ export class Typewriter {
             this._rafId = null;
             this._flushDrain();
         }
+    }
+
+    _finishGlyph() {
+        if (!this._glyph) return;
+        this.term.revealScaledChar(this._glyph, this._glyph.width - this._glyph.shown);
+        this._glyph = null;
     }
 
     _flushDrain() {

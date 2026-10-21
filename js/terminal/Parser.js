@@ -72,6 +72,14 @@ export class Parser {
         }
     }
 
+    // Typewriter may stage a single printable glyph only in ground state.
+    // Everything else must continue through the normal parser state machine.
+    beginScaledChar(ch) {
+        if (this._state !== 'ground' || this.screen.attr.scale <= 1 ||
+            ch.codePointAt(0) < 0x20 || ch === '\x7F') return null;
+        return this.screen.beginScaledChar(ch);
+    }
+
     _feedGround(ch) {
         const screen = this.screen;
         const code = ch.charCodeAt(0);
