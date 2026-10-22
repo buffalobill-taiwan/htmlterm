@@ -208,10 +208,10 @@ class SudokuCmd extends CmdBase {
 
         if (code === 0x1B) {
             const s = typeof data === 'string' ? data : '';
-            if (s === '\x1B[A') { this._move(0, -1); return; }
-            if (s === '\x1B[B') { this._move(0, 1); return; }
-            if (s === '\x1B[D') { this._move(-1, 0); return; }
-            if (s === '\x1B[C') { this._move(1, 0); return; }
+            if (s === '\x1B[A' || s === '\x1B[1;5A') { this._move(0, -1); return; }
+            if (s === '\x1B[B' || s === '\x1B[1;5B') { this._move(0, 1); return; }
+            if (s === '\x1B[D' || s === '\x1B[1;5D') { this._move(-1, 0); return; }
+            if (s === '\x1B[C' || s === '\x1B[1;5C') { this._move(1, 0); return; }
             if (s === '\x1B[3~') { this._clearCell(); return; }
             if (s === '\x1B' || data === 0x1B) this._quit();
             return;

@@ -610,6 +610,19 @@ async function run() {
             key('keydown', { key: '1', ctrlKey: true });
             key('keydown', { key: '2', ctrlKey: true });
             assert(cmd._hintDigit === 2, 'holding Ctrl allows switching digits');
+            const mask = Array.from(cmd._hintMask).join(',');
+            for (const [sequence, row, col] of [
+                ['\x1B[1;5A', 3, 4], ['\x1B[1;5D', 3, 3],
+                ['\x1B[1;5B', 4, 3], ['\x1B[1;5C', 4, 4],
+            ]) {
+                H.system.handleInput(sequence);
+                assert(cmd._cursorRow === row && cmd._cursorCol === col, 'Ctrl arrow moves cursor');
+                assert(cmd._hintDigit === 2 && Array.from(cmd._hintMask).join(',') === mask,
+                    'Ctrl arrow preserves exclusion hint');
+            }
+            for (let i = 0; i < 12; i++) H.system.handleInput('\x1B[1;5A');
+            assert(cmd._cursorRow === 0, 'Ctrl arrow stops at board edge');
+
             window.dispatchEvent(new Event('blur'));
             assert(!hasHint(), 'blur clears hint');
             H.system.handleInput('g');
