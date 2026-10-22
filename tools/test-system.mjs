@@ -27,6 +27,7 @@ import { Echo } from '../js/cmd/echo.js';
 import { defineLazy } from '../js/cmd/lazy.js';
 import { wrapInteractiveFlow } from '../js/system/InteractiveCommandHelper.js';
 import { ConfirmDialog } from '../js/dialog/ConfirmDialog.js';
+import { SudokuCmd } from '../js/cmd/sudoku/SudokuCmd.js';
 
 // Command output flows through the Typewriter, which schedules
 // requestAnimationFrame. Headless Node cannot pump frames on its own, so
@@ -572,6 +573,60 @@ async function run() {
         assert(H.screen.scrollback.length > 0, 'long article scrolls');
         assert(countPrompts(screenText(H.screen)) === 1, 'one normal prompt after article');
         H.system.dispose();
+    });
+
+    await record('Sudoku: Ctrl digit hints and physical release', async () => {
+        const previousWindow = globalThis.window;
+        globalThis.window = new EventTarget();
+        const H = makeHarness({ SudokuCmd });
+        const key = (type, props) => {
+            const event = new Event(type, { cancelable: true });
+            Object.assign(event, props);
+            window.dispatchEvent(event);
+            return event;
+        };
+        try {
+            await settle();
+            H.system.execute('sudoku 0 --easy');
+            await settle();
+            const cmd = H.system._cmdInstances.sudoku;
+            const board = JSON.stringify(cmd._board);
+            const hasHint = () => H.screen.buffer.some(row => row.some(cell => cell.bg === 238));
+            for (let n = 1; n <= 9; n++) {
+                const down = key('keydown', { key: String(n), code: 'Digit' + n, ctrlKey: true });
+                assert(down.defaultPrevented, 'shortcut default is prevented');
+                assert(cmd._hintDigit === n, 'Ctrl selects requested digit');
+                assert(hasHint(), 'hint is visible');
+                key('keyup', { key: String(n), ctrlKey: true });
+                assert(hasHint(), 'digit release keeps hint while Ctrl is held');
+                H.screen.dirtyRows.clear();
+                key('keyup', { key: 'Control', code: 'ControlLeft', ctrlKey: false, isComposing: true });
+                assert(cmd._hintDigit === 0 && !hasHint(), 'Ctrl release clears hint even during composition');
+                assert(H.screen.dirtyRows.size > 0, 'cleared board is scheduled for repaint');
+            }
+            assert(JSON.stringify(cmd._board) === board, 'shortcuts do not enter digits');
+            H.system.handleInput('!');
+            assert(!hasHint(), 'old Shift shortcut no longer activates hints');
+            key('keydown', { key: '1', ctrlKey: true });
+            key('keydown', { key: '2', ctrlKey: true });
+            assert(cmd._hintDigit === 2, 'holding Ctrl allows switching digits');
+            window.dispatchEvent(new Event('blur'));
+            assert(!hasHint(), 'blur clears hint');
+            H.system.handleInput('g');
+            assert(!key('keydown', { key: '1', ctrlKey: true }).defaultPrevented,
+                'parent does not intercept shortcuts while a dialog is open');
+            H.system.handleInput('\x1B');
+            await settle();
+            H.system.handleInput('q');
+            await settle();
+            assert(!key('keydown', { key: '1', ctrlKey: true }).defaultPrevented,
+                'shortcut listener is inactive after exit');
+        } finally {
+            H.system._cmdInstances.sudoku?.onCancel();
+            H.system.dispose();
+            if (previousWindow === undefined) delete globalThis.window;
+            else globalThis.window = previousWindow;
+        }
     });
 
     if (failed > 0) {

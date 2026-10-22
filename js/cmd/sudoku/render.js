@@ -92,6 +92,8 @@ const renderMethods = {
         this._drawHeader(this._rootVB);
         if (this._seed != null)
             this._rootVB.writeStr(2, 51, gray('seed: ' + this._seed));
+        this._rootVB.writeStr(4, 51, gray('Ctrl+1-9: exclusion hint'));
+        this._rootVB.writeStr(5, 51, gray('Release Ctrl to clear'));
         this._drawBoardBorders(this._boardVB);
         this._drawSidebarFrame(this._sidebarVB);
 
@@ -165,6 +167,15 @@ const renderMethods = {
         const isCur = r === br && c === bc;
         const isError = auto && !isGiven && val !== 0 && this._hasConflict(r, c);
         const digit = val !== 0 ? String(val) : ' ';
+
+        if (this._hintMask?.[r * SIZE + c]) {
+            // Keep the cursor's existing inverse style on the center character.
+            const bg = '\x1B[48;5;238m';
+            const styled = isError ? red(bold(digit)) : isGiven ? cyan(bold(digit)) :
+                val !== 0 ? green(digit) : digit;
+            return bg + ' ' + (isCur ? '\x1B[49;7m' : '') + styled +
+                '\x1B[0m' + bg + ' \x1B[0m';
+        }
 
         if (isCur) {
             if (isError)   return ' \x1B[7m' + red(bold(digit)) + '\x1B[0m ';

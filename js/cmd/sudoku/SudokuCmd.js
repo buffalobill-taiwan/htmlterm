@@ -1,6 +1,6 @@
 import { CmdBase } from '../CmdBase.js';
 import { _createEmpty, _generate, _copyGrid } from './solver.js';
-import { SIZE } from './constants.js';
+import { SIZE, BOX } from './constants.js';
 import { term, system } from '../../system/sys.js';
 import { CURSOR_HIDE, yellow, bold, red, gray, green } from '../../util/sgr.js';
 import { ConfirmDialog } from '../../dialog/ConfirmDialog.js';
@@ -20,6 +20,36 @@ class SudokuCmd extends CmdBase {
             this.error(error);
             return this.showHelp();
         }
+        this._hintDigit = 0;
+        this._hintMask = new Uint8Array(SIZE * SIZE);
+        const releaseHint = () => this._setHintDigit(0);
+        // Observe the physical release before IME/input routing can consume it.
+        // Checking modifier state also recovers when a platform reports a
+        // different key name for the release.
+        const releaseHintOnKeyUp = event => {
+            if (event.key === 'Control' || event.code === 'ControlLeft' ||
+                event.code === 'ControlRight' || event.ctrlKey === false) releaseHint();
+        };
+        const showHintOnKeyDown = event => {
+            const top = system.cmdStack[system.cmdStack.length - 1];
+            if (top?.cmd !== this || this.closed || this._completed || !this._difficulty) return;
+            if (!event.ctrlKey || event.altKey || event.metaKey || event.shiftKey) return;
+            const digit = /^[1-9]$/.test(event.key) ? Number(event.key) :
+                /^Digit[1-9]$/.test(event.code) ? Number(event.code.slice(-1)) : 0;
+            if (!digit) return;
+            event.preventDefault();
+            event.stopPropagation();
+            this._setHintDigit(digit);
+        };
+        window.addEventListener('keydown', showHintOnKeyDown, true);
+        window.addEventListener('keyup', releaseHintOnKeyUp, true);
+        window.addEventListener('blur', releaseHint);
+        this.addCleanup(() => {
+            window.removeEventListener('keydown', showHintOnKeyDown, true);
+            window.removeEventListener('keyup', releaseHintOnKeyUp, true);
+            window.removeEventListener('blur', releaseHint);
+            releaseHint();
+        });
         let diff = null;
         if (p.flag('--easy'))   diff = 'easy';
         if (p.flag('--medium')) diff = 'medium';
@@ -32,6 +62,7 @@ class SudokuCmd extends CmdBase {
     }
 
     _pickDifficulty() {
+        this._setHintDigit(0);
         this._board = _createEmpty();
         this._given = Array.from({ length: SIZE }, () => Array(SIZE).fill(false));
         this._solution = _createEmpty();
@@ -92,6 +123,7 @@ class SudokuCmd extends CmdBase {
 
     _giveUpConfirm() {
         if (this._completed) return;
+        this._setHintDigit(0);
         system.createDialog(ConfirmDialog, 'sudoku-confirm', {
             title: 'Confirm',
             message: 'Give up and reveal\nthe answer?',
@@ -100,6 +132,7 @@ class SudokuCmd extends CmdBase {
     }
 
     _giveUp() {
+        this._setHintDigit(0);
         this._completed = true;
         if (this._timerInterval) {
             clearInterval(this._timerInterval);
@@ -118,6 +151,7 @@ class SudokuCmd extends CmdBase {
     }
 
     _win() {
+        this._setHintDigit(0);
         this._completed = true;
         if (this._timerInterval) {
             clearInterval(this._timerInterval);
@@ -127,6 +161,33 @@ class SudokuCmd extends CmdBase {
         this._rootVB.writeStr(20, 0, bold(green('  Congratulations!')) + '  ' +
             yellow('Time: ' + timeStr));
         this._rootVB.writeStr(21, 0, gray('  Press [n]ew game or [q]uit'));
+        term.writeVB(this._rootVB);
+    }
+
+    _setHintDigit(digit) {
+        if (digit === this._hintDigit) return;
+        this._hintDigit = digit;
+        this._refreshHint();
+    }
+
+    _refreshHint() {
+        const mask = this._hintMask;
+        mask.fill(0);
+        if (this._hintDigit) {
+            for (let r = 0; r < SIZE; r++) {
+                for (let c = 0; c < SIZE; c++) {
+                    if (this._board[r][c] !== this._hintDigit) continue;
+                    const br = Math.floor(r / BOX) * BOX;
+                    const bc = Math.floor(c / BOX) * BOX;
+                    for (let i = 0; i < SIZE; i++) {
+                        mask[r * SIZE + i] = 1;
+                        mask[i * SIZE + c] = 1;
+                        mask[(br + Math.floor(i / BOX)) * SIZE + bc + i % BOX] = 1;
+                    }
+                }
+            }
+        }
+        for (let r = 0; r < SIZE; r++) this._drawBoardRow(this._boardVB, r);
         term.writeVB(this._rootVB);
     }
 
@@ -200,6 +261,7 @@ class SudokuCmd extends CmdBase {
             this._errors.delete(r + ',' + c);
         }
 
+        if (this._hintDigit) this._refreshHint();
         this._renderRow(r);
         if (oldVal > 0) this._updateDigitRow(oldVal);
         if (num > 0 && num !== oldVal) this._updateDigitRow(num);
@@ -214,6 +276,7 @@ class SudokuCmd extends CmdBase {
         const oldVal = this._board[r][c];
         this._board[r][c] = 0;
         this._errors.delete(r + ',' + c);
+        if (this._hintDigit) this._refreshHint();
         this._renderRow(r);
         this._updateDigitRow(oldVal);
     }
@@ -232,6 +295,7 @@ class SudokuCmd extends CmdBase {
     }
 
     _restart() {
+        this._setHintDigit(0);
         for (let r = 0; r < SIZE; r++)
             for (let c = 0; c < SIZE; c++)
                 this._board[r][c] = this._given[r][c] ? this._initialBoard[r][c] : 0;
@@ -252,6 +316,7 @@ class SudokuCmd extends CmdBase {
     }
 
     _quit() {
+        this._setHintDigit(0);
         if (this._difficultyDialog) {
             this._difficultyDialog.close();
             this._difficultyDialog = null;
