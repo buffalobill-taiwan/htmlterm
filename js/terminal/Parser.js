@@ -17,6 +17,13 @@ import {
 // accumulating attacker-controlled text without bound.
 const CSI_MAX_LEN = 128;
 
+/**
+ * Parser - VT100/ANSI escape sequence parser.
+ * State machine processes raw bytes and delegates buffer mutations to Screen.
+ * @param {Screen} screen
+ * @param {Object} [callbacks]
+ * @param {Function} [callbacks.onSend]
+ */
 export class Parser {
     constructor(screen, callbacks = {}) {
         this.screen = screen;

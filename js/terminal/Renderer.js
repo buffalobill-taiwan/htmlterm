@@ -9,6 +9,14 @@ const BLANK_CELL = Object.freeze({
     width: 1,
 });
 
+/**
+ * Renderer - Pre-created 80x25 span grid, cursor DOM, rAF rendering, overlay blending.
+ * @param {HTMLElement} container
+ * @param {Screen} screen
+ * @param {Object} [opts]
+ * @param {number} [opts.charWidth]
+ * @param {number} [opts.charHeight]
+ */
 export class Renderer {
     constructor(container, screen, opts = {}) {
         this.container = container;

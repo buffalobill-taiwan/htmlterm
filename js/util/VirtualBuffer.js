@@ -5,7 +5,29 @@ import { createEmptyBuffer } from './sgr.js';
 export const _blankCell = Object.freeze({ ch: ' ', fg: 7, bg: 0, bold: false, dim: false, italic: false, underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: 1 });
 
 
+/**
+ * VirtualBuffer - compositing buffer for terminal UI.
+ * Supports nested child buffers via addChildSlot()/embed().
+ * Cells are placed directly; null cells are transparent on blit/render.
+ * @typedef {Object} Cell
+ * @property {string} ch
+ * @property {number} fg
+ * @property {number} bg
+ * @property {boolean} bold
+ * @property {boolean} dim
+ * @property {boolean} italic
+ * @property {boolean} underline
+ * @property {boolean} blink
+ * @property {boolean} inverse
+ * @property {boolean} conceal
+ * @property {boolean} crossedOut
+ * @property {number} width
+ */
 export class VirtualBuffer {
+    /**
+     * @param {number} w
+     * @param {number} h
+     */
     constructor(w, h) {
         this.width = w;
         this.height = h;

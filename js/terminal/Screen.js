@@ -2,7 +2,27 @@ import { defaultAttr, applySGR, makeCell, rgbToAnsi256 } from '../util/sgr.js';
 import { isWide } from '../util/display-width.js';
 import { DEFAULT_FG, DEFAULT_BG, SCROLLBACK_MAX, SCROLLBACK_TRIM_SLACK, TAB_WIDTH } from '../util/constants.js';
 
+/**
+ * Screen - cell buffer, cursor, scrollback, SGR state, dirty tracking, overlays.
+ * @typedef {Object} Cell
+ * @property {string} ch
+ * @property {number} fg
+ * @property {number} bg
+ * @property {boolean} bold
+ * @property {boolean} dim
+ * @property {boolean} italic
+ * @property {boolean} underline
+ * @property {boolean} blink
+ * @property {boolean} inverse
+ * @property {boolean} conceal
+ * @property {boolean} crossedOut
+ * @property {number} width
+ */
 export class Screen {
+    /**
+     * @param {number} cols
+     * @param {number} rows
+     */
     constructor(cols, rows) {
         this.cols = cols;
         this.rows = rows;

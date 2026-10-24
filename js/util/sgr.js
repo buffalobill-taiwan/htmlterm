@@ -1,6 +1,22 @@
 import { MAX_TEXT_SCALE } from './text-scale.js';
 import { DEFAULT_FG, DEFAULT_BG, CSI_INTRODUCER } from './constants.js';
 
+/**
+ * Create a default SGR attribute object.
+ * @typedef {Object} SgrAttr
+ * @property {number} fg
+ * @property {number} bg
+ * @property {boolean} bold
+ * @property {boolean} dim
+ * @property {boolean} italic
+ * @property {boolean} underline
+ * @property {boolean} blink
+ * @property {boolean} inverse
+ * @property {boolean} conceal
+ * @property {boolean} crossedOut
+ * @property {number} scale
+ * @returns {SgrAttr}
+ */
 export function defaultAttr() {
     return { fg: DEFAULT_FG, bg: DEFAULT_BG, bold: false, dim: false, italic: false, underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, scale: 1 };
 }

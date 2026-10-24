@@ -590,6 +590,139 @@ queue.push(test('SeedArgs: flag wins, positional fallback, shared error', () => 
     assert(seedFromArgs(['5', '6'], p).error, 'second rest arg rejected');
 }));
 
+test('Screen: alt buffer save/restore preserves primary state', () => {
+    const { screen, parser } = makeParser();
+    parser.write('hello');
+    screen.cursorPos(3, 5);
+    screen.setSGR([31]);
+    parser.write('X');
+    const px = screen.curX, py = screen.curY;
+    screen.useAltBuffer();
+    assert(screen.curX === 0 && screen.curY === 0, 'alt buffer resets cursor');
+    parser.write('ALT');
+    assert(screen.buffer[0][0].ch === 'A', 'writes go to alt buffer');
+    screen.restorePrimaryBuffer();
+    assert(screen.curX === px && screen.curY === py, 'restored cursor');
+    assert(screen.buffer[2][4].ch === 'X', 'primary content intact');
+});
+
+test('Screen: scroll regions limit scrolling', () => {
+    const { screen, parser } = makeParser();
+    parser.write('\x1B[3;5r');
+    parser.write('\x1B[1;1H');
+    for (let i = 0; i < 10; i++) parser.write('a\n');
+    assert(screen.scrollTop === 2 && screen.scrollBottom === 4, 'scroll region set');
+    assert(screen.buffer[2][0].ch === 'a', 'content in scroll region scrolled');
+});
+
+test('Screen: insert mode shifts characters right', () => {
+    const { screen, parser } = makeParser();
+    parser.write('ABCD');
+    screen.cursorPos(1, 3);
+    parser.write('\x1B[4h');
+    parser.write('X');
+    assert(screen.buffer[0][0].ch === 'A', 'first char unchanged');
+    assert(screen.buffer[0][2].ch === 'X', 'inserted char at cursor');
+    assert(screen.buffer[0][3].ch === 'C', 'shifted char moved right');
+    assert(screen.buffer[0][4].ch === 'D', 'shifted char moved right');
+});
+
+test('Screen: wide char wrapping at line end', () => {
+    const { screen, parser } = makeParser();
+    screen.resize(4, 3);
+    parser.write('中');
+    assert(screen.curX === 2, 'wide char advances by 2');
+    parser.write('A');
+    const hasWide = screen.buffer.some(row => row.some(c => c && c.ch === '中'));
+    assert(hasWide, 'wide char present after operations');
+});
+
+test('Screen: eraseDisplay clears screen', () => {
+    const { screen, parser } = makeParser();
+    parser.write('hello');
+    parser.write('\x1B[2J');
+    for (let c = 0; c < screen.cols; c++) {
+        assert(screen.buffer[0][c].ch === ' ', 'entire screen cleared');
+    }
+});
+
+test('Parser: DEL ignored and CAN aborts CSI', () => {
+    const { screen, parser } = makeParser();
+    parser.write('A' + String.fromCharCode(0x7F) + 'B');
+    assert(screen.buffer[0][0].ch === 'A', 'A written');
+    assert(screen.buffer[0][1].ch === 'B', 'DEL ignored so B after');
+    parser.write('\x1B[2J\x1B[H');
+    parser.write('\x1B[31' + String.fromCharCode(0x18));
+    parser.write('C');
+    assert(screen.buffer[0][0].ch === 'C', 'CAN aborts incomplete CSI and C written');
+});
+
+test('Parser: oversized CSI dropped', () => {
+    const { screen, parser } = makeParser();
+    parser.write('A' + '\x1B[' + '1;'.repeat(70) + '31m' + 'B');
+    assert(screen.buffer[0][0].ch === 'A', 'A written');
+    assert(screen.buffer[0][1].ch === 'B', 'oversized CSI dropped');
+});
+
+test('Parser: mouse modes independent of encoding', () => {
+    const { screen } = makeParser();
+    const p2 = new Parser(screen, { onSend: () => {} });
+    p2.write('\x1B[?1000h\x1B[?1006h');
+    assert(screen.mouseMode === 1000, 'mouse mode set');
+    assert(screen.mouseEncoding === 1006, 'mouse encoding set independently');
+    p2.write('\x1B[?1002h');
+    assert(screen.mouseMode === 1002, 'mouse mode can change');
+    p2.write('\x1B[?1006l');
+    assert(screen.mouseEncoding === 0, 'encoding cleared separately');
+});
+
+test('Screen: cursor-only movement does not dirty rows', () => {
+    const { screen } = makeParser();
+    screen.dirtyRows.clear();
+    screen.cursorUp(1);
+    screen.cursorDown(1);
+    screen.cursorForward(1);
+    screen.cursorBack(1);
+    assert(screen.dirtyRows.size === 0, 'cursor movement marks no dirty rows');
+});
+
+test('VirtualBuffer: blit and child slots', () => {
+    const root = new VirtualBuffer(10, 5);
+    const child = new VirtualBuffer(3, 2);
+    child.writeStr(0, 0, 'AB');
+    child.writeStr(1, 0, 'CD');
+    const slot = root.addChildSlot();
+    slot.vb = child; slot.x = 2; slot.y = 1; slot.active = true;
+    const dest = Array.from({length: 5}, ()=>Array(10).fill(null));
+    root.blit(dest, 0, 0);
+    assert(dest[1][2].ch === 'A', 'child blitted at offset');
+    assert(dest[2][3].ch === 'D', 'child blitted correctly');
+    slot.active = false;
+    const dest2 = Array.from({length: 5}, ()=>Array(10).fill(null));
+    root.blit(dest2, 0, 0);
+    assert(dest2[1][2] === null, 'inactive slot not blitted');
+});
+
+test('VirtualBuffer: render with children', () => {
+    const root = new VirtualBuffer(5, 3);
+    const child = new VirtualBuffer(2, 1);
+    child.writeStr(0, 0, 'XY');
+    root.embed(child, 1, 1);
+    const res = root.render();
+    assert(res[1][1].ch === 'X', 'child rendered via embed');
+    assert(res[1][2].ch === 'Y', 'child rendered correctly');
+});
+
+test('VirtualBuffer: clearCells preserves slots, clear removes them', () => {
+    const vb = new VirtualBuffer(4, 2);
+    const slot = vb.addChildSlot();
+    slot.vb = new VirtualBuffer(1,1); slot.active = true;
+    vb.clearCells();
+    assert(vb._children.length === 1, 'clearCells keeps children');
+    vb.clear();
+    assert(vb._children.length === 0, 'clear removes children');
+});
+
     await Promise.all(queue);
 
     console.log(`\n================================`);

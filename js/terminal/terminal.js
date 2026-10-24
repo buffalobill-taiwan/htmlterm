@@ -4,6 +4,16 @@ import { Renderer } from './Renderer.js';
 import { DEFAULT_COLS, DEFAULT_ROWS, MOUSE_SGR } from '../util/constants.js';
 import { warn } from '../util/sgr.js';
 
+/**
+ * Terminal - Coordinator, event wiring, public delegations.
+ * @param {HTMLElement} container
+ * @param {Object} [opts]
+ * @param {number} [opts.cols]
+ * @param {number} [opts.rows]
+ * @param {number} [opts.charWidth]
+ * @param {number} [opts.charHeight]
+ * @param {boolean} [opts.noAutoRender]
+ */
 export class Terminal {
     constructor(container, opts = {}) {
         this.onData = null;

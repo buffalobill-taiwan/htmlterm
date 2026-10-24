@@ -5,6 +5,15 @@ import { isWide } from './display-width.js';
 const _sgrParams = [];
 const _attr = defaultAttr(); // created once; reset via resetAttr() per _writeStr call
 
+/**
+ * Write a string with inline SGR into a 2D cell buffer.
+ * Handles wide glyphs and breaks at maxX.
+ * @param {Array<Array<Object|null>>} buf
+ * @param {number} y
+ * @param {number} x
+ * @param {string} str
+ * @param {number} [maxX]
+ */
 export function _writeStr(buf, y, x, str, maxX) {
     resetAttr(_attr);
     let cx = x;

@@ -1,6 +1,10 @@
 import { CURSOR_HIDE, CURSOR_SHOW } from '../util/sgr.js';
 import { system, term } from './sys.js';
 
+/**
+ * Base frame class for the command stack.
+ * Frames control input while topmost and block while output/async work/interactive command remains active.
+ */
 export class CmdFrame {
     constructor() {
         this.done = false;

@@ -11,6 +11,16 @@ function isDigit(ch) { return ch >= '0' && ch <= '9'; }
 // the difficulty key the onConfirm callback receives.
 const DIFFICULTY_OPTIONS = [['Easy', 'easy'], ['Medium', 'medium'], ['Hard', 'hard']];
 
+/**
+ * Base class for all commands.
+ * Commands are instantiated by CommandRegistry and reused across executions.
+ * Per-run state should be initialized in execute() or helpers.
+ * @typedef {Object} ParseResult
+ * @property {boolean} hasHelp
+ * @property {string[]} rest
+ * @property {string[]} declared
+ * @property {Function} flag
+ */
 export class CmdBase {
     constructor() {
         this.closed = true;

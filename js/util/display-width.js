@@ -4,7 +4,14 @@ import { CSI_INTRODUCER } from './constants.js';
 
 export { isWide };
 
+/**
+ * Calculate display width of plain text (no escape sequences).
+ * CJK/full-width glyphs count as 2 columns, others as 1.
+ * @param {string} s
+ * @returns {number}
+ */
 export function displayWidth(s) {
+    if (!s) return 0;
     let w = 0;
     for (const ch of s) {
         w += isWide(ch) ? 2 : 1;
@@ -12,6 +19,12 @@ export function displayWidth(s) {
     return w;
 }
 
+/**
+ * Calculate visible width of text containing SGR escape sequences.
+ * Escape sequences are skipped; only printable characters are counted.
+ * @param {string} str
+ * @returns {number}
+ */
 export function bufWidth(str) {
     if (!str) return 0;
     let w = 0, inEsc = false;

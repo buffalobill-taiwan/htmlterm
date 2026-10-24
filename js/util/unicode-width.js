@@ -164,6 +164,12 @@ const ranges = [
     [0x30000, 0x3FFFF],
 ];
 
+/**
+ * Determine if a character is East Asian wide/full-width.
+ * Uses a binary search over compiled ranges.
+ * @param {string|number} ch
+ * @returns {boolean}
+ */
 export function isWide(ch) {
     const code = typeof ch === 'string' ? ch.codePointAt(0) : ch;
     let lo = 0;

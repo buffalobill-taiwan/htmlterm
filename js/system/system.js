@@ -10,8 +10,22 @@ export { WidgetManager } from './WidgetManager.js';
 import { bold, green, yellow, gray, red, warn, CURSOR_SHOW } from '../util/sgr.js';
 import { MenuDialog } from '../dialog/MenuDialog.js';
 
+/**
+ * SystemManager - singleton managing frame stack, input routing, Typewriter, and commands.
+ * @typedef {Object} Frame
+ * @property {boolean} done
+ * @property {boolean} started
+ * @property {boolean} persistent
+ * @property {Function} start
+ * @property {Function} handleInput
+ * @property {Function} finish
+ * @property {Function} cancel
+ */
 export class SystemManager {
+    /** @returns {SystemManager|null} */
     static get instance() { return getSystem(); }
+    /** @param {SystemManager|null} value */
+    static set instance(value) { setSystem(value); }
     static set instance(value) { setSystem(value); }
 
     constructor(term, cmdModule) {
