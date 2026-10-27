@@ -5,6 +5,7 @@ import {
     DIFFICULTY, GRID_COLS, GRID_ROWS, DIR, SPEED_LEVELS, OPPOSITE, DY, DX, BOARD_Y, BOARD_H,
 } from './constants.js';
 import { renderMethods } from './render.js';
+import { installMethods } from '../../util/install-methods.js';
 import { GAME_META } from '../game-meta.js';
 const META = GAME_META.snake;
 
@@ -274,12 +275,6 @@ class SnakeCmd extends CmdBase {
 }
 
 // Keep the command as the state owner and preserve class-method descriptors.
-for (const methods of [renderMethods]) {
-    for (const [name, value] of Object.entries(methods)) {
-        Object.defineProperty(SnakeCmd.prototype, name, {
-            value, writable: true, configurable: true, enumerable: false,
-        });
-    }
-}
+installMethods(SnakeCmd, renderMethods);
 
 export { SnakeCmd };

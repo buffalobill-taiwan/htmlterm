@@ -1,7 +1,5 @@
 import { system, term } from '../system/sys.js';
 import { bold, yellow, CURSOR_SHOW, CURSOR_HIDE } from '../util/sgr.js';
-import { ShowDialog } from '../dialog/ShowDialog.js';
-import { InputDialog } from '../dialog/InputDialog.js';
 import { FieldPickerDialog } from '../dialog/FieldPickerDialog.js';
 import { defaultGridMove, defaultGridRender } from '../util/select-grid.js';
 

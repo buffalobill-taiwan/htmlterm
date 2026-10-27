@@ -5,12 +5,7 @@ import {
 import { term } from '../../system/sys.js';
 import { bold, cyan, gray, yellow, red, green } from '../../util/sgr.js';
 import { displayWidth } from '../../util/display-width.js';
-
-function _formatTime(seconds) {
-    const m = Math.floor(seconds / 60);
-    const s = seconds % 60;
-    return String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
-}
+import { formatDuration } from '../../util/format.js';
 
 const renderMethods = {
     _initVBs() {
@@ -30,7 +25,7 @@ const renderMethods = {
         } else {
             const auto = this._autoCheck;
             vb.writeStr(0, 0, bold(cyan('  Sudoku [' + DIFFICULTY[this._difficulty].label + ']')) +
-                '    ' + yellow(_formatTime(this._timer)) +
+                '    ' + yellow(formatDuration(this._timer)) +
                 '    ' + gray('[g]ive up [n]ew [r]estart [c]heck:' + (auto ? 'ON' : 'OFF') + ' [q]uit'));
         }
     },
@@ -196,4 +191,4 @@ const renderMethods = {
     },
 };
 
-export { _formatTime, renderMethods };
+export { renderMethods };

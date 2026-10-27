@@ -2,6 +2,7 @@ import { VirtualBuffer } from '../../util/VirtualBuffer.js';
 import { term } from '../../system/sys.js';
 import { DIFFICULTY } from './constants.js';
 import { bold, cyan, red, yellow, gray } from '../../util/sgr.js';
+import { formatDuration } from '../../util/format.js';
 
 const NUM_COLORS = [
     '',                         // 0 — unused
@@ -20,12 +21,6 @@ const CELL_EMPTY  = '　';  // fullwidth space (revealed empty, 0 neighbors)
 const CELL_FLAG   = 'Ｆ';  // Ｆ
 const CELL_MINE   = '＊';  // ＊
 const CELL_WRONG  = 'Ｘ';  // Ｘ
-
-function _formatTime(sec) {
-    const m = Math.floor(sec / 60);
-    const s = sec % 60;
-    return String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
-}
 
 const renderMethods = {
     _initVBs() {
@@ -64,7 +59,7 @@ const renderMethods = {
     _drawHeader() {
         const cfg = DIFFICULTY[this._difficulty];
         const mines = this._completed ? 0 : this._mineCount - this._flagsPlaced;
-        const t = _formatTime(this._timer);
+        const t = formatDuration(this._timer);
         const pad = Math.max(0, 48 - cfg.label.length);
         this._clearRootRow(0);
         this._rootVB.writeStr(0, 0, bold(cyan('  Minesweeper [' + cfg.label + ']')) +
@@ -139,4 +134,4 @@ const renderMethods = {
     },
 };
 
-export { _formatTime, renderMethods };
+export { renderMethods };

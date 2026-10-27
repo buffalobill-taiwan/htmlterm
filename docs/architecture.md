@@ -40,16 +40,16 @@ protocol conformance. The source of truth is [Parser](../js/terminal/Parser.js),
 | Indexed colors | 16 colors with bold brightening and 256-color `38;5;n` / `48;5;n` rendering |
 | RGB colors | Screen and SGR parser map 24-bit `38;2;r;g;b` / `48;2;r;g;b` to the closest 256-color palette index via Euclidean distance, rendered via `.q0`–`.q255` / `.b0`–`.b255` |
 | Text attributes | Common SGR rendering includes bold brightening, dim, italic, underline, inverse, strikeout, and blink; conceal is stored but not applied by Renderer. Project-specific SGR 502–510 selects text scale ×2–×10; 500 aliases ×2, 501 and SGR 0 restore ×1 |
-| Cursor and editing | Common CSI cursor movement, positioning, erase, insert/delete, scrolling, scroll regions, save/restore, and status reports. CSI `4h`/`4l` enables insert mode (IRM), so writing shifts the rest of the row right |
+| Cursor and editing | Common CSI cursor movement, positioning, erase, insert/delete, scrolling, scroll regions, save/restore, and status reports. Cursor forward/back wrap across rows but stop at the screen edges, matching the clamping of cursor up/down. CSI `4h`/`4l` enables insert mode (IRM), so writing shifts the rest of the row right |
 | Erase semantics | With pending wrap, the cursor is treated as being on the last written cell, so `EL`/`ED` clear that cell. Erasing the leading half of a wide glyph replaces the orphaned continuation with a blank cell instead of leaving a half-drawn glyph |
 | Private modes | Cursor visibility, alternate buffer 1049, application cursor keys, and mouse modes 1000/1002/1003 with SGR encoding 1006; these are selected implementations, not general DEC compatibility |
 | Mouse events | Event type (1000/1002/1003) and encoding (X10 or SGR 1006) are independent: any event type may be combined with either encoding. X10 coordinates above 223 are not sent, release reports use button 3, motion adds 32, and SGR release uses the lowercase `m` final byte |
 | Input robustness | Text is decoded by code point, so a surrogate pair reaches the screen as one wide glyph. `DEL` (0x7F) is ignored, and `CAN`/`SUB` abort an in-progress CSI or string; a CSI longer than 128 bytes is dropped. Private CSI parameters are applied as a set, and unknown parameters are ignored |
-| String controls | OSC/DCS/SOS/PM/APC strings are consumed without implementing their payloads |
+| String controls | OSC/DCS/SOS/PM/APC strings are consumed without implementing their payloads. ESC intermediates and their designator (`ESC ( B`, `ESC # 8`) and SS2/SS3 designators are consumed, so neither byte is printed |
 | Paste | Text paste is supported; the parser handles both standard DEC private mode 2004 and project-specific 2000 for bracketed paste |
-| Resize | `Screen.resize()` refits scrollback and current rows to the new width, resets the scroll region, marks the whole screen dirty, and never routes an alternate-buffer row into scrollback |
+| Resize | `Screen.resize()` refits scrollback and current rows to the new width, resets the scroll region, and marks the whole screen dirty. Shrinking drops rows from the top so content stays anchored at the bottom: primary-buffer rows leave in order into scrollback, alternate-buffer rows and rows hidden behind the alternate buffer are discarded, and the cursor moves up with its content |
 | Layout | Demo defaults to 80×25; scaling never drops below 1, so a viewport smaller than the base grid can overflow |
-| Line endings | LF also performs carriage return; cursor forward/back can wrap across rows, which is a project-specific behavior |
+| Line endings | LF also performs carriage return; cursor forward/back wraps across rows between the screen edges, which is a project-specific behavior |
 
 Scaled main-screen glyphs occupy independent clipped cells with `clipScale`,
 `clipOffX`, and `clipOffY`; legacy clipped overlay cells without `clipScale`

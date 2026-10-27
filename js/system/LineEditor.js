@@ -5,7 +5,6 @@
  * history management, and tab completion display.
  */
 import { TextInputModel, parseCSI } from './TextInputModel.js';
-import { isWide } from '../util/display-width.js';
 
 export class LineEditor {
     constructor(term, callbacks = {}) {
@@ -24,9 +23,7 @@ export class LineEditor {
         this._commands = [];
         this._prompt   = '$ ';
 
-        this._cursorDisplayCol = 0;
-        this._lastTotalWidth   = 0;
-        this._lastPromptRow    = this.term.curY;
+        this._lastPromptRow = this.term.curY;
         this._restAfterEnter = '';
     }
 
@@ -51,9 +48,7 @@ export class LineEditor {
         this._model.reset();
         this.historyPos = -1;
         this._savedLine = null;
-        this._cursorDisplayCol = this._prompt.length;
-        this._lastTotalWidth   = this._prompt.length;
-        this._lastPromptRow    = this.term.curY;
+        this._lastPromptRow = this.term.curY;
     }
 
     // ── Rendering ─────────────────────────────────────────────────────────────
@@ -61,7 +56,6 @@ export class LineEditor {
     _redraw() {
         const cols = this.term.cols;
         const promptLen = this._prompt.length;
-        const totalWidth = promptLen + this._model.widthRange(0, this._model.length);
         const cursorDisplayCol = promptLen + this._model.widthRange(0, this._model.cursor);
 
         const oldRowOffset = Math.max(0, this.term.curY - this._lastPromptRow);
@@ -75,8 +69,6 @@ export class LineEditor {
         this.term.write('\x1B[J');
 
         this._lastPromptRow = startY;
-        this._lastTotalWidth = totalWidth;
-        this._cursorDisplayCol = cursorDisplayCol;
 
         const targetRow = startY + Math.floor(cursorDisplayCol / cols);
         const targetCol = cursorDisplayCol % cols;
@@ -208,7 +200,6 @@ export class LineEditor {
                 this._model.insert(c);
                 if (this._model.cursor === this._model.length) {
                     this.term.write(c);                   // fast path: at end
-                    this._cursorDisplayCol += isWide(c) ? 2 : 1;
                 } else {
                     this._redraw();
                 }
@@ -229,7 +220,6 @@ export class LineEditor {
                 const w = m.charWidth(m.cursor);
                 if (m.moveRight() !== 'none') {
                     this.term.write(`\x1B[${w}C`);
-                    this._cursorDisplayCol += w;
                 }
                 break;
             }
@@ -237,7 +227,6 @@ export class LineEditor {
                 const w = m.charWidth(m.cursor - 1);
                 if (m.moveLeft()  !== 'none') {
                     this.term.write(`\x1B[${w}D`);
-                    this._cursorDisplayCol -= w;
                 }
                 break;
             }

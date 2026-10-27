@@ -18,7 +18,9 @@ import { Typewriter } from '../js/system/typewriter.js';
 import { Screen } from '../js/terminal/Screen.js';
 import { Parser } from '../js/terminal/Parser.js';
 import { VirtualBuffer } from '../js/util/VirtualBuffer.js';
-import { applySGR, defaultAttr, rgbToAnsi256 } from '../js/util/sgr.js';
+import { applySGR, defaultAttr, rgbToAnsi256, skipEscapeSeq } from '../js/util/sgr.js';
+import { safeEval } from '../js/util/calc-expr.js';
+import { formatDuration } from '../js/util/format.js';
 import { computeRLE, computeDiff, decodeRLE, applyDiff } from '../js/util/pixel-codec.js';
 import { _generate as generateSudoku } from '../js/cmd/sudoku/solver.js';
 import { generatePuzzle as generateMinesweeper } from '../js/cmd/minesweeper/solver.js';
@@ -33,6 +35,12 @@ let failed = 0;
 
 function assert(condition, message) {
     if (!condition) throw new Error(message);
+}
+
+function assertThrows(fn, message) {
+    let threw = false;
+    try { fn(); } catch { threw = true; }
+    if (!threw) throw new Error(message);
 }
 
 function test(name, fn) {
@@ -445,6 +453,90 @@ queue.push(test('Screen & Parser: cursor-only movement marks no dirty rows', () 
     screen.dirtyRows.clear();
     parser.write('\x1B[A\x1B[B\x1B[C\x1B[D');
     assert(screen.dirtyRows.size === 0, 'Pure cursor motion should not dirty rows');
+}));
+
+queue.push(test('Screen: cursor back/forward stop at the screen edge', () => {
+    const { screen } = makeParser();
+    screen.curY = 0;
+    screen.curX = 5;
+    screen.cursorBack(10);
+    assert(screen.curY === 0 && screen.curX === 0,
+        `back should clamp at (0,0), got (${screen.curY},${screen.curX})`);
+
+    screen.curY = screen.rows - 1;
+    screen.curX = screen.cols - 1;
+    screen.cursorForward(10);
+    assert(screen.curY === screen.rows - 1 && screen.curX === screen.cols - 1,
+        `forward should clamp at the last cell, got (${screen.curY},${screen.curX})`);
+
+    // Wrapping away from the edges still crosses rows.
+    screen.curY = 2;
+    screen.curX = 5;
+    screen.cursorBack(10);
+    assert(screen.curY === 1 && screen.curX === screen.cols - 5,
+        `back should wrap to the previous row, got (${screen.curY},${screen.curX})`);
+}));
+
+queue.push(test('Screen: shrinking rows keeps content anchored at the bottom', () => {
+    const { screen } = makeParser();
+    screen.resize(10, 5);
+    screen.scrollback.length = 0;               // only count rows dropped by the shrink
+    for (let r = 0; r < 5; r++) {
+        screen.curY = r;
+        screen.curX = 0;
+        screen.writeChar(String.fromCharCode(65 + r));   // A..E
+    }
+    screen.curY = 4;                                     // cursor on E
+    screen.resize(10, 3);
+
+    const first = r => screen.getRowAt(r)[0].ch;
+    assert(screen.buffer.length === 3, 'buffer height follows the new row count');
+    assert(first(0) === 'C' && first(1) === 'D' && first(2) === 'E',
+        'bottom rows stay visible');
+    assert(screen.scrollback.map(row => row[0].ch).join('') === 'AB',
+        'rows leaving the top become history in order');
+    assert(screen.curY === 2, 'cursor follows its content');
+
+    screen.resize(10, 5);
+    assert(screen.buffer.length === 5, 'growing restores the row count');
+    assert(first(0) === 'C' && first(2) === 'E', 'content keeps its order after growing');
+    assert(screen.scrollback.map(row => row[0].ch).join('') === 'AB', 'history is retained');
+}));
+
+queue.push(test('Parser: ESC intermediates and SS2/SS3 are consumed', () => {
+    const { screen, parser } = makeParser();
+    parser.write('A\x1B(B');       // charset designation
+    parser.write('\x1B)0');        // alternate charset designation
+    parser.write('\x1B#8');        // DECALN (designator must not restore the cursor)
+    parser.write('\x1B%G');        // UTF-8 select
+    parser.write('\x1BOA');        // SS3 designator
+    parser.write('Z');
+    const row = screen.getRowAt(0).map(cell => (cell && cell.ch) || '').join('').trimEnd();
+    assert(row === 'AZ', `only printable text should reach the screen, got "${row}"`);
+    assert(screen.curX === 2, 'consumed sequences do not advance the cursor');
+}));
+
+queue.push(test('Typewriter: escape scanner keeps text after two-byte sequences', () => {
+    assert(skipEscapeSeq('\x1b(BABC', 0) === 3, 'ESC ( B consumes three characters');
+    assert(skipEscapeSeq('\x1bOA', 0) === 3, 'SS3 consumes its designator');
+    assert(skipEscapeSeq('\x1b[31mX', 0) === 5, 'CSI stops at its final byte');
+    assert(skipEscapeSeq('\x1b]0;t\x07X', 0) === 6, 'OSC stops at BEL');
+}));
+
+queue.push(test('Calc: malformed numbers are rejected', () => {
+    assert(safeEval('1+2') === 3, 'valid expression still evaluates');
+    assert(safeEval('.5') === 0.5, 'leading-dot decimal is accepted');
+    assert(safeEval('1.') === 1, 'trailing-dot decimal is accepted');
+    assertThrows(() => safeEval('1.2.3'), 'two decimal points rejected');
+    assertThrows(() => safeEval('1..2'), 'empty decimal fraction rejected');
+    assertThrows(() => safeEval('1 2'), 'two numbers rejected');
+}));
+
+queue.push(test('Format: duration helper', () => {
+    assert(formatDuration(0) === '00:00', 'zero');
+    assert(formatDuration(59) === '00:59', 'under one minute');
+    assert(formatDuration(61) === '01:01', 'minutes and seconds');
+    assert(formatDuration(600) === '10:00', 'ten minutes');
 }));
 
 queue.push(test('VirtualBuffer: Layout, child slots and writeStr with SGR', () => {

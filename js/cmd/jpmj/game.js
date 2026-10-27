@@ -7,6 +7,7 @@ import { gameCallMethods } from './game-calls.js';
 import { gameKanMethods } from './game-kans.js';
 import { gameScoringMethods } from './game-scoring.js';
 import { gameRoundMethods } from './game-rounds.js';
+import { installMethods } from '../../util/install-methods.js';
 
 export class Game {
   constructor(options) {
@@ -207,16 +208,5 @@ export class Game {
 }
 
 // Preserve class-method descriptors and the existing Game API.
-for (const methods of [
-  gameTurnMethods,
-  gameCallMethods,
-  gameKanMethods,
-  gameScoringMethods,
-  gameRoundMethods,
-]) {
-  for (const [name, value] of Object.entries(methods)) {
-    Object.defineProperty(Game.prototype, name, {
-      value, writable: true, configurable: true, enumerable: false,
-    });
-  }
-}
+installMethods(Game, gameTurnMethods, gameCallMethods, gameKanMethods,
+  gameScoringMethods, gameRoundMethods);

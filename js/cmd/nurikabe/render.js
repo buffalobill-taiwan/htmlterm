@@ -5,6 +5,7 @@ import { VirtualBuffer, _blankCell } from '../../util/VirtualBuffer.js';
 import { term } from '../../system/sys.js';
 import { bufWidth } from '../../util/display-width.js';
 import { formatClue, BLACK } from '../../util/nurikabe-engine.js';
+import { formatDuration } from '../../util/format.js';
 
 const CELL_ISLAND = '　';
 
@@ -16,12 +17,6 @@ if (!isWide(CELL_ISLAND)) {
 
 if (CELL_SEA.length !== 2) {
     throw new Error('Nurikabe sea cells must occupy exactly 2 columns.');
-}
-
-function _formatTime(sec) {
-    const m = Math.floor(sec / 60);
-    const s = sec % 60;
-    return String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
 }
 
 function _styleClue(status, ch) {
@@ -79,7 +74,7 @@ const renderMethods = {
         const title = bold(cyan('  Nurikabe [' + this._label + ']'));
         this._clearRow(0);
         this._rootVB.writeStr(0, 0, title + ' '.repeat(Math.max(0, 61 - bufWidth(title))) +
-            yellow(_formatTime(this._timer)));
+            yellow(formatDuration(this._timer)));
         if (flush) term.writeVB(this._rootVB);
     },
 
@@ -160,4 +155,4 @@ const renderMethods = {
     },
 };
 
-export { _formatTime, renderMethods };
+export { renderMethods };

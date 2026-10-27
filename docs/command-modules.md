@@ -61,11 +61,13 @@ contains shared dimensions, difficulty settings, and other fixed configuration.
 | [tetris](../js/cmd/tetris/index.js) | `TetrisCmd` | `board.js`: collisions, ghost landing, T-spins, and line clearing; `pieces.js`: shapes, wall kicks, and colors |
 | [memory](../js/cmd/memory/index.js) | `MemoryCmd` | Everything stays in the class file; difficulty selections come from `CmdBase.openDifficultyDialog()` |
 
-The command class installs `renderMethods` on its prototype once, at module
+The command class installs its method groups with
+[`installMethods()`](../js/util/install-methods.js) once, at module
 initialization. These methods use the same `this` as before; they do not create
 another state owner. Their descriptors remain non-enumerable, writable, and
-configurable, matching class methods. Buffers, palettes, and child slots retain
-their existing reuse and cleanup behavior.
+configurable, matching class methods, and later groups win when two groups define
+the same name. Buffers, palettes, and child slots retain their existing reuse and
+cleanup behavior.
 
 Import shared values directly from the module that owns them. Rendering and
 rule helpers must not import their command class or its `index.js`; calls to

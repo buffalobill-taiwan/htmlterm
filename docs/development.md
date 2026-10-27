@@ -30,7 +30,7 @@ validating changes.
 | 404 for modules or fonts | Start the server in the directory containing index.html |
 | Old behavior after an edit | Reload with browser cache disabled while DevTools is open |
 | Clipped view in a narrow window | Scaling has a minimum of 1; the base 80×25 grid may exceed the viewport (accepted limitation, see [Scope](#scope)) |
-| Wrong colors for RGB escape sequences | See the [compatibility table](architecture.md#terminal-compatibility); RGB rendering is not implemented |
+| Wrong colors for RGB escape sequences | See the [compatibility table](architecture.md#terminal-compatibility); 24-bit RGB is approximated by the nearest 256-color palette entry, so exact RGB colors do not survive |
 
 The browser entry uses `js/main.js`. Importing every command in Node is not a
 runtime smoke test: `tools/import-check.mjs` only proves that modules parse,
@@ -50,6 +50,7 @@ node tools/import-check.mjs # dynamic import: paths, syntax, module side effects
 node tools/test-headless.mjs # Parser/Screen, VirtualBuffer, seeds, seed args, lazy commands
 node tools/test-system.mjs  # frame stack: prompts, input replay, busy, dialogs, lazy, errors
 node tools/test-maze.mjs     # Maze scoring fixtures, tree topology, branch distribution
+node tools/test-cchess-mahjong.mjs # Chinese chess / Japanese mahjong tile and rule checks
 git diff --check
 ```
 

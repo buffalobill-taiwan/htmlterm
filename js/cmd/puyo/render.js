@@ -5,11 +5,7 @@ import {
 import { bold, cyan, gray, makeCell } from '../../util/sgr.js';
 import { term } from '../../system/sys.js';
 import { buildStatRow as _buildDynRow, writeStatRow as _writeDynRow } from '../../util/stat-row.js';
-
-function _fmtTime(sec) {
-    const m = Math.floor(sec / 60), s = sec % 60;
-    return String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
-}
+import { formatDuration } from '../../util/format.js';
 
 /** Pre-render all static sidebar text into cell arrays (one-time cost). */
 function _buildStaticSidebar() {
@@ -218,7 +214,7 @@ const renderMethods = {
 
         _writeDynRow(buf[5], this._dynScore, this._score);
         _writeDynRow(buf[6], this._dynChain, this._maxChain);
-        _writeDynRow(buf[7], this._dynTime, _fmtTime(this._time));
+        _writeDynRow(buf[7], this._dynTime, formatDuration(this._time));
     },
 
     _setPuyo(buf, x, y, color) {

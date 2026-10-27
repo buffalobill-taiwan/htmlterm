@@ -35,8 +35,9 @@ Read the document that matches the work being done before changing that area.
 - There is no automated-test or CI requirement. Validate browser-facing changes
   manually and run appropriate syntax/static checks: `./tools/check-syntax.sh`,
   `node tools/import-check.mjs`, `node tools/test-headless.mjs`,
-  `node tools/test-system.mjs`, and `node tools/test-maze.mjs` when touching
-  maze logic. Plain `node --check file.js` is not reliable here
+  `node tools/test-system.mjs`, `node tools/test-maze.mjs` when touching maze
+  logic, and `node tools/test-cchess-mahjong.mjs` when touching Chinese chess or
+  Japanese mahjong rules. Plain `node --check file.js` is not reliable here
   — with no `package.json` the file is parsed as CommonJS, which accepts a
   top-level `return`.
 - Do not add `jsconfig.json`, `tsconfig.json`, `.editorconfig`, `.vscode/`, or

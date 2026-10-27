@@ -8,6 +8,7 @@ import {
 import { _createBoard, _bag, _fits, _isTSpin, _isTSpinMini } from './board.js';
 import { SHAPES, KICKS_I, KICKS_3x3, PIECE_COLORS } from './pieces.js';
 import { renderMethods } from './render.js';
+import { installMethods } from '../../util/install-methods.js';
 import { GAME_META } from '../game-meta.js';
 const META = GAME_META.tetris;
 
@@ -457,12 +458,6 @@ class TetrisCmd extends CmdBase {
 }
 
 // Keep the command as the state owner and preserve class-method descriptors.
-for (const methods of [renderMethods]) {
-    for (const [name, value] of Object.entries(methods)) {
-        Object.defineProperty(TetrisCmd.prototype, name, {
-            value, writable: true, configurable: true, enumerable: false,
-        });
-    }
-}
+installMethods(TetrisCmd, renderMethods);
 
 export { TetrisCmd };

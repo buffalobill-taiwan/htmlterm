@@ -4,7 +4,9 @@ import { term } from '../../system/sys.js';
 import { CURSOR_HIDE, yellow, bold, red, gray, green } from '../../util/sgr.js';
 import { _create2D, _analyzeClueColors, _analyzePools, _analyzeSeaConnectivity } from './analysis.js';
 import { WHITE, geom, BLACK, isSolved } from '../../util/nurikabe-engine.js';
-import { _formatTime, renderMethods } from './render.js';
+import { renderMethods } from './render.js';
+import { installMethods } from '../../util/install-methods.js';
+import { formatDuration } from '../../util/format.js';
 import { GAME_META } from '../game-meta.js';
 const META = GAME_META.nurikabe;
 
@@ -227,7 +229,7 @@ class NurikabeCmd extends CmdBase {
         this._updateClueColors();
         this._drawHeader();
         this._drawBoard();
-        const timeStr = _formatTime(this._timer);
+        const timeStr = formatDuration(this._timer);
         const fRow = this._footerRow();
         const msg = won
             ? bold(green('  Congratulations!')) + '  ' + yellow('Time: ' + timeStr)
@@ -419,12 +421,6 @@ class NurikabeCmd extends CmdBase {
 }
 
 // Keep the command as the state owner and preserve class-method descriptors.
-for (const methods of [renderMethods]) {
-    for (const [name, value] of Object.entries(methods)) {
-        Object.defineProperty(NurikabeCmd.prototype, name, {
-            value, writable: true, configurable: true, enumerable: false,
-        });
-    }
-}
+installMethods(NurikabeCmd, renderMethods);
 
 export { NurikabeCmd };

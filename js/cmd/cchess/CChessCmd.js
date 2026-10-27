@@ -12,6 +12,7 @@ import { ConfirmDialog } from '../../dialog/ConfirmDialog.js';
 import { CompactListDialog } from '../../dialog/CompactListDialog.js';
 import { FieldPickerDialog } from '../../dialog/FieldPickerDialog.js';
 import { renderMethods } from './render.js';
+import { installMethods } from '../../util/install-methods.js';
 import { darkMethods } from './dark.js';
 import { mahjongMethods } from './mahjong/game.js';
 import { mahjongRenderMethods } from './mahjong/render.js';
@@ -323,6 +324,4 @@ export class CChessCmd extends CmdBase {
     static get usage() { return META.usage; }
 }
 
-for (const [name, value] of Object.entries({ ...renderMethods, ...darkMethods, ...mahjongMethods, ...mahjongRenderMethods })) {
-    Object.defineProperty(CChessCmd.prototype, name, { value, writable: true, configurable: true });
-}
+installMethods(CChessCmd, renderMethods, darkMethods, mahjongMethods, mahjongRenderMethods);

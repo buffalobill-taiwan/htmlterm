@@ -5,6 +5,7 @@ import {
     BOARD_W, BOARD_H, SIDEBAR_W, SIDEBAR_H, BOARD_X, BOARD_Y, SIDEBAR_X, SIDEBAR_Y, ROWS, COLS,
 } from './constants.js';
 import { makeCell, bold, cyan, gray, yellow } from '../../util/sgr.js';
+import { formatDuration } from '../../util/format.js';
 import LEVELS from '../../data/klotski-levels.json' with { type: 'json' };
 
 const NAME_COLOR = {
@@ -29,12 +30,6 @@ const NAME_CHARS = {
     '黃忠': '黃忠',
     '兵': '兵',
 };
-
-function _fmtTime(t) {
-    const m = String(Math.floor(t / 60)).padStart(2, '0');
-    const s = String(t % 60).padStart(2, '0');
-    return m + ':' + s;
-}
 
 function _centerContent(content, width) {
     const w = bufWidth(content);
@@ -136,7 +131,7 @@ const renderMethods = {
         vb.writeStr(3, 0, gray(' 關卡 ') + bold(yellow(lv.name)));
         vb.writeStr(4, 0, gray(' 步數 ') + bold(String(this._moves)));
         vb.writeStr(5, 0, gray(' 目標 ') + bold('≤ ' + lv.mini));
-        vb.writeStr(6, 0, gray(' 時間 ') + bold(_fmtTime(this._time)));
+        vb.writeStr(6, 0, gray(' 時間 ') + bold(formatDuration(this._time)));
         vb.writeStr(7, 0, gray('─'.repeat(20)));
         vb.writeStr(9, 0, gray('  Space/↵ 選取'));
         vb.writeStr(10, 0, gray('  ←↑↓→   滑動'));
@@ -264,7 +259,7 @@ const renderMethods = {
         vb.writeStr(0, 0, '\x1B[1;33m┌' + '─'.repeat(W - 2) + '┐\x1B[0m');
         vb.writeStr(1, 0, '\x1B[1;33m│\x1B[0m' + _centerContent(bold(yellow('恭喜通關！')), W - 2) + '\x1B[1;33m│\x1B[0m');
         vb.writeStr(2, 0, '\x1B[1;33m│\x1B[0m' + _centerContent(bold('步數 ' + this._moves + '/' + lv.mini) + (good ? ' ★' : ''), W - 2) + '\x1B[1;33m│\x1B[0m');
-        vb.writeStr(3, 0, '\x1B[1;33m│\x1B[0m' + _centerContent(bold('時間 ' + _fmtTime(this._time)), W - 2) + '\x1B[1;33m│\x1B[0m');
+        vb.writeStr(3, 0, '\x1B[1;33m│\x1B[0m' + _centerContent(bold('時間 ' + formatDuration(this._time)), W - 2) + '\x1B[1;33m│\x1B[0m');
         vb.writeStr(4, 0, '\x1B[1;33m│\x1B[0m' + _centerContent(gray('[n]新關  [q]離開'), W - 2) + '\x1B[1;33m│\x1B[0m');
         vb.writeStr(5, 0, '\x1B[1;33m│\x1B[0m' + ' '.repeat(W - 2) + '\x1B[1;33m│\x1B[0m');
         vb.writeStr(6, 0, '\x1B[1;33m└' + '─'.repeat(W - 2) + '┘\x1B[0m');

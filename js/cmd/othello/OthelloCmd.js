@@ -5,6 +5,7 @@ import { idx, isValid, applyMove, other, getValidMoves, countPieces } from './bo
 import { BLACK, WHITE, N, FLIP_MS, PASS_MS, THINK_MS, BLINK_MS, CLEAR_ROW } from './constants.js';
 import { aiMoveEasy, aiMoveMedium, aiMoveHard } from './ai.js';
 import { renderMethods } from './render.js';
+import { installMethods } from '../../util/install-methods.js';
 import { GAME_META } from '../game-meta.js';
 const META = GAME_META.othello;
 
@@ -345,12 +346,6 @@ class OthelloCmd extends CmdBase {
 }
 
 // Keep the command as the state owner and preserve class-method descriptors.
-for (const methods of [renderMethods]) {
-    for (const [name, value] of Object.entries(methods)) {
-        Object.defineProperty(OthelloCmd.prototype, name, {
-            value, writable: true, configurable: true, enumerable: false,
-        });
-    }
-}
+installMethods(OthelloCmd, renderMethods);
 
 export { OthelloCmd };

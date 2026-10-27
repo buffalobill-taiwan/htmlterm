@@ -9,6 +9,7 @@ import {
     _createBoard, _findMatches, _hasAnyMove, _swapCreatesMatch, _calcChainScore, _fallOneStep,
 } from './board.js';
 import { renderMethods } from './render.js';
+import { installMethods } from '../../util/install-methods.js';
 import { GAME_META } from '../game-meta.js';
 const META = GAME_META.gweled;
 
@@ -402,12 +403,6 @@ class GweledCmd extends CmdBase {
 }
 
 // Keep the command as the state owner and preserve class-method descriptors.
-for (const methods of [renderMethods]) {
-    for (const [name, value] of Object.entries(methods)) {
-        Object.defineProperty(GweledCmd.prototype, name, {
-            value, writable: true, configurable: true, enumerable: false,
-        });
-    }
-}
+installMethods(GweledCmd, renderMethods);
 
 export { GweledCmd };

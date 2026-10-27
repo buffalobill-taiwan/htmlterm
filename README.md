@@ -16,7 +16,7 @@ dialogs, and TSR-style widgets.
 
 - Common ANSI/VT100 escape sequences (SGR colors, cursor positioning, scroll regions)
 - 16-color ANSI palette with bold brightening
-- 256-color indexed rendering; RGB parsing has rendering limitations
+- 256-color indexed rendering; 24-bit RGB is approximated to the closest palette entry
 - Insert mode (IRM), scroll regions, alternate screen (1049), and robust input decoding (surrogate pairs, `DEL` ignored, `CAN`/`SUB` abort in-progress sequences)
 - Mouse tracking (event types 1000/1002/1003 combinable with either X10 or SGR 1006 encoding)
 - Scrollback buffer (2000 lines) with mouse wheel navigation

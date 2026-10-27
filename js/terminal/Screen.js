@@ -143,8 +143,15 @@ export class Screen {
     cursorForward(n) {
         const target = this.curX + n;
         if (target >= this.cols) {
-            this.curY = Math.min(this.rows - 1, this.curY + Math.floor(target / this.cols));
-            this.curX = target % this.cols;
+            const rowsDown = Math.floor(target / this.cols);
+            if (this.curY + rowsDown > this.rows - 1) {
+                // Wrapping stops at the end of the screen like cursorDown().
+                this.curY = this.rows - 1;
+                this.curX = this.cols - 1;
+            } else {
+                this.curY += rowsDown;
+                this.curX = target % this.cols;
+            }
         } else {
             this.curX = target;
         }
@@ -153,9 +160,15 @@ export class Screen {
     cursorBack(n) {
         const target = this.curX - n;
         if (target < 0) {
-            const rowsUp = Math.min(this.curY, Math.ceil(-target / this.cols));
-            this.curY -= rowsUp;
-            this.curX = ((target % this.cols) + this.cols) % this.cols;
+            const rowsUp = Math.ceil(-target / this.cols);
+            if (rowsUp > this.curY) {
+                // Wrapping stops at the start of the screen like cursorUp().
+                this.curY = 0;
+                this.curX = 0;
+            } else {
+                this.curY -= rowsUp;
+                this.curX = ((target % this.cols) + this.cols) % this.cols;
+            }
         } else {
             this.curX = target;
         }
@@ -384,16 +397,16 @@ export class Screen {
         this.scrollTop = 0;
         this.scrollBottom = newRows - 1;
 
-        // Fit scrollback first: rows dropped out of the primary buffer below are
-        // pushed onto scrollback already fitted.
+        // Fit scrollback first: rows that leave the primary buffer above the new
+        // viewport are pushed onto scrollback already fitted.
         for (let i = 0; i < this.scrollback.length; i++) {
             this._fitRow(this.scrollback[i], oldCols, newCols);
         }
-        this._fitBuffer(this.buffer, oldCols, newCols, newRows, !this._primaryBuffer);
+        const dropped = this._fitBuffer(this.buffer, oldCols, newCols, newRows, !this._primaryBuffer);
         if (this._primaryBuffer) this._fitBuffer(this._primaryBuffer, oldCols, newCols, newRows, false);
 
         this.curX = Math.min(this.curX, newCols - 1);
-        this.curY = Math.min(this.curY, newRows - 1);
+        this.curY = Math.max(0, Math.min(this.curY - dropped, newRows - 1));
         this.viewOffset = Math.min(this.viewOffset, this.maxViewOffset());
         this.markAllDirty();
     }
@@ -410,13 +423,21 @@ export class Screen {
         }
     }
 
+    // Fit every row to the new width, then keep the buffer at newRows rows.
+    // Shrinking drops rows from the top, so the visible content stays anchored
+    // at the bottom like a terminal window whose height changed. Primary-buffer
+    // rows that leave the screen become scrollback history; alternate-buffer
+    // rows are discarded. Returns the number of rows dropped from the top.
     _fitBuffer(buf, oldCols, newCols, newRows, keepInScrollback) {
         for (const row of buf) this._fitRow(row, oldCols, newCols);
+        let dropped = 0;
         while (buf.length > newRows) {
-            const row = buf.pop();
+            const row = buf.shift();
+            dropped++;
             if (keepInScrollback && row) this._pushScrollback(row);
         }
         while (buf.length < newRows) buf.push(this._emptyRow());
+        return dropped;
     }
 
     scrollbackUp(n) {

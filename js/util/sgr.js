@@ -1,5 +1,8 @@
 import { MAX_TEXT_SCALE } from './text-scale.js';
-import { DEFAULT_FG, DEFAULT_BG, CSI_INTRODUCER } from './constants.js';
+import {
+    DEFAULT_FG, DEFAULT_BG, CSI_INTRODUCER,
+    ESC_OSC, ESC_DCS, ESC_SOS, ESC_PM, ESC_APC, ESC_SS2, ESC_SS3,
+} from './constants.js';
 
 /**
  * Create a default SGR attribute object.
@@ -163,8 +166,6 @@ export const gray = _sgrStyle([90]);
 
 export function fg(n) { return _sgrStyle([38, 5, n]); }
 export function bg(n) { return _sgrStyle([48, 5, n]); }
-export function rgbFg(r, g, b) { return _sgrStyle([38, 2, r, g, b]); }
-export function rgbBg(r, g, b) { return _sgrStyle([48, 2, r, g, b]); }
 export function sgr(...params) { return _sgrStyle(params); }
 
 export const CURSOR_HIDE = '\x1B[?25l';
@@ -237,16 +238,19 @@ export function skipEscapeSeq(text, i) {
             if (isFinalByte(text.charCodeAt(i))) { i++; break; }
             i++;
         }
-    } else if (next === 0x5D || next === 0x50) {
+    } else if (next >= 0x20 && next <= 0x2F) {
+        // ESC intermediate + designator: charset selection (ESC ( B) or DECALN
+        // (ESC # 8). Both bytes belong to the sequence.
+        if (i < text.length) i++;
+    } else if (next === ESC_SS2 || next === ESC_SS3) {
+        // SS2/SS3: one designator character follows.
+        if (i < text.length) i++;
+    } else if (next === ESC_OSC || next === ESC_DCS || next === ESC_SOS ||
+               next === ESC_PM || next === ESC_APC) {
         while (i < text.length) {
             const c = text.charCodeAt(i);
             if (c === 0x07) { i++; break; }
             if (c === 0x1B && i + 1 < text.length && text.charCodeAt(i + 1) === 0x5C) { i += 2; break; }
-            i++;
-        }
-    } else {
-        while (i < text.length) {
-            if (text.charCodeAt(i) === 0x1B && i + 1 < text.length && text.charCodeAt(i + 1) === 0x5C) { i += 2; break; }
             i++;
         }
     }

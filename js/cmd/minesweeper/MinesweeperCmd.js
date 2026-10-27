@@ -5,7 +5,9 @@ import { DIFFICULTY } from './constants.js';
 import { _create2D, generatePuzzle, parseStart, revealCells } from './solver.js';
 import { seedFromArgs } from '../../util/seed-args.js';
 import { SEED_MAX } from '../../util/random.js';
-import { _formatTime, renderMethods } from './render.js';
+import { renderMethods } from './render.js';
+import { installMethods } from '../../util/install-methods.js';
+import { formatDuration } from '../../util/format.js';
 import { GAME_META } from '../game-meta.js';
 const META = GAME_META.minesw;
 
@@ -137,7 +139,7 @@ class MinesweeperCmd extends CmdBase {
                 if (this._board[r][c] === -1) this._revealed[r][c] = true;
         this._drawHeader();
         this._drawBoard();
-        const timeStr = _formatTime(this._timer);
+        const timeStr = formatDuration(this._timer);
         const fRow = this._footerRow();
         const msg = won
             ? bold(green('  Congratulations!')) + '  ' + yellow('Time: ' + timeStr)
@@ -245,12 +247,6 @@ class MinesweeperCmd extends CmdBase {
 }
 
 // Keep the command as the state owner and preserve class-method descriptors.
-for (const methods of [renderMethods]) {
-    for (const [name, value] of Object.entries(methods)) {
-        Object.defineProperty(MinesweeperCmd.prototype, name, {
-            value, writable: true, configurable: true, enumerable: false,
-        });
-    }
-}
+installMethods(MinesweeperCmd, renderMethods);
 
 export { MinesweeperCmd };

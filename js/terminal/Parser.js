@@ -32,6 +32,9 @@ export class Parser {
         this._state = 'ground';
         this._retained = '';
         this._stringEscape = false;
+        // Set after an ESC intermediate byte (0x20-0x2F): the next byte is the
+        // designator of a two-byte sequence such as ESC ( B or ESC # 8.
+        this._escIntermediate = false;
     }
 
     /**
@@ -49,6 +52,10 @@ export class Parser {
             i++;
 
             if (this._state === 'escape') { this._handleEscape(ch); continue; }
+
+            // SS2/SS3 prefix a single-character designator (ESC O A). The
+            // designator is consumed, never printed.
+            if (this._state === 'ss') { this._state = 'ground'; continue; }
 
             if (this._state === 'csi') {
                 if (code === CAN || code === SUB) { this._state = 'ground'; this._retained = ''; continue; }
@@ -128,13 +135,20 @@ export class Parser {
     _handleEscape(ch) {
         const screen = this.screen;
         const code = ch.charCodeAt(0);
+        if (this._escIntermediate) {
+            this._escIntermediate = false;
+            // A second ESC restarts the sequence; anything else is the
+            // designator byte (or a control character) and is consumed.
+            if (code !== ESC) this._state = 'ground';
+            return;
+        }
         if (code === CSI_INTRODUCER) { this._state = 'csi'; this._retained = ''; return; }
         if (code === ESC_OSC) { this._state = 'osc'; this._stringEscape = false; return; }
         if (code === ESC_DCS) { this._state = 'dcs'; this._stringEscape = false; return; }
         if (code === ESC_SOS) { this._state = 'sos'; this._stringEscape = false; return; }
         if (code === ESC_PM) { this._state = 'pm'; this._stringEscape = false; return; }
         if (code === ESC_APC) { this._state = 'apc'; this._stringEscape = false; return; }
-        if (code === ESC_SS2 || code === ESC_SS3) { this._state = 'ground'; return; }
+        if (code === ESC_SS2 || code === ESC_SS3) { this._state = 'ss'; return; }
         if (code === ESC_IND) { screen.lineFeedEdge(); this._state = 'ground'; return; }
         if (code === ESC_NEL) { screen.lineFeedEdge(); screen.carriageReturn(); this._state = 'ground'; return; }
         if (code === ESC_SAVE) { screen.savedX = screen.curX; screen.savedY = screen.curY; this._state = 'ground'; return; }
@@ -142,6 +156,9 @@ export class Parser {
         if (code === ESC_TABSET) { this._state = 'ground'; return; }
         if (code === ESC_RI) { screen.reverseScroll(); this._state = 'ground'; return; }
         if (code === ESC_ST) { this._state = 'ground'; return; }
+        // ESC intermediates (charset designation, DECALN, ...) are consumed
+        // with their designator so neither byte is printed.
+        if (code >= 0x20 && code <= 0x2F) { this._escIntermediate = true; return; }
         if (code >= 0x40 && code <= 0x5F) { this._state = 'ground'; return; }
         this._state = 'ground';
     }

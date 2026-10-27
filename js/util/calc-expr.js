@@ -16,11 +16,19 @@ export function safeEval(expr) {
 
     function parseNumber() {
         skipWS();
-        let num = '';
-        if (expr[pos] === '-') { num += '-'; pos++; }
-        while (pos < expr.length && /[0-9.]/.test(expr[pos])) num += expr[pos++];
-        if (num === '' || num === '-') throw new Error();
-        return parseFloat(num);
+        const start = pos;
+        if (expr[pos] === '-') pos++;
+        let digits = 0;
+        while (pos < expr.length && expr[pos] >= '0' && expr[pos] <= '9') { digits++; pos++; }
+        if (expr[pos] === '.') {
+            pos++;
+            while (pos < expr.length && expr[pos] >= '0' && expr[pos] <= '9') { digits++; pos++; }
+        }
+        const text = expr.slice(start, pos);
+        // One decimal point at most: "1.2.3" and "1..2" are rejected instead of
+        // silently parsing their leading number.
+        if (!digits || !/^-?(?:\d+(?:\.\d*)?|\.\d+)$/.test(text)) throw new Error('invalid number');
+        return parseFloat(text);
     }
 
     function parsePrimary() {

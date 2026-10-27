@@ -26,7 +26,6 @@ export class SystemManager {
     static get instance() { return getSystem(); }
     /** @param {SystemManager|null} value */
     static set instance(value) { setSystem(value); }
-    static set instance(value) { setSystem(value); }
 
     constructor(term, cmdModule) {
         SystemManager.instance = this;

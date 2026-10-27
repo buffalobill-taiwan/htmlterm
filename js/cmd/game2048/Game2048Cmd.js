@@ -4,6 +4,7 @@ import { term } from '../../system/sys.js';
 import { CURSOR_HIDE } from '../../util/sgr.js';
 import { BOARD_Y, BOARD_H } from './constants.js';
 import { renderMethods } from './render.js';
+import { installMethods } from '../../util/install-methods.js';
 import { GAME_META } from '../game-meta.js';
 const META = GAME_META['2048'];
 
@@ -203,12 +204,6 @@ class Game2048Cmd extends CmdBase {
 }
 
 // Keep the command as the state owner and preserve class-method descriptors.
-for (const methods of [renderMethods]) {
-    for (const [name, value] of Object.entries(methods)) {
-        Object.defineProperty(Game2048Cmd.prototype, name, {
-            value, writable: true, configurable: true, enumerable: false,
-        });
-    }
-}
+installMethods(Game2048Cmd, renderMethods);
 
 export { Game2048Cmd };

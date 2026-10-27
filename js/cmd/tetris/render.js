@@ -8,11 +8,6 @@ import { term } from '../../system/sys.js';
 import { buildStatRow as _buildDynRow, writeStatRow as _writeDynRow } from '../../util/stat-row.js';
 import { _ghostY } from './board.js';
 
-function _fmtTime(sec) {
-    const m = Math.floor(sec / 60), s = sec % 60;
-    return String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
-}
-
 function _drawPreviewVB(vb, ry, rx, type, innerW, innerH, cells) {
     const shape = SHAPES[type][0];
     const pieceW = shape[0].length * 2;

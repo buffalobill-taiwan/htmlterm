@@ -5,7 +5,9 @@ import { term, system } from '../../system/sys.js';
 import { CURSOR_HIDE, yellow, bold, red, gray, green } from '../../util/sgr.js';
 import { ConfirmDialog } from '../../dialog/ConfirmDialog.js';
 import { seedFromArgs } from '../../util/seed-args.js';
-import { _formatTime, renderMethods } from './render.js';
+import { renderMethods } from './render.js';
+import { installMethods } from '../../util/install-methods.js';
+import { formatDuration } from '../../util/format.js';
 import { GAME_META } from '../game-meta.js';
 const META = GAME_META.sudoku;
 
@@ -143,7 +145,7 @@ class SudokuCmd extends CmdBase {
                 this._board[r][c] = this._solution[r][c];
         this._autoCheck = false;
         this._render();
-        const timeStr = _formatTime(this._timer);
+        const timeStr = formatDuration(this._timer);
         this._rootVB.writeStr(20, 0, bold(red('  Game Over')) + '  ' +
             yellow('Time: ' + timeStr));
         this._rootVB.writeStr(21, 0, gray('  Press [n]ew game or [q]uit'));
@@ -157,7 +159,7 @@ class SudokuCmd extends CmdBase {
             clearInterval(this._timerInterval);
             this._timerInterval = null;
         }
-        const timeStr = _formatTime(this._timer);
+        const timeStr = formatDuration(this._timer);
         this._rootVB.writeStr(20, 0, bold(green('  Congratulations!')) + '  ' +
             yellow('Time: ' + timeStr));
         this._rootVB.writeStr(21, 0, gray('  Press [n]ew game or [q]uit'));
@@ -342,12 +344,6 @@ class SudokuCmd extends CmdBase {
 }
 
 // Keep the command as the state owner and preserve class-method descriptors.
-for (const methods of [renderMethods]) {
-    for (const [name, value] of Object.entries(methods)) {
-        Object.defineProperty(SudokuCmd.prototype, name, {
-            value, writable: true, configurable: true, enumerable: false,
-        });
-    }
-}
+installMethods(SudokuCmd, renderMethods);
 
 export { SudokuCmd };
