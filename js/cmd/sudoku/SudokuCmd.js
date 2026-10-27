@@ -22,15 +22,15 @@ class SudokuCmd extends CmdBase {
             this.error(error);
             return this.showHelp();
         }
-        this._hintDigit = 0;
+        this._focusNumber = 1;
+        this._hintVisible = false;
         this._hintMask = new Uint8Array(SIZE * SIZE);
-        const releaseHint = () => this._setHintDigit(0);
+        const releaseHint = () => this._setHintVisible(false);
         // Observe the physical release before IME/input routing can consume it.
         // Checking modifier state also recovers when a platform reports a
         // different key name for the release.
         const releaseHintOnKeyUp = event => {
-            if (event.key === 'Control' || event.code === 'ControlLeft' ||
-                event.code === 'ControlRight' || event.ctrlKey === false) releaseHint();
+            if (event.ctrlKey === false) releaseHint();
         };
         const showHintOnKeyDown = event => {
             const top = system.cmdStack[system.cmdStack.length - 1];
@@ -38,10 +38,12 @@ class SudokuCmd extends CmdBase {
             if (!event.ctrlKey || event.altKey || event.metaKey || event.shiftKey) return;
             const digit = /^[1-9]$/.test(event.key) ? Number(event.key) :
                 /^Digit[1-9]$/.test(event.code) ? Number(event.code.slice(-1)) : 0;
-            if (!digit) return;
-            event.preventDefault();
-            event.stopPropagation();
-            this._setHintDigit(digit);
+            if (digit) {
+                event.preventDefault();
+                event.stopPropagation();
+                this._setFocusNumber(digit);
+            }
+            this._setHintVisible(true);
         };
         window.addEventListener('keydown', showHintOnKeyDown, true);
         window.addEventListener('keyup', releaseHintOnKeyUp, true);
@@ -64,7 +66,8 @@ class SudokuCmd extends CmdBase {
     }
 
     _pickDifficulty() {
-        this._setHintDigit(0);
+        this._setHintVisible(false);
+        this._focusNumber = 1;
         this._board = _createEmpty();
         this._given = Array.from({ length: SIZE }, () => Array(SIZE).fill(false));
         this._solution = _createEmpty();
@@ -89,6 +92,9 @@ class SudokuCmd extends CmdBase {
     }
 
     _startGame(difficulty, seed) {
+        this._focusNumber = 1;
+        this._hintVisible = false;
+        this._hintMask.fill(0);
         this._difficulty = difficulty;
         this._completed = false;
         this._timer = 0;
@@ -125,7 +131,7 @@ class SudokuCmd extends CmdBase {
 
     _giveUpConfirm() {
         if (this._completed) return;
-        this._setHintDigit(0);
+        this._setHintVisible(false);
         system.createDialog(ConfirmDialog, 'sudoku-confirm', {
             title: 'Confirm',
             message: 'Give up and reveal\nthe answer?',
@@ -134,7 +140,7 @@ class SudokuCmd extends CmdBase {
     }
 
     _giveUp() {
-        this._setHintDigit(0);
+        this._setHintVisible(false);
         this._completed = true;
         if (this._timerInterval) {
             clearInterval(this._timerInterval);
@@ -153,7 +159,7 @@ class SudokuCmd extends CmdBase {
     }
 
     _win() {
-        this._setHintDigit(0);
+        this._setHintVisible(false);
         this._completed = true;
         if (this._timerInterval) {
             clearInterval(this._timerInterval);
@@ -166,19 +172,29 @@ class SudokuCmd extends CmdBase {
         term.writeVB(this._rootVB);
     }
 
-    _setHintDigit(digit) {
-        if (digit === this._hintDigit) return;
-        this._hintDigit = digit;
+    _setFocusNumber(digit) {
+        if (digit === this._focusNumber) return;
+        const previous = this._focusNumber;
+        this._focusNumber = digit;
+        this._drawSidebarRow(this._sidebarVB, previous);
+        this._drawSidebarRow(this._sidebarVB, digit);
+        if (this._hintVisible) this._refreshHint();
+        else term.writeVB(this._rootVB);
+    }
+
+    _setHintVisible(visible) {
+        if (visible === this._hintVisible) return;
+        this._hintVisible = visible;
         this._refreshHint();
     }
 
     _refreshHint() {
         const mask = this._hintMask;
         mask.fill(0);
-        if (this._hintDigit) {
+        if (this._hintVisible) {
             for (let r = 0; r < SIZE; r++) {
                 for (let c = 0; c < SIZE; c++) {
-                    if (this._board[r][c] !== this._hintDigit) continue;
+                    if (this._board[r][c] !== this._focusNumber) continue;
                     const br = Math.floor(r / BOX) * BOX;
                     const bc = Math.floor(c / BOX) * BOX;
                     for (let i = 0; i < SIZE; i++) {
@@ -251,6 +267,7 @@ class SudokuCmd extends CmdBase {
     }
 
     _enterDigit(num) {
+        this._setFocusNumber(num);
         const r = this._cursorRow;
         const c = this._cursorCol;
         if (this._given[r][c]) return;
@@ -263,7 +280,21 @@ class SudokuCmd extends CmdBase {
             this._errors.delete(r + ',' + c);
         }
 
-        if (this._hintDigit) this._refreshHint();
+        if (oldVal !== num) {
+            const { counts, total } = this._countDigits();
+            const complete = digit => counts[digit] === SIZE && total[digit] === SIZE;
+            if (complete(num)) {
+                for (let offset = 1; offset < SIZE; offset++) {
+                    const next = (num - 1 + offset) % SIZE + 1;
+                    if (!complete(next)) {
+                        this._setFocusNumber(next);
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (this._hintVisible) this._refreshHint();
         this._renderRow(r);
         if (oldVal > 0) this._updateDigitRow(oldVal);
         if (num > 0 && num !== oldVal) this._updateDigitRow(num);
@@ -278,7 +309,7 @@ class SudokuCmd extends CmdBase {
         const oldVal = this._board[r][c];
         this._board[r][c] = 0;
         this._errors.delete(r + ',' + c);
-        if (this._hintDigit) this._refreshHint();
+        if (this._hintVisible) this._refreshHint();
         this._renderRow(r);
         this._updateDigitRow(oldVal);
     }
@@ -297,7 +328,8 @@ class SudokuCmd extends CmdBase {
     }
 
     _restart() {
-        this._setHintDigit(0);
+        this._setHintVisible(false);
+        this._focusNumber = 1;
         for (let r = 0; r < SIZE; r++)
             for (let c = 0; c < SIZE; c++)
                 this._board[r][c] = this._given[r][c] ? this._initialBoard[r][c] : 0;
@@ -318,7 +350,7 @@ class SudokuCmd extends CmdBase {
     }
 
     _quit() {
-        this._setHintDigit(0);
+        this._setHintVisible(false);
         if (this._difficultyDialog) {
             this._difficultyDialog.close();
             this._difficultyDialog = null;

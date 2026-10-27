@@ -87,8 +87,8 @@ const renderMethods = {
         this._drawHeader(this._rootVB);
         if (this._seed != null)
             this._rootVB.writeStr(2, 51, gray('seed: ' + this._seed));
-        this._rootVB.writeStr(4, 51, gray('Ctrl+1-9: Mask Hint'));
-        this._rootVB.writeStr(5, 51, gray('Release Ctrl to clear'));
+        this._rootVB.writeStr(4, 51, gray('Hold Ctrl: Mask Hint'));
+        this._rootVB.writeStr(5, 51, gray('Ctrl+1-9: Change focus'));
         this._drawBoardBorders(this._boardVB);
         this._drawSidebarFrame(this._sidebarVB);
 
@@ -148,7 +148,12 @@ const renderMethods = {
             styled = gray(visible);
         }
         const w = displayWidth(visible);
-        return styled + ' '.repeat(Math.max(0, 5 - w));
+        const padding = ' '.repeat(Math.max(0, 5 - w));
+        if (n === this._focusNumber) {
+            const bg = '\x1B[48;5;52m';
+            return bg + styled + bg + padding + '\x1B[0m';
+        }
+        return styled + padding;
     },
 
     _updateDigitRow(n) {
@@ -163,9 +168,9 @@ const renderMethods = {
         const isError = auto && !isGiven && val !== 0 && this._hasConflict(r, c);
         const digit = val !== 0 ? String(val) : ' ';
 
-        if (this._hintDigit && (val !== 0 || this._hintMask?.[r * SIZE + c])) {
+        if (this._hintVisible && (val !== 0 || this._hintMask?.[r * SIZE + c])) {
             // Keep the cursor's existing inverse style on the center character.
-            const bg = val === this._hintDigit ? '\x1B[48;5;52m' : '\x1B[48;5;238m';
+            const bg = val === this._focusNumber ? '\x1B[48;5;52m' : '\x1B[48;5;238m';
             const styled = isError ? red(bold(digit)) : isGiven ? cyan(bold(digit)) :
                 val !== 0 ? green(digit) : digit;
             return bg + ' ' + (isCur ? '\x1B[49;7m' : '') + styled +

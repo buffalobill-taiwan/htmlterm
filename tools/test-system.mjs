@@ -575,7 +575,7 @@ async function run() {
         H.system.dispose();
     });
 
-    await record('Sudoku: Ctrl digit hints and physical release', async () => {
+    await record('Sudoku: focus number, held Ctrl hints and physical release', async () => {
         const previousWindow = globalThis.window;
         globalThis.window = new EventTarget();
         const H = makeHarness({ SudokuCmd });
@@ -592,16 +592,20 @@ async function run() {
             const cmd = H.system._cmdInstances.sudoku;
             const board = JSON.stringify(cmd._board);
             const hasHint = () => H.screen.buffer.some(row => row.some(cell => cell.bg === 238));
+            assert(cmd._focusNumber === 1, 'initial focus is 1');
+            key('keydown', { key: 'Control', code: 'ControlLeft', ctrlKey: true });
+            assert(hasHint(), 'Ctrl alone shows the initial focus hint');
+            key('keyup', { key: 'Control', ctrlKey: false });
             for (let n = 1; n <= 9; n++) {
                 const down = key('keydown', { key: String(n), code: 'Digit' + n, ctrlKey: true });
                 assert(down.defaultPrevented, 'shortcut default is prevented');
-                assert(cmd._hintDigit === n, 'Ctrl selects requested digit');
+                assert(cmd._focusNumber === n, 'Ctrl selects requested digit');
                 assert(hasHint(), 'hint is visible');
                 key('keyup', { key: String(n), ctrlKey: true });
                 assert(hasHint(), 'digit release keeps hint while Ctrl is held');
                 H.screen.dirtyRows.clear();
                 key('keyup', { key: 'Control', code: 'ControlLeft', ctrlKey: false, isComposing: true });
-                assert(cmd._hintDigit === 0 && !hasHint(), 'Ctrl release clears hint even during composition');
+                assert(cmd._focusNumber === n && !cmd._hintVisible && !hasHint(), 'Ctrl release clears hint even during composition');
                 assert(H.screen.dirtyRows.size > 0, 'cleared board is scheduled for repaint');
             }
             assert(JSON.stringify(cmd._board) === board, 'shortcuts do not enter digits');
@@ -609,7 +613,7 @@ async function run() {
             assert(!hasHint(), 'old Shift shortcut no longer activates hints');
             key('keydown', { key: '1', ctrlKey: true });
             key('keydown', { key: '2', ctrlKey: true });
-            assert(cmd._hintDigit === 2, 'holding Ctrl allows switching digits');
+            assert(cmd._focusNumber === 2, 'holding Ctrl allows switching digits');
             const mask = Array.from(cmd._hintMask).join(',');
             for (const [sequence, row, col] of [
                 ['\x1B[1;5A', 3, 4], ['\x1B[1;5D', 3, 3],
@@ -617,7 +621,7 @@ async function run() {
             ]) {
                 H.system.handleInput(sequence);
                 assert(cmd._cursorRow === row && cmd._cursorCol === col, 'Ctrl arrow moves cursor');
-                assert(cmd._hintDigit === 2 && Array.from(cmd._hintMask).join(',') === mask,
+                assert(cmd._focusNumber === 2 && Array.from(cmd._hintMask).join(',') === mask,
                     'Ctrl arrow preserves exclusion hint');
             }
             for (let i = 0; i < 12; i++) H.system.handleInput('\x1B[1;5A');
@@ -625,6 +629,61 @@ async function run() {
 
             window.dispatchEvent(new Event('blur'));
             assert(!hasHint(), 'blur clears hint');
+            for (const given of [true, false]) {
+                const r = cmd._given.findIndex(row => row.includes(given));
+                const c = cmd._given[r].indexOf(given);
+                cmd._cursorRow = r;
+                cmd._cursorCol = c;
+                const before = cmd._board[r][c];
+                H.system.handleInput('7');
+                assert(cmd._focusNumber === 7, 'number input updates focus on any cell');
+                assert(cmd._board[r][c] === (given ? before : 7), 'only editable cells change');
+                const focused = cmd._sidebarVB._buffer[13];
+                assert(focused.slice(1, 6).every(cell => cell.bg === 52), 'full focus panel interior is red');
+                assert(focused[0].bg !== 52 && focused[6].bg !== 52, 'panel border stays unchanged');
+                key('keydown', { key: 'Control', ctrlKey: true });
+                assert(hasHint(), 'Ctrl alone reuses the selected focus');
+                key('keyup', { key: 'Control', ctrlKey: false });
+            }
+            const prepareCompletion = (digit, incomplete) => {
+                cmd._setHintVisible(false);
+                cmd._completed = false;
+                cmd._board = cmd._solution.map(row => row.map(value => incomplete.includes(value) ? 0 : value));
+                cmd._given = cmd._board.map(row => row.map(() => false));
+                cmd._cursorRow = 0;
+                cmd._cursorCol = cmd._solution[0].indexOf(digit);
+                cmd._board[0][cmd._cursorCol] = 0;
+                cmd._render();
+            };
+            prepareCompletion(4, [7]);
+            H.system.handleInput('4');
+            assert(cmd._focusNumber === 7, 'completion skips already complete numbers');
+            assert(cmd._sidebarVB._buffer[13].slice(1, 6).every(cell => cell.bg === 52),
+                'automatic focus advances the sidebar highlight');
+            H.system.handleInput('4');
+            assert(cmd._focusNumber === 4, 'reentering the same digit does not advance focus');
+            prepareCompletion(9, [2]);
+            cmd._autoCheck = false;
+            H.system.handleInput('9');
+            assert(cmd._focusNumber === 2, 'completion wraps past 9 even with check disabled');
+            key('keydown', { key: 'Control', ctrlKey: true });
+            assert(cmd._hintVisible && !cmd._hintMask.some(Boolean),
+                'hint uses the automatically selected number, absent from this fixture');
+            prepareCompletion(4, [7]);
+            const extraCol = cmd._solution[1].indexOf(7);
+            cmd._board[1][extraCol] = 4;
+            H.system.handleInput('4');
+            assert(cmd._focusNumber === 4, 'conflicting digits do not count as complete');
+            prepareCompletion(9, []);
+            H.system.handleInput('9');
+            assert(cmd._completed && cmd._focusNumber === 9,
+                'final completion wins and retains focus when no unfinished number remains');
+            cmd._restart();
+            H.system.handleInput('r');
+            assert(cmd._focusNumber === 1 && !hasHint(), 'restart resets focus and hint');
+            assert(cmd._sidebarVB._buffer[13].slice(1, 6).every(cell => cell.bg !== 52),
+                'previous focus background is removed');
+            key('keydown', { key: 'Control', ctrlKey: true });
             H.system.handleInput('g');
             assert(!key('keydown', { key: '1', ctrlKey: true }).defaultPrevented,
                 'parent does not intercept shortcuts while a dialog is open');
