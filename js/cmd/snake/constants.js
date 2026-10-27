@@ -23,14 +23,16 @@ const DY = [-1, 0, 1, 0];
 const OPPOSITE = [DIR.DOWN, DIR.LEFT, DIR.UP, DIR.RIGHT];
 
 const DIFFICULTY = {
-    easy:   { startSpeed: 200, speedUpEvery: 8,  label: 'Easy' },
-    medium: { startSpeed: 170, speedUpEvery: 5,  label: 'Medium' },
-    hard:   { startSpeed: 130, speedUpEvery: 3,  label: 'Hard' },
+    easy:   { startSpeedLevel: 1, label: 'Easy' },
+    medium: { startSpeedLevel: 3, label: 'Medium' },
+    hard:   { startSpeedLevel: 7, label: 'Hard' },
 };
 
-const SPEED_LEVELS = [200, 180, 160, 140, 120, 100, 80, 65, 50, 40];
+const SPEED_UP_EVERY = 3;
+const SPEED_LEVELS = Array.from({ length: 17 }, (_, i) =>
+    Math.max(40, Math.round(200 * 0.9 ** i)));
 
 export {
     BOARD_W, BOARD_H, SIDEBAR_W, BOARD_X, BOARD_Y, SIDEBAR_X, DIFFICULTY, GRID_COLS, GRID_ROWS,
-    DIR, SPEED_LEVELS, OPPOSITE, DY, DX,
+    DIR, SPEED_LEVELS, SPEED_UP_EVERY, OPPOSITE, DY, DX,
 };

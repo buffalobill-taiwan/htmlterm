@@ -1,6 +1,6 @@
 import { VirtualBuffer } from '../../util/VirtualBuffer.js';
 import { term } from '../../system/sys.js';
-import { BOARD_W, BOARD_H, SIDEBAR_W, BOARD_X, BOARD_Y, SIDEBAR_X, DIFFICULTY } from './constants.js';
+import { BOARD_W, BOARD_H, SIDEBAR_W, BOARD_X, BOARD_Y, SIDEBAR_X, DIFFICULTY, SPEED_LEVELS } from './constants.js';
 import { makeCell, bold, cyan, gray } from '../../util/sgr.js';
 import { buildStatRow, writeStatRow } from '../../util/stat-row.js';
 
@@ -77,6 +77,8 @@ const renderMethods = {
         if (!this._dynScore) {
             this._dynScore = buildStatRow(' Score  ');
             this._dynSpeed = buildStatRow(' Speed  ');
+            this._maxSpeedRow = Array.from(' Speed  ' + `${SPEED_LEVELS.length}(max)`.padStart(8),
+                (ch, i) => makeCell(ch, i < 8 ? 7 : 11, 0, i >= 8));
         }
     },
 
@@ -149,7 +151,11 @@ const renderMethods = {
         vb.writeStr(0, 0, bold(cyan('  Snake')) + gray(' [' + DIFFICULTY[this._difficulty].label + ']'));
 
         writeStatRow(buf[2], this._dynScore, this._score);
-        writeStatRow(buf[3], this._dynSpeed, this._speedLevel);
+        if (this._speedLevel === SPEED_LEVELS.length) {
+            for (let i = 0; i < this._maxSpeedRow.length; i++) buf[3][i] = this._maxSpeedRow[i];
+        } else {
+            writeStatRow(buf[3], this._dynSpeed, this._speedLevel);
+        }
 
         vb.writeStr(5, 0, gray('─'.repeat(16)));
         vb.writeStr(7, 0, gray(' ←↑↓→ Move'));

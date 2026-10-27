@@ -2,7 +2,7 @@ import { CmdBase } from '../CmdBase.js';
 import { term } from '../../system/sys.js';
 import { CURSOR_HIDE } from '../../util/sgr.js';
 import {
-    DIFFICULTY, GRID_COLS, GRID_ROWS, DIR, SPEED_LEVELS, OPPOSITE, DY, DX, BOARD_Y, BOARD_H,
+    DIFFICULTY, GRID_COLS, GRID_ROWS, DIR, SPEED_LEVELS, SPEED_UP_EVERY, OPPOSITE, DY, DX, BOARD_Y, BOARD_H,
 } from './constants.js';
 import { renderMethods } from './render.js';
 import { installMethods } from '../../util/install-methods.js';
@@ -43,9 +43,9 @@ class SnakeCmd extends CmdBase {
         const cfg = DIFFICULTY[diff];
         this._difficulty = diff;
         this._score = 0;
-        this._speedLevel = this._speedForInterval(cfg.startSpeed);
+        this._speedLevel = cfg.startSpeedLevel;
         this._startSpeedLevel = this._speedLevel;
-        this._currentInterval = cfg.startSpeed;
+        this._currentInterval = SPEED_LEVELS[this._speedLevel - 1];
         this._completed = false;
         this._paused = false;
         this._difficultyDialog = null;
@@ -71,12 +71,6 @@ class SnakeCmd extends CmdBase {
         this._spawnFood();
         this._render();
         this._startTick();
-    }
-
-    _speedForInterval(interval) {
-        for (let i = SPEED_LEVELS.length - 1; i >= 0; i--)
-            if (interval <= SPEED_LEVELS[i]) return i + 1;
-        return 1;
     }
 
     _startTick() {
@@ -134,17 +128,15 @@ class SnakeCmd extends CmdBase {
     }
 
     _checkSpeedUp() {
-        const cfg = DIFFICULTY[this._difficulty];
         const newLevel = Math.min(
             SPEED_LEVELS.length,
             this._startSpeedLevel + Math.floor(
-                this._score / (10 * cfg.speedUpEvery)
+                this._score / (10 * SPEED_UP_EVERY)
             )
         );
         if (newLevel !== this._speedLevel) {
             this._speedLevel = newLevel;
-            const idx = Math.min(newLevel - 1, SPEED_LEVELS.length - 1);
-            this._currentInterval = SPEED_LEVELS[idx];
+            this._currentInterval = SPEED_LEVELS[newLevel - 1];
             this._startTick();
         }
     }
