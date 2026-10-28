@@ -150,7 +150,7 @@ const renderMethods = {
         const w = displayWidth(visible);
         const padding = ' '.repeat(Math.max(0, 5 - w));
         if (n === this._focusNumber) {
-            const bg = '\x1B[48;5;52m';
+            const bg = '\x1B[48;5;17m';
             return bg + styled + bg + padding + '\x1B[0m';
         }
         return styled + padding;
@@ -170,7 +170,7 @@ const renderMethods = {
 
         if (this._hintVisible && (val !== 0 || this._hintMask?.[r * SIZE + c])) {
             // Keep the cursor's existing inverse style on the center character.
-            const bg = val === this._focusNumber ? '\x1B[48;5;52m' : '\x1B[48;5;238m';
+            const bg = val === this._focusNumber ? '\x1B[48;5;17m' : '\x1B[48;5;238m';
             const styled = isError ? red(bold(digit)) : isGiven ? cyan(bold(digit)) :
                 val !== 0 ? green(digit) : digit;
             return bg + ' ' + (isCur ? '\x1B[49;7m' : '') + styled +

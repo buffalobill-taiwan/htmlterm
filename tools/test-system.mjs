@@ -639,8 +639,8 @@ async function run() {
                 assert(cmd._focusNumber === 7, 'number input updates focus on any cell');
                 assert(cmd._board[r][c] === (given ? before : 7), 'only editable cells change');
                 const focused = cmd._sidebarVB._buffer[13];
-                assert(focused.slice(1, 6).every(cell => cell.bg === 52), 'full focus panel interior is red');
-                assert(focused[0].bg !== 52 && focused[6].bg !== 52, 'panel border stays unchanged');
+                assert(focused.slice(1, 6).every(cell => cell.bg === 17), 'full focus panel interior is dark blue');
+                assert(focused[0].bg !== 17 && focused[6].bg !== 17, 'panel border stays unchanged');
                 key('keydown', { key: 'Control', ctrlKey: true });
                 assert(hasHint(), 'Ctrl alone reuses the selected focus');
                 key('keyup', { key: 'Control', ctrlKey: false });
@@ -658,7 +658,7 @@ async function run() {
             prepareCompletion(4, [7]);
             H.system.handleInput('4');
             assert(cmd._focusNumber === 7, 'completion skips already complete numbers');
-            assert(cmd._sidebarVB._buffer[13].slice(1, 6).every(cell => cell.bg === 52),
+            assert(cmd._sidebarVB._buffer[13].slice(1, 6).every(cell => cell.bg === 17),
                 'automatic focus advances the sidebar highlight');
             H.system.handleInput('4');
             assert(cmd._focusNumber === 4, 'reentering the same digit does not advance focus');
@@ -681,7 +681,7 @@ async function run() {
             cmd._restart();
             H.system.handleInput('r');
             assert(cmd._focusNumber === 1 && !hasHint(), 'restart resets focus and hint');
-            assert(cmd._sidebarVB._buffer[13].slice(1, 6).every(cell => cell.bg !== 52),
+            assert(cmd._sidebarVB._buffer[13].slice(1, 6).every(cell => cell.bg !== 17),
                 'previous focus background is removed');
             key('keydown', { key: 'Control', ctrlKey: true });
             H.system.handleInput('g');
