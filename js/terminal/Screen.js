@@ -521,7 +521,7 @@ export class Screen {
         const a = this.attr;
         const flags = (a.bold ? 1 : 0) | (a.dim ? 2 : 0) | (a.italic ? 4 : 0) |
                       (a.underline ? 8 : 0) | (a.blink ? 16 : 0) | (a.inverse ? 32 : 0) |
-                      (a.conceal ? 64 : 0) | (a.crossedOut ? 128 : 0);
+                      (a.conceal ? 64 : 0) | (a.crossedOut ? 128 : 0) | (a.flipX ? 256 : 0) | (a.flipY ? 512 : 0);
         if (this._blankRef && this._blankFlags === flags &&
             this._blankFg === a.fg && this._blankBg === a.bg) {
             return this._blankRef;

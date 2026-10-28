@@ -286,3 +286,7 @@ still owns writing the prompt.
 
 Read [command authoring](command-authoring.md) for API usage and
 [rendering performance](rendering-performance.md) before changing hot paths.
+
+Project-specific SGR 520/521 enables/disables vertical glyph reflection;
+522/523 enables/disables horizontal glyph reflection. SGR 0 resets both.
+These transform individual glyphs without changing cell order or dimensions.

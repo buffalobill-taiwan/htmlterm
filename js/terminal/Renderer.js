@@ -202,15 +202,20 @@ export class Renderer {
 
             let cls = this._spanClass(fg, bg, cell.italic, cell.underline, cell.crossedOut, cell.blink, cell.dim);
 
-            if (cell.clip) {
+            if (cell.flipX) cls += ' glyph-flip-x';
+            if (cell.flipY) cls += ' glyph-flip-y';
+
+            if (cell.clip || cell.flipX || cell.flipY) {
                 cls += ' clip-cell';
-                const scale = cell.clipScale || 2;
-                const offX = cell.clipOffX || 0;
+                const scale = cell.clip ? (cell.clipScale || 2) : 1;
+                const offX = cell.clipOffX || (cell._clipLeft ? -1 : 0);
                 const offY = cell.clipOffY || 0;
                 const ox = offX * this.charWidth;
                 const oy = offY * this.charHeight;
                 if (span.className === cls && span._clipText === text && span._ox === ox && span._oy === oy && span._clipScale === scale) continue;
                 span.style.setProperty('--glyph-scale', scale);
+                span.style.setProperty('--glyph-width', this.screen.isWide(text) ? 2 : 1);
+                span.style.setProperty('--cell-width', cell.clip || cell._clipLeft || cell._clipRight ? 1 : cell.width);
                 span.style.setProperty('--glyph-x', offX);
                 span.style.setProperty('--glyph-y', offY);
                 let clipSpan = span.firstElementChild;

@@ -758,3 +758,14 @@ html, body {
 }
 
 
+
+#screen .row span.clip-cell { width: calc(var(--cell-width, 1) * var(--char-w)); }
+#screen .row .clip-cell > span {
+    display: block;
+    width: calc(var(--glyph-width, 2) * var(--glyph-scale, 2) * var(--char-w));
+    height: calc(var(--glyph-scale, 2) * var(--char-h));
+    transform: scale(var(--flip-x, 1), var(--flip-y, 1));
+    transform-origin: center center;
+}
+.glyph-flip-x { --flip-x: -1; }
+.glyph-flip-y { --flip-y: -1; }

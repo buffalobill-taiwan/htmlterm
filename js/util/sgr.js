@@ -21,7 +21,7 @@ import {
  * @returns {SgrAttr}
  */
 export function defaultAttr() {
-    return { fg: DEFAULT_FG, bg: DEFAULT_BG, bold: false, dim: false, italic: false, underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, scale: 1 };
+    return { fg: DEFAULT_FG, bg: DEFAULT_BG, bold: false, dim: false, italic: false, underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, scale: 1, flipX: false, flipY: false };
 }
 
 /** Reset an existing attr object to defaults in-place — zero allocation. */
@@ -37,6 +37,8 @@ export function resetAttr(attr) {
     attr.conceal = false;
     attr.crossedOut = false;
     attr.scale = 1;
+    attr.flipX = false;
+    attr.flipY = false;
 }
 
 export const ANSI_PALETTE_256 = [
@@ -114,6 +116,10 @@ export function applySGR(attr, params) {
         else if (p === 27) attr.inverse = false;
         else if (p === 28) attr.conceal = false;
         else if (p === 29) attr.crossedOut = false;
+        else if (p === 520) attr.flipY = true;
+        else if (p === 521) attr.flipY = false;
+        else if (p === 522) attr.flipX = true;
+        else if (p === 523) attr.flipX = false;
         else if (p === 500) attr.scale = 2;
         else if (p === 501) attr.scale = 1;
         else if (p >= 502 && p <= 500 + MAX_TEXT_SCALE) attr.scale = p - 500;
@@ -187,7 +193,7 @@ export function makeCell(ch, arg2, arg3, arg4, arg5) {
     return { ch: ch || ' ', fg: arg2.fg, bg: arg2.bg, bold: arg2.bold,
              dim: arg2.dim, italic: arg2.italic, underline: arg2.underline,
              blink: arg2.blink, inverse: arg2.inverse, conceal: arg2.conceal,
-             crossedOut: arg2.crossedOut, width: arg3 || 1 };
+             crossedOut: arg2.crossedOut, flipX: !!arg2.flipX, flipY: !!arg2.flipY, width: arg3 || 1 };
 }
 
 /** Blinking block cursor for overlay buffers (dialogs, widgets).

@@ -7,18 +7,20 @@ const PRAISE = '贊曰：黔婁之妻有言：「不戚戚於貧賤，不汲汲�
 
 export class FiveWillow extends CmdBase {
     execute(args) {
-        let scale = 1;
+        let scale = 1, inv = false, flip = false;
         for (const arg of args) {
+            if (arg === '--inv') { inv = true; continue; }
+            if (arg === '--flip') { flip = true; continue; }
             const value = textScaleFlag(arg);
             if (value === 0) return this.error('Text scale must be --x2 through --x10.');
             if (value) scale = value;
         }
         const body = TEXT + PRAISE + '\n';
-        this.print(scale > 1 ? textScaleSGR(scale) + body + '\x1B[501m' : body);
+        this.print(textScaleSGR(scale) + (inv ? '\x1B[520m' : '') + (flip ? '\x1B[522m' : '') + body + '\x1B[501;521;523m');
     }
 
     static get commandName() { return '5willow'; }
     static get help() { return 'Print 五柳先生傳'; }
     static get menu() { return '五柳先生傳'; }
-    static get usage() { return '5willow [--x2…--x10|--big]'; }
+    static get usage() { return '5willow [--x2…--x10|--big] [--inv] [--flip]'; }
 }

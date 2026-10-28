@@ -264,3 +264,8 @@ frame count and compressed sizes without writing. Already-compressed input is
 always inspected, even when an output path is supplied. For raw input, omitting
 `--output` replaces a JSON input in place or writes a sibling `.json` for a
 `.js`/`.mjs` input. Specify an output path to preserve the raw JSON.
+
+Glyph reflection: compare `echo --inv ABC中文`, `echo --flip ABC中文`,
+and `echo --x2 --inv --flip ABC中文 tail`. All echo text now shares the
+selected scale. Check `5willow --x10 --flip`, scrolling, overlay clipping,
+and Ctrl+C followed by ordinary output; the prompt must not remain reflected.

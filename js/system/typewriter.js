@@ -79,7 +79,7 @@ export class Typewriter {
         this._active = false;
         this._accumulator = 0;
         this._sgrAttr.scale = 1;
-        this.term.write('\x1B[501m' + CURSOR_SHOW);
+        this.term.write('\x1B[501;521;523m' + CURSOR_SHOW);
     }
 
     onDrain(callback) {
