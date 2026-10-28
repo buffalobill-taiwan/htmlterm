@@ -49,7 +49,7 @@ contains shared dimensions, difficulty settings, and other fixed configuration.
 |---|---|---|
 | [game2048](../js/cmd/game2048/index.js) | `Game2048Cmd` | `board.js`: sliding, merging, spawning, and move availability |
 | [gweled](../js/cmd/gweled/index.js) | `GweledCmd` | `board.js`: matches, gravity, legal swaps, and chain scores |
-| [klotski](../js/cmd/klotski/index.js) | `KlotskiCmd` | `LevelSelectDialog.js`: level chooser; level data and solutions stay in `js/data/` |
+| [klotski](../js/cmd/klotski/index.js) | `KlotskiCmd` | Level chooser configures shared `SelectDialog`; level data and solutions stay in `js/data/` |
 | [minesweeper](../js/cmd/minesweeper/index.js) | `MinesweeperCmd` | `solver.js`: seeded generation, first-reveal parsing, flood reveal, and logical solvability checks |
 | [nurikabe](../js/cmd/nurikabe/index.js) | `NurikabeCmd` | `analysis.js`: clue groups, pools, and sea connectivity; `generation-worker.js`: runs seeded generation off the UI thread and is terminated on completion or cancellation; generation rules stay in `js/util/nurikabe-engine.js` |
 | [othello](../js/cmd/othello/index.js) | `OthelloCmd` | `board.js`: legal moves and flips; `ai.js`: evaluation and search |

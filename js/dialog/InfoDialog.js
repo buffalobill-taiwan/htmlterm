@@ -18,7 +18,14 @@ export class InfoDialog extends Dialog {
         const h = content.height + 2;
         const pos = centeredDialogPos(term, width, h);
 
-        super(term, { ...opts, width, header: false, footer: false });
+        super(term, {
+            ...opts, width, header: false, footer: false,
+            keyActions: {
+                q: { close: false, onAction: opts.onQuit || (() => {}) },
+                Q: { close: false, onAction: opts.onQuit || (() => {}) },
+                ...opts.keyActions,
+            },
+        });
 
         this.h = h;
         this.x = opts.x != null ? opts.x : pos.x;
@@ -27,7 +34,6 @@ export class InfoDialog extends Dialog {
         this._contentSlot = null;
         this._onExit = opts.onExit || (() => {});
         this._onCancel = opts.onCancel || (() => {});
-        this._onQuit = opts.onQuit || (() => {});
     }
 
     _initBuffer() {
@@ -48,10 +54,6 @@ export class InfoDialog extends Dialog {
     _onKey(data) {
         if (data.length !== 1) return;
         const code = data.charCodeAt(0);
-        if (code === 0x71 || code === 0x51) {
-            this._onQuit();
-            return;
-        }
         if (code === 0x1B || code === 0x03) {
             return this.complete(this._onCancel);
         }

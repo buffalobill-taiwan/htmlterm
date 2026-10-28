@@ -1,7 +1,7 @@
 import { CmdBase } from '../CmdBase.js';
 import { term, system } from '../../system/sys.js';
 import { CURSOR_HIDE } from '../../util/sgr.js';
-import { LevelSelectDialog } from './LevelSelectDialog.js';
+import { SelectDialog } from '../../dialog/SelectDialog.js';
 import LEVELS from '../../data/klotski-levels.json' with { type: 'json' };
 import { ROWS, COLS, FINISH_FALL, BOARD_Y, BOARD_H } from './constants.js';
 import { NAME_COLOR, renderMethods } from './render.js';
@@ -32,7 +32,10 @@ class KlotskiCmd extends CmdBase {
         this._history = [];
         term.write('\x1B[2J\x1B[1;1H');
         term.write(CURSOR_HIDE);
-        this._levelDialog = this.openDialog(LevelSelectDialog, 'klotski-level', {
+        this._levelDialog = this.openDialog(SelectDialog, 'klotski-level', {
+            layout: 'list', width: 40, title: '選擇關卡 Klotski', numbered: true,
+            footer: '↑↓ 選關  ↩ 開始  ESC 離開',
+            options: LEVELS.map(level => ({ label: level.name, trailing: level.mini + '步' })),
             onSelect: (idx) => {
                 this._levelDialog = null;
                 this._startGame(idx);

@@ -1,5 +1,5 @@
 import { FieldPickerDialog } from '../../../dialog/FieldPickerDialog.js';
-import { CompactListDialog } from '../../../dialog/CompactListDialog.js';
+import { SelectDialog } from '../../../dialog/SelectDialog.js';
 import { ConfirmDialog } from '../../../dialog/ConfirmDialog.js';
 import { ShowDialog } from '../../../dialog/ShowDialog.js';
 import { term } from '../../../system/sys.js';
@@ -23,39 +23,6 @@ const RULES = [
     '結算後 Enter 下一局；r 重玩本局，恢復局前積分。',
     'n 重新設定並清零積分；q 退出；Ctrl+C 立即退出。',
 ].join('\n');
-
-// DialogFrame still owns routing; finish the dialog before invoking game controls.
-class ActionDialog extends CompactListDialog {
-    constructor(term, opts) { super(term, opts); this._control = opts.onControl; }
-    _onKey(data) {
-        if (data === '\x03' || /^[hrnq]$/i.test(data)) return this.complete(this._control, data);
-        return super._onKey(data);
-    }
-}
-
-class GameConfirmDialog extends ConfirmDialog {
-    constructor(term, opts) { super(term, opts); this._abort = opts.onAbort; }
-    _onKey(data) {
-        if (data === '\x03') return this.complete(this._abort);
-        return super._onKey(data);
-    }
-}
-
-class SetupDialog extends FieldPickerDialog {
-    constructor(term, opts) { super(term, opts); this._abort = opts.onAbort; }
-    _onKey(data) {
-        if (data === '\x03') return this.complete(this._abort);
-        return super._onKey(data);
-    }
-}
-
-class RulesDialog extends ShowDialog {
-    constructor(term, opts) { super(term, opts); this._abort = opts.onAbort; }
-    _onKey(data) {
-        if (data === '\x03') return this.complete(this._abort);
-        return super._onKey(data);
-    }
-}
 
 const CALL_BUFFERS = new Map();
 
@@ -100,7 +67,7 @@ export const mahjongMethods = {
         if (!this._mahjong || this._dialog) return;
         this._stopAsync();
         const state = this._mahjong, epoch = this._epoch;
-        this._dialog = this.openDialog(RulesDialog, 'cchess-mahjong-rules', {
+        this._dialog = this.openDialog(ShowDialog, 'cchess-mahjong-rules', {
             title: '象棋麻將規則', width: 72, message: RULES,
             footer: 'Enter / Esc 返回遊戲  Ctrl+C 退出',
             onExit: () => {
@@ -116,7 +83,7 @@ export const mahjongMethods = {
         this._mahjong = this._mahjongInitial = null;
         this._mahjongError = null;
         this._render();
-        this._dialog = this.openDialog(SetupDialog, 'cchess-mahjong-setup', {
+        this._dialog = this.openDialog(FieldPickerDialog, 'cchess-mahjong-setup', {
             title: '象棋麻將', width: 56,
             footer: '↑↓ 切換  ← → 選擇  Enter 開始  Esc 返回',
             fields: [
@@ -186,7 +153,8 @@ export const mahjongMethods = {
             this._applyMahjongAction(actions[index]);
         };
         const tile = state.pending?.tile;
-        this._dialog = this.openDialog(ActionDialog, 'cchess-mahjong-action', {
+        this._dialog = this.openDialog(SelectDialog, 'cchess-mahjong-action', {
+            layout: 'list', footer: false, align: 'center',
             width: 32,
             title: tile ? `${WINDS[state.pending.seat]}家打出 ${CHARS[tile.color][tile.type]}` : '可以自摸',
             options: actions.map(a => a.type === 'pass' ? '過' : a.type === 'win'
@@ -195,7 +163,9 @@ export const mahjongMethods = {
                     .sort((a, b) => a.kind - b.kind).map(t => CHARS[t.color][t.type]).join('')),
             onSelect: select,
             onCancel: () => select(actions.length - 1),
-            onControl: data => { this._dialog = null; this._onMahjongKey(data); },
+            keyActions: Object.fromEntries(['h', 'H', 'r', 'R', 'n', 'N', 'q', 'Q', '\x03'].map(key => [key, {
+                onAction: data => { this._dialog = null; this._onMahjongKey(data); },
+            }])),
         });
     },
 
@@ -208,7 +178,7 @@ export const mahjongMethods = {
     _confirmMahjong(newMatch) {
         if (this._dialog) return;
         this._stopAsync();
-        this._dialog = this.openDialog(GameConfirmDialog, 'cchess-mahjong-confirm', {
+        this._dialog = this.openDialog(ConfirmDialog, 'cchess-mahjong-confirm', {
             title: newMatch ? '重開象棋麻將' : '退出象棋麻將',
             message: newMatch ? '結束本場並重新設定？積分將歸零。' : '確定退出目前的遊戲嗎？',
             confirmLabel: newMatch ? '重開' : '退出', cancelLabel: '繼續', selectedIndex: 1,

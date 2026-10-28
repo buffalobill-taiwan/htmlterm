@@ -312,11 +312,10 @@ export class CmdBase {
      * @param {Function} DialogClass
      * @param {string|null} key - Position-persistence key, or null to skip
      * @param {object} opts
-     * @param {...any} ctorArgs - Extra constructor args before opts
      * @returns {object|null} Dialog instance
      */
-    openDialog(DialogClass, key, opts, ...ctorArgs) {
-        return system.createDialog(DialogClass, key, opts, ...ctorArgs);
+    openDialog(DialogClass, key, opts) {
+        return system.createDialog(DialogClass, key, opts);
     }
 
     /**

@@ -26,6 +26,8 @@ export class Dialog {
         this.title = opts.title || '';
         this.footer = opts.footer || '';
         this.closed = false;
+        this._onAbort = opts.onAbort;
+        this._keyActions = opts.keyActions || {};
         this.x = opts.x != null ? opts.x : 0;
         this.y = opts.y != null ? opts.y : 0;
         this.h = 0;
@@ -88,6 +90,20 @@ export class Dialog {
         }
         // Keep the selection and callbacks unchanged while the dialog is hidden.
         if (this._peekHeld) return;
+        const action = data.length === 1 && Object.hasOwn(this._keyActions, data)
+            ? this._keyActions[data] : null;
+        if (data === '\x03' && this._onAbort) {
+            this.complete(this._onAbort);
+            this.close();
+            return;
+        }
+        if (action) {
+            if (action.close !== false) {
+                this.complete(action.onAction, data);
+                this.close();
+            } else action.onAction(data);
+            return;
+        }
         const csi = parseCSI(data);
         if (this._fullHeight > this.h && csi?.final === '~' && (csi.params === '5' || csi.params === '6')) {
             const step = this.h - this._headerRows - this._footerRows;

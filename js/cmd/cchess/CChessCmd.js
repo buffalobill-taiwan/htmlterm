@@ -9,14 +9,13 @@ import { INITIAL_FEN } from './constants.js';
 import { boardKey, positionKey, hasLost, responseMove } from './endgames.js';
 import { animateMove } from './animation.js';
 import { ConfirmDialog } from '../../dialog/ConfirmDialog.js';
-import { CompactListDialog } from '../../dialog/CompactListDialog.js';
+import { SelectDialog } from '../../dialog/SelectDialog.js';
 import { FieldPickerDialog } from '../../dialog/FieldPickerDialog.js';
 import { renderMethods } from './render.js';
 import { installMethods } from '../../util/install-methods.js';
 import { darkMethods } from './dark.js';
 import { mahjongMethods } from './mahjong/game.js';
 import { mahjongRenderMethods } from './mahjong/render.js';
-import { EndgameSelectDialog } from './EndgameSelectDialog.js';
 import { GAME_META } from '../game-meta.js';
 const META = GAME_META.cchess;
 
@@ -52,7 +51,8 @@ export class CChessCmd extends CmdBase {
         this._board = this._mode = null;
         this._mahjong = this._mahjongInitial = null;
         this._render();
-        this._dialog = this.openDialog(CompactListDialog, 'cchess-select', {
+        this._dialog = this.openDialog(SelectDialog, 'cchess-select', {
+            layout: 'list', footer: false, align: 'center',
             title: '中國象棋',
             options: ['傳統象棋', '殘局遊戲', '休閒暗棋', '象棋麻將'],
             onSelect: i => {
@@ -111,8 +111,11 @@ export class CChessCmd extends CmdBase {
             this._index = list;
             this._busy = false; this._message = null;
             if (this._dialog) { this._dialog.close(); this._dialog = null; }
-            this._dialog = this.openDialog(EndgameSelectDialog, 'cchess-endgame', {
-                options: list,
+            this._dialog = this.openDialog(SelectDialog, 'cchess-endgame', {
+                width: 40, title: '選擇殘局 中國象棋', visibleCount: 10,
+                footer: '↑↓選關 PgUp/Dn翻頁 ↩開始 Esc返回',
+                layout: 'list', numbered: true, scrollbar: true,
+                options: list.map(item => ({ label: item.name, trailing: item.step + '步' })),
                 onSelect: i => { this._dialog = null; this._loadEndgame(list[i]); },
                 onCancel: () => { this._dialog = null; this._pickMode(); },
             });

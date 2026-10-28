@@ -139,7 +139,7 @@ The first two puzzles were
 supplied as `/tmp/傌炮兵圍城.json` and
 `/tmp/雙俥夾車攻.json`.
 
-The endgame selector uses MenuDialog scrolling with at most 10 visible puzzles
+The endgame selector configures the shared SelectDialog list and scrolling with at most 10 visible puzzles
 and a scrollbar. Up/Down moves the selection, PageUp/PageDown moves by one
 page, and Home/End selects the first/last puzzle. Enter completes the dialog
 before loading the selected puzzle; Escape returns to mode selection.

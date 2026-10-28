@@ -14,16 +14,22 @@ const META = GAME_META.jpmj;
 
 const SETTINGS = [
     { key: 'gameLength', label: '對戰長度', value: '東風戰',
+      picker: { layout: 'horizontal' },
       options: ['東風戰', '半莊戰', '一莊戰'] },
     { key: 'aiLeft', label: '上家 AI', value: '一般人',
+      picker: { layout: 'grid', cols: 3, width: 36 },
       options: ['初學者', '一般人', '高手', '国士命', '断么廚', '門清俠'] },
     { key: 'aiAcross', label: '對家 AI', value: '一般人',
+      picker: { layout: 'grid', cols: 3, width: 36 },
       options: ['初學者', '一般人', '高手', '国士命', '断么廚', '門清俠'] },
     { key: 'aiRight', label: '下家 AI', value: '一般人',
+      picker: { layout: 'grid', cols: 3, width: 36 },
       options: ['初學者', '一般人', '高手', '国士命', '断么廚', '門清俠'] },
     { key: 'autoPlayAI', label: '託管 AI', value: '一般人',
+      picker: { layout: 'grid', cols: 3, width: 36 },
       options: ['初學者', '一般人', '高手', '国士命', '断么廚', '門清俠'] },
     { key: 'seat', label: '起始座位', value: '隨機',
+      picker: { layout: 'horizontal' },
       options: ['隨機', '東', '南', '西', '北'] },
 ];
 

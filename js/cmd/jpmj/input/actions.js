@@ -1,5 +1,5 @@
 import { checkTenpai, getWaitingTiles } from '../yaku/index.js';
-import { VerticalSelectDialog } from '../../../dialog/VerticalSelectDialog.js';
+import { SelectDialog } from '../../../dialog/SelectDialog.js';
 import { displayWidth } from '../../../util/display-width.js';
 
 const actionsMethods = {
@@ -144,12 +144,12 @@ const actionsMethods = {
                 return;
             }
             const maxW = 3 + Math.max(...options.map(o => o.waits.length)) * 2;
-            this._openPeekDialog(VerticalSelectDialog, 'jpmj-riichi', {
+            this._openPeekDialog(SelectDialog, 'jpmj-riichi', {
                 title: '立直',
                 message: 'どの牌を捨てますか？',
                 options,
                 width: Math.max(displayWidth('どの牌を捨てますか？') + 4, maxW + 10),
-                cols: 1,
+                layout: 'list',
                 cellHeight: 2,
                 renderOption: (idx, o, sel) => this._buildRiichiStripVB(o, sel),
                 onSelect: (idx) => {
@@ -167,12 +167,12 @@ const actionsMethods = {
 
         if (action && typeof action === 'object') {
             if (action.type === 'chi' && action.chiSets && action.chiSets.length > 1) {
-                this._openPeekDialog(VerticalSelectDialog, 'jpmj-chi', {
+                this._openPeekDialog(SelectDialog, 'jpmj-chi', {
                     title: 'チー選択',
                     message: 'どの組み合わせでチーしますか？',
                     options: action.chiSets,
                     width: displayWidth('どの組み合わせでチーしますか？') + 6,
-                    cols: 1,
+                    layout: 'list',
                     cellHeight: 2,
                     renderOption: (idx, set, sel) => this._buildTileStripVB(set, sel),
                     onSelect: (idx) => {
@@ -212,11 +212,11 @@ const actionsMethods = {
                 }
                 const key = action.type === 'ankans' ? 'jpmj-ankans' : 'jpmj-kakans';
                 const kanLabel = action.type === 'ankans' ? '暗槓' : '加槓';
-                this._openPeekDialog(VerticalSelectDialog, key, {
+                this._openPeekDialog(SelectDialog, key, {
                     title: action.type === 'ankans' ? '暗槓選択' : '加槓選択',
                     options: opts,
                     width: Math.max(displayWidth(action.type === 'ankans' ? '暗槓選択' : '加槓選択') + 6, 2 + 1 + displayWidth(kanLabel) + 10),
-                    cols: 1,
+                    layout: 'list',
                     cellHeight: 2,
                     renderOption: (idx, o, sel) => this._buildTileStripVB([o.tile], sel, kanLabel),
                     onSelect: (idx) => {

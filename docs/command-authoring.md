@@ -127,7 +127,7 @@ command layout so moving the board also moves the return position.
 
 ## Dialog and widget rules
 
-Open every dialog with `this.openDialog(DialogClass, key, opts, ...ctorArgs)`
+Open every dialog with `this.openDialog(DialogClass, key, opts)`
 (or `system.createDialog` when not inside a command). Pass a string `key` to
 persist drag position across opens, or `null` to skip. Never call
 `dialog.open()` yourself and never forward keys to a dialog from the command
@@ -175,39 +175,87 @@ On quit/abort, still `close()` any held dialog reference before nulling it:
 a closed dialog. Null-check child-dialog references after callbacks that clear
 them.
 
-Dialog subclasses must compute constructor values locally, call `super()`, then
-set their own `this.h`: the base constructor initializes height to zero and
-does not consume `opts.h`.
+Commands configure shared dialogs; do not define dialog subclasses or implement
+selection indices, scroll offsets, key parsing, borders or column padding in
+commands. All dialog constructors take `(term, opts)`; `openDialog` and
+`createDialog` take only `(DialogClass, positionKey, opts)`.
 
 Dialog result callbacks (`onConfirm`, `onSelect`, `onCancel`, `onExit`, and
-`onStart`) run after the closing frame has restored its cursor and been popped.
-Callbacks may position the shell cursor, start a game, or open a new dialog
-without a frame-pop hook. MenuDialog's `onSelect` is intentionally different:
-it runs while the menu is open, allowing a nested submenu; return `'close'` to
-close that menu. Custom dialog subclasses use `return this.complete(callback,
-...args)` for a terminal result. Calling `close()` directly only removes the
-overlay; it does not deliver a result callback.
+`onStart`) run after the closing frame restores its cursor and is popped.
+`SelectDialog` calls `onSelect(index, option)` with the zero-based index and the
+original option. Set `closeOnSelect: false`, or a predicate `(index, option) =>
+boolean`, only for selections that must keep their parent open while opening a
+child. That callback runs while the parent is open; its return value does not
+control closing. Closing selections use `complete()` internally, never a delayed
+callback. Calling `close()` directly removes the overlay without delivering a
+result.
 
-`SelectDialog` and `VerticalSelectDialog` accept `selectedIndex` (zero-based).
-Horizontal options flow into additional rows when needed; the vertical grid
-reduces its column count to fit and reveals the selection during navigation.
-Messages wrap at CJK-aware cell boundaries, preserving SGR. Tall dialogs retain
-their header/footer inside the 80×25 viewport and scroll with PageUp/PageDown.
-InputDialog scrolls horizontally to keep its editing cursor visible. Title,
-footer, prompt, and setting labels are clipped inside fixed borders.
+### Selection configuration
 
-`CompactListDialog` is a compact, title-only vertical menu with no footer, for
-short picks such as a mode list. `FieldPickerDialog` renders one labelled row
-per field with inline options: pass `fields` of `{ key, label, options, default }`
-(an option is either a label string or a `[label, value]` pair) and read the
-chosen values from the `onConfirm(values)` object. Both size to their content.
-The `Dialog` base also accepts `header: false` and `footer: false` to omit the
-title or footer rows.
+`SelectDialog` replaces the former Menu, CompactList and VerticalSelect classes.
+`ConfirmDialog` is a thin two-button preset of the same selection component.
 
-`SettingsDialog` defaults to title `Settings` and action label `Apply`; supply
-`title` and `startLabel` for command-specific wording. It opens each submenu at
-the current setting value. `InfoDialog` remains available for caller-owned
-VirtualBuffers; oversized content is clipped horizontally and scrolls vertically.
+| Option | Behavior |
+|---|---|
+| `layout` | `horizontal` (default), `list`, or `grid` |
+| `options` | Strings or `{ label, description, trailing }` records; arbitrary data when using a renderer |
+| `selectedIndex` | Initial zero-based selection, automatically revealed |
+| `wrap` | Defaults to true; false clamps arrow navigation at boundaries |
+| `width`, `title`, `message`, `footer` | Frame text and width; `footer: false` removes footer rows |
+| `cols`, `cellWidth`, `cellHeight` | Grid columns and content cell dimensions; list uses the available inner width |
+| `visibleCount` | Maximum visible option rows, clamped to the terminal capacity |
+| `align` | `left` or `center`; list defaults to left, other layouts to center |
+| `numbered`, `scrollbar` | Optional numbered rows and scroll indicator, both default false |
+| `renderOption(index, option, selected)` | Pure content renderer for list/grid, returning text or a VirtualBuffer; both appearances are cached on opening |
+
+Lists use Up/Down; horizontal buttons use Left/Right; grids use both axes.
+Home/End select the first/last item. PageUp/PageDown move selection by a visible
+page, clamping at the ends; the selected item remains visible. Grid arrows wrap
+within the current axis, and incomplete final rows land on an existing option.
+Empty selections ignore Enter. Horizontal buttons flow onto additional rows.
+Labels are clipped at CJK-aware cell boundaries, leaving room for the trailing
+column; shorter replacement rows are cleared by the component.
+
+```js
+this.openDialog(SelectDialog, 'my-levels', {
+    layout: 'list', title: '選擇關卡', width: 40,
+    numbered: true, scrollbar: true, visibleCount: 10,
+    options: levels.map(level => ({ label: level.name, trailing: level.steps + '步' })),
+    onSelect: index => this.startLevel(levels[index]),
+    onCancel: () => this.close(),
+});
+```
+
+For a compact mode chooser use `layout: 'list', footer: false, align: 'center'`.
+Commands provide content only; use records rather than padding strings or
+rendering whole dialog rows. Custom tile renderers own tile content and must not
+change dialog selection or lifecycle. VirtualBuffer child slots and both tile
+appearances are reused during navigation.
+
+`FieldPickerDialog` keeps one labelled row per field with inline options: pass
+`fields` of `{ key, label, options, default }` (an option is a label string or a
+`[label, value]` pair) and read `onConfirm(values)`. Field navigation remains
+bounded, while values cycle. `SettingsDialog` keeps its settings page and Apply
+action; each setting supplies `picker: { layout, cols, width, ... }` for its
+selection submenu. The current setting value determines the initial selection;
+there is no option-count-based choice of picker layout.
+
+`InputDialog` retains text editing and horizontal cursor reveal. `ShowDialog`
+retains wrapped text display and generic content scrolling. `InfoDialog` accepts
+a caller-owned VirtualBuffer; oversized content is clipped horizontally and
+scrolls vertically. `SettingsDialog` defaults to title `Settings` and action
+label `Apply`; override `title` and `startLabel` as needed.
+
+### Shared dialog actions
+
+All dialogs accept `onAbort`; when provided, Ctrl+C closes the dialog and invokes
+it instead of the normal cancel/exit callback. Without it, original cancel/exit
+behavior applies. `keyActions` maps exact single-character keys to
+`{ close: true, onAction(key) }`; `close` defaults to true and delivers the action
+after frame teardown. Use `close: false` only for actions that keep the dialog
+open. Register upper/lowercase explicitly. Escape sequences and navigation are
+handled by shared components, not action callbacks. `InfoDialog` retains its
+legacy q/Q `onQuit` mapping as non-closing shared actions.
 
 Use `bufWidth()` for visible CJK-aware width, including strings with SGR. Dialog
 row helpers clear old content and preserve fixed borders. Custom rendering must

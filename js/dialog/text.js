@@ -16,3 +16,16 @@ export function wrapDialogText(text, width) {
     lines.push(line);
     return lines;
 }
+
+// Clip a single line without leaving half of a wide glyph at the edge.
+export function clipDialogText(text, width) {
+    let result = '', used = 0;
+    for (const token of String(text).match(/\x1B\[[0-9;]*m|[^]/gu) || []) {
+        if (token.startsWith('\x1B[')) { result += token; continue; }
+        const size = isWide(token) ? 2 : 1;
+        if (token === '\n' || used + size > width) break;
+        result += token;
+        used += size;
+    }
+    return result;
+}

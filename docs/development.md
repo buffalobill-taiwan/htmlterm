@@ -269,3 +269,18 @@ Glyph reflection: compare `echo --inv ABC中文`, `echo --flip ABC中文`,
 and `echo --x2 --inv --flip ABC中文 tail`. All echo text now shares the
 selected scale. Check `5willow --x10 --flip`, scrolling, overlay clipping,
 and Ctrl+C followed by ordinary output; the prompt must not remain reflected.
+
+## Dialog integration regression checks
+
+`node tools/test-system.mjs` covers selection wrap/clamp, initial reveal, paging,
+incomplete grids, empty/single-item lists, CJK columns and borders, partial dirty
+rows, horizontal flow, cached tile buffers, peek release/blur, abort/shortcut
+completion ordering, explicit settings submenus, and menu → time transitions.
+
+In a desktop browser, exercise Klotski and cchess level selection (Up at the
+first item, Down at the last, Home/End, paging, confirmation and reopening),
+cchess modes and mahjong rules/setup/action shortcuts, jpmj setting submenus
+and tile/confirmation dialogs with held Tab, plus menu → calc/quiz/time.
+Verify cancellation returns to the right parent, position keys still restore
+dragged dialogs, and no overlay remains after closing. Check difficulty dialogs
+still return their original value objects. No game-rule changes are involved.

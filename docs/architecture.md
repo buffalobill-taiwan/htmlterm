@@ -235,8 +235,18 @@ still invalidate the affected area. Inline SGR is parsed into cell attributes by
 Terminal result callbacks are delivered once after `_processStack()` pops the
 finished dialog frame; cancellation/disposal drops undelivered results. Thus
 callbacks can change cursor state or open a replacement without a later restore
-overwriting their work. Menu selection callbacks can keep their menu open and
-are not terminal results.
+overwriting their work. SelectDialog's explicit `closeOnSelect: false` (or a
+predicate returning false) keeps the parent open for a nested dialog; only that
+non-closing callback runs immediately. All three selection layouts share one
+index/navigation model and a bounded viewport; their paging moves selection and
+scroll position together, rather than invoking generic text-buffer scrolling.
+Numbering, label/description/trailing columns, clipping and scrollbar rendering
+belong to SelectDialog. Commands pass options and business callbacks.
+
+Dialog handles optional `onAbort` and exact `keyActions` before type-specific
+input. Tab peek takes precedence: while hidden, actions and navigation are
+suppressed. Releasing Tab or blurring restores the overlay and notifies the
+optional `onPeekChange` callback. Special game panels remain command-owned.
 
 Open dialogs only through `system.createDialog()` or `CmdBase.openDialog()`.
 Those helpers construct the dialog, call `pushDialogFrame()` (which owns

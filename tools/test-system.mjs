@@ -29,6 +29,13 @@ import { wrapInteractiveFlow } from '../js/system/InteractiveCommandHelper.js';
 import { ConfirmDialog } from '../js/dialog/ConfirmDialog.js';
 import { SudokuCmd } from '../js/cmd/sudoku/SudokuCmd.js';
 
+import { InfoDialog } from '../js/dialog/InfoDialog.js';
+import { SelectDialog } from '../js/dialog/SelectDialog.js';
+import { ShowDialog } from '../js/dialog/ShowDialog.js';
+import { SettingsDialog } from '../js/dialog/SettingsDialog.js';
+import { VirtualBuffer } from '../js/util/VirtualBuffer.js';
+import { TimeCmd } from '../js/cmd/time.js';
+
 // Command output flows through the Typewriter, which schedules
 // requestAnimationFrame. Headless Node cannot pump frames on its own, so
 // the callbacks are captured and advanced manually — tests stay
@@ -285,6 +292,220 @@ function record(name, fn) {
 const assert = (condition, message) => { if (!condition) throw new Error(message); };
 
 async function run() {
+    await record('Dialogs: list wrap, paging, initial reveal and index/item results', async () => {
+        const H = makeHarness();
+        await settle();
+        const options = Array.from({ length: 23 }, (_, i) => ({ label: `題目${i}`, trailing: `${i}步` }));
+        let result;
+        const d = H.system.createDialog(SelectDialog, null, {
+            layout: 'list', width: 32, visibleCount: 4, scrollbar: true, numbered: true,
+            options, selectedIndex: 22, onSelect: (index, item) => { result = { index, item }; },
+        });
+        const view = () => Array.from({ length: d.h }, (_, r) => Array.from({ length: d.width }, (_, c) => d._overlay.getCell(r, c)?.ch || '').join('')).join('\n');
+        assert(view().includes('題目22'), 'initial last selection is visible');
+        H.system.handleInput('\x1B[B');
+        assert(d._selected === 0 && view().includes('題目0'), 'down wraps and reveals first');
+        H.system.handleInput('\x1B[A');
+        assert(d._selected === 22 && view().includes('題目22'), 'up wraps and reveals last');
+        H.system.handleInput('\x1B[H');
+        H.system.handleInput('\x1B[6~');
+        assert(d._selected === 4 && view().includes('題目4'), 'page moves selected item, not only viewport');
+        H.system.handleInput('\x1B[5~');
+        assert(d._selected === 0, 'page up clamps at first');
+        H.system.handleInput('\x1B[8~');
+        H.system.handleInput('\r'); await settle();
+        assert(result.index === 22 && result.item === options[22], 'result contains index and original item');
+        assert(d.closed && H.screen.overlays.length === 0, 'selection removes overlay');
+        H.system.dispose();
+    });
+
+    await record('Dialogs: empty, single, bounded and incomplete-grid navigation', async () => {
+        const H = makeHarness();
+        await settle();
+        let confirmed = 0;
+        let d = H.system.createDialog(SelectDialog, null, { layout: 'list', options: [], onSelect: () => confirmed++ });
+        for (const key of ['\x1B[A', '\x1B[B', '\x1B[F', '\x1B[6~', '\r']) H.system.handleInput(key);
+        assert(!d.closed && confirmed === 0, 'empty list ignores navigation and confirmation');
+        H.system.handleInput('\x1B'); await settle();
+        d = H.system.createDialog(SelectDialog, null, { layout: 'list', options: ['one'], onSelect: () => confirmed++ });
+        H.system.handleInput('\x1B[A'); H.system.handleInput('\x1B[B'); H.system.handleInput('\r'); await settle();
+        assert(confirmed === 1, 'single item stays selectable');
+        d = H.system.createDialog(SelectDialog, null, { layout: 'list', options: ['a', 'b'], wrap: false });
+        H.system.handleInput('\x1B[A'); assert(d._selected === 0, 'wrap false clamps first');
+        H.system.handleInput('\x1B[F'); H.system.handleInput('\x1B[B');
+        assert(d._selected === 1, 'wrap false clamps last'); H.system.handleInput('\x1B'); await settle();
+        d = H.system.createDialog(SelectDialog, null, { layout: 'grid', cols: 3, options: ['a', 'b', 'c', 'd', 'e'], selectedIndex: 2 });
+        H.system.handleInput('\x1B[B'); assert(d._selected === 4, 'down into incomplete row selects valid last column');
+        H.system.handleInput('\x1B[C'); assert(d._selected === 3, 'right wraps within short row');
+        H.system.handleInput('\x1B[D'); assert(d._selected === 4, 'left wraps within short row');
+        H.system.handleInput('\x1B[B'); assert(d._selected === 1, 'down wraps to first row in same column');
+        for (const key of ['\x1B[2~', '\x1B[3~', '\x1BOZ']) H.system.handleInput(key);
+        assert(!d.closed && d._selected === 1, 'unrecognized sequences do not cancel');
+        H.system.dispose();
+    });
+
+    await record('Dialogs: shared row layout preserves borders, trailing text and dirty rows', async () => {
+        const H = makeHarness(); await settle();
+        const d = H.system.createDialog(SelectDialog, null, {
+            layout: 'list', width: 24, footer: false, visibleCount: 2, numbered: true,
+            options: [{ label: '很長很長的中文關卡名稱', trailing: '99步' }, { label: '短', trailing: '1步' }, { label: '末', trailing: '2步' }],
+        });
+        assert(d.h === 6, 'footer false removes two rows');
+        const rowText = r => d._buffer[r].map(c => c?.ch || '').join('');
+        assert(rowText(3).includes('99步'), 'long label leaves room for trailing column');
+        for (let r = 1; r < d.h - 1; r++) {
+            assert(d._buffer[r][0].ch === '│' && d._buffer[r][d.width - 1].ch === '│', 'wide text preserves both borders');
+        }
+        const dirty = new Set(); const mark = H.term.markRowDirty.bind(H.term);
+        H.term.markRowDirty = r => { dirty.add(r); mark(r); };
+        H.system.handleInput('\x1B[B');
+        assert(dirty.size <= 2, 'in-page movement dirties only affected rows');
+        H.system.handleInput('\x1B[B');
+        assert(!rowText(3).includes('很長') && rowText(3).includes('短'), 'scroll clears shorter replacement rows');
+        H.system.dispose();
+    });
+
+    await record('Dialogs: horizontal flow and multi-line text remain selectable', async () => {
+        const H = makeHarness(); await settle();
+        let chosen;
+        const d = H.system.createDialog(SelectDialog, null, {
+            width: 16, options: ['第一個選項', '第二個選項', '非常非常非常長的第三個選項'],
+            selectedIndex: 2, onSelect: i => { chosen = i; },
+        });
+        assert(d._rows > 1, 'horizontal labels flow across rows');
+        H.system.handleInput('\x1B[C'); assert(d._selected === 0, 'right wraps');
+        H.system.handleInput('\x1B[D'); H.system.handleInput('\r'); await settle();
+        assert(chosen === 2, 'wrapped label retains original result index');
+        H.system.dispose();
+    });
+
+    await record('Dialogs: custom tile buffers and slots are reused; peek suppresses actions', async () => {
+        const H = makeHarness(); await settle();
+        const oldWindow = globalThis.window;
+        globalThis.window = new EventTarget();
+        try {
+            let renders = 0, selected = 0, aborted = 0;
+            const peek = [];
+            const d = H.system.createDialog(SelectDialog, null, {
+                layout: 'list', width: 20, cellHeight: 2, visibleCount: 2, options: ['牌一', '牌二', '牌三'],
+                peekOnTab: true, onPeekChange: held => peek.push(held), onAbort: () => aborted++,
+                renderOption: (index, option, active) => {
+                    renders++;
+                    const vb = new VirtualBuffer(6, 2);
+                    vb.writeStr(0, 0, (active ? '\x1B[7m' : '') + option);
+                    vb.writeStr(1, 0, `第${index}張`);
+                    return vb;
+                }, onSelect: () => selected++,
+            });
+            const buffers = d._optionBuffers, slots = [...d._slots];
+            H.system.handleInput('\x1B[B'); H.system.handleInput('\x1B[B');
+            assert(renders === 6 && buffers === d._optionBuffers && slots.every((s, i) => s === d._slots[i]), 'navigation reuses both appearances and slots');
+            H.system.handleInput('\t');
+            assert(d._overlay.getCell(0, 0) === null, 'peek makes overlay transparent');
+            for (const key of ['\r', '\x03', '\x1B[A']) H.system.handleInput(key);
+            assert(!d.closed && d._selected === 2 && selected === 0 && aborted === 0, 'peek suppresses confirmation, abort and navigation');
+            window.dispatchEvent(new Event('blur'));
+            assert(d._overlay.getCell(0, 0) !== null, 'blur restores overlay');
+            H.system.handleInput('\t'); d.handleKeyUp('Tab');
+            assert(JSON.stringify(peek) === '[true,false,true,false]', 'release also restores peek');
+            H.system.handleInput('\x03'); await settle();
+            assert(aborted === 1 && d.closed, 'abort runs after peek ends');
+        } finally { H.system.dispose(); globalThis.window = oldWindow; }
+    });
+
+    await record('Dialogs: shortcuts close before callbacks and preserve parent cursor', async () => {
+        const H = makeHarness(); await settle();
+        H.term.curX = 7; H.term.curY = 9;
+        let calls = 0;
+        const d = H.system.createDialog(ShowDialog, null, {
+            message: 'rules', keyActions: { h: { onAction: key => {
+                assert(key === 'h' && d.closed && !H.screen.overlays.length, 'shortcut receives key after overlay removal');
+                assert(H.term.curX === 7 && H.term.curY === 9, 'cursor restored before callback');
+                calls++;
+            } } },
+        });
+        H.system.handleInput('h'); await settle();
+        d.handleKey('h');
+        assert(calls === 1, 'closed dialog cannot repeat callback');
+        let aborted = 0, exited = 0;
+        H.system.createDialog(ShowDialog, null, { message: 'rules', onExit: () => exited++, onAbort: () => aborted++ });
+        H.system.handleInput('\x03'); await settle();
+        assert(aborted === 1 && exited === 0, 'onAbort distinguishes Ctrl+C from exit');
+        H.system.createDialog(ShowDialog, null, { message: 'rules', onExit: () => exited++ });
+        H.system.handleInput('\x03'); await settle(); assert(exited === 1, 'without onAbort original exit behavior remains');
+        H.system.dispose();
+    });
+
+    await record('Dialogs: explicit settings picker retains parent and updates value', async () => {
+        const H = makeHarness(); await settle();
+        const settings = [{ key: 'value', label: '選擇', value: 'b', options: ['a', 'b', 'c'], picker: { layout: 'grid', cols: 2 } }];
+        const parent = H.system.createDialog(SettingsDialog, null, { settings });
+        H.system.handleInput('\r'); await settle();
+        const child = H.system.cmdStack.at(-1).dialog;
+        assert(child instanceof SelectDialog && child._layout === 'grid' && child._selected === 1, 'explicit layout and initial value applied');
+        H.system.handleInput('\x1B[C'); H.system.handleInput('\r'); await settle();
+        assert(settings[0].value === 'a' && !parent.closed && H.screen.overlays.length === 1, 'child updates value and restores parent');
+        H.system.handleInput('\r'); await settle(); H.system.handleInput('\x1B'); await settle();
+        assert(!parent.closed && settings[0].value === 'a', 'child cancellation preserves parent state');
+        H.system.dispose();
+    });
+
+    await record('Dialogs: menu time cancel returns to menu; confirm closes parent before execution', async () => {
+        const H = makeHarness({ Echo, TimeCmd }); await settle();
+        H.system.menuCmd();
+        const menu = H.system.menuDialog;
+        const idx = menu._options.findIndex(o => o.name === 'time');
+        assert(idx >= 0, 'time menu option exists');
+        for (let i = 0; i < idx; i++) H.system.handleInput('\x1B[B');
+        H.system.handleInput('\r'); await settle();
+        assert(!menu.closed && H.screen.overlays.length === 2, 'time opens nested input without closing menu');
+        H.system.handleInput('\x1B'); await settle();
+        assert(!menu.closed && H.screen.overlays.length === 1, 'cancel returns to menu');
+        H.system.handleInput('\r'); await settle(); H.system.handleInput('echo dialog-ok'); H.system.handleInput('\r'); await settle();
+        assert(await waitText(H.screen, 'dialog-ok'), 'confirmed command executes');
+        assert(menu.closed && H.system.menuDialog === null && H.screen.overlays.length === 0, 'time confirmation removes both overlays');
+        await settle(); H.system.dispose();
+    });
+
+
+
+    await record('Dialogs: normal menu selection closes before command startup', async () => {
+        let overlayCount, cursor;
+        class MenuProbe extends CmdBase {
+            static get commandName() { return 'menuprobe'; }
+            static get menu() { return 'Menu probe'; }
+            execute() {
+                overlayCount = H.screen.overlays.length;
+                cursor = [H.term.curX, H.term.curY];
+            }
+        }
+        const H = makeHarness({ MenuProbe }); await settle();
+        H.term.curX = 3; H.term.curY = 8;
+        H.system.menuCmd();
+        H.system.handleInput('\r'); await settle();
+        assert(overlayCount === 0 && cursor[0] === 3 && cursor[1] === 8, 'menu teardown restores cursor before execute');
+        assert(H.system.menuDialog === null, 'menu reference cleared');
+        H.system.dispose();
+    });
+
+    await record('Dialogs: text/info scrolling and non-closing quit actions retain their contracts', async () => {
+        const H = makeHarness(); await settle();
+        const text = Array.from({ length: 40 }, (_, i) => `line ${i}`).join('\n');
+        const show = H.system.createDialog(ShowDialog, null, { title: 'Long text', message: text });
+        H.system.handleInput('\x1B[6~');
+        assert(show._scroll > 0 && !show.closed, 'text dialog still uses generic scrolling');
+        H.system.handleInput('\x1B'); await settle();
+        let quit = 0, exit = 0;
+        const buffer = new VirtualBuffer(10, 30); buffer.writeStr(29, 0, 'last row');
+        const info = H.system.createDialog(InfoDialog, null, { buffer, onQuit: () => quit++, onExit: () => exit++ });
+        H.system.handleInput('q'); H.system.handleInput('Q');
+        assert(quit === 2 && !info.closed, 'legacy q/Q actions remain non-closing');
+        H.system.handleInput('\x1B[6~');
+        assert(info._scroll > 0, 'buffer dialog retains scrolling');
+        H.system.handleInput('\r'); await settle();
+        assert(exit === 1 && info.closed, 'Enter closes buffer dialog exactly once');
+        H.system.dispose();
+    });
 
     await record('Screen.topOverlayAt: rank, bbox and skip predicate', () => {
         const H = makeHarness();

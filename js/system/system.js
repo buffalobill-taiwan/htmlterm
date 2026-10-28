@@ -8,7 +8,7 @@ import { CommandRegistry } from './CommandRegistry.js';
 import { WidgetManager } from './WidgetManager.js';
 export { WidgetManager } from './WidgetManager.js';
 import { bold, green, yellow, gray, red, warn, CURSOR_SHOW } from '../util/sgr.js';
-import { MenuDialog } from '../dialog/MenuDialog.js';
+import { SelectDialog } from '../dialog/SelectDialog.js';
 
 /**
  * SystemManager - singleton managing frame stack, input routing, Typewriter, and commands.
@@ -375,11 +375,11 @@ export class SystemManager {
         this.tick();
     }
 
-    replaceDialog(dialog, DialogClass, key, opts, ...ctorArgs) {
+    replaceDialog(dialog, DialogClass, key, opts) {
         const frame = this.cmdStack.find(f => f.dialog === dialog);
         if (!frame || frame.done || this._disposed) return null;
         frame.finish();
-        return this.createDialog(DialogClass, key, opts, ...ctorArgs);
+        return this.createDialog(DialogClass, key, opts);
     }
 
     pushDialogFrame(dlg) {
@@ -469,9 +469,8 @@ export class SystemManager {
      * @param {Function} DialogClass
      * @param {string|null} key - Position-persistence key, or null to skip
      * @param {object} opts - Dialog options (merged last before saved x/y)
-     * @param {...any} ctorArgs - Extra constructor args before opts
      */
-    createDialog(DialogClass, key, opts, ...ctorArgs) {
+    createDialog(DialogClass, key, opts) {
         if (this._disposed) return null;
         const dlgOpts = { ...(opts || {}) };
         if (key != null) {
@@ -480,19 +479,22 @@ export class SystemManager {
             if (pos.y != null) dlgOpts.y = pos.y;
             dlgOpts.savePos = (x, y) => { this._dialogPositions[key] = { x, y }; };
         }
-        const dlg = new DialogClass(this.term, ...ctorArgs, dlgOpts);
+        const dlg = new DialogClass(this.term, dlgOpts);
         this.pushDialogFrame(dlg);
         return dlg;
     }
 
     menuCmd() {
         this.menuDialog = null;
-        const menuDlg = this.createDialog(MenuDialog, 'menu', {
+        const menuDlg = this.createDialog(SelectDialog, 'menu', {
+            layout: 'list', scrollbar: true,
             width: 44,
             title: 'Command Menu',
             footer: '↑↓ Move  PgUp/Dn Page  ↩ Run  ESC Quit',
             visibleCount: 5,
-            onSelect: (item) => {
+            options: this.menuItems.map(item => ({ ...item, label: item.name, description: item.desc })),
+            closeOnSelect: (index, item) => !this._cmdInstances[item.name]?.constructor.openMenuDialog,
+            onSelect: (index, item) => {
                 const inst = this._cmdInstances[item.name];
                 if (inst && inst.constructor.openMenuDialog) {
                     inst.constructor.openMenuDialog();
@@ -500,10 +502,9 @@ export class SystemManager {
                 }
                 this._pushFrame(new SyncCmdFrame(item.name, [], inst));
                 this.menuDialog = null;
-                return 'close';
             },
             onCancel: () => { this.menuDialog = null; }
-        }, this.menuItems);
+        });
         this.menuDialog = menuDlg;
     }
 

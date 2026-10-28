@@ -1,6 +1,5 @@
 import { Dialog } from './Dialog.js';
 import { SelectDialog } from './SelectDialog.js';
-import { VerticalSelectDialog } from './VerticalSelectDialog.js';
 import { centeredDialogPos } from './position.js';
 import { parseCSI } from '../system/TextInputModel.js';
 import { system } from '../system/sys.js';
@@ -106,35 +105,16 @@ export class SettingsDialog extends Dialog {
         const s = this._settings[settingIdx];
         const opts = s.options;
 
-        if (opts.length <= 5) {
-            system.createDialog(SelectDialog, null, {
-                title: s.label,
-                options: opts,
-                selectedIndex: Math.max(0, opts.indexOf(s.value)),
-                footer: '← → Move  ↩ Confirm  ESC Cancel',
-                onSelect: (idx) => {
-                    s.value = opts[idx];
-                    this.refreshContent();
-                },
-                onCancel: () => {
-                    this.refreshContent();
-                },
-            });
-        } else {
-            system.createDialog(VerticalSelectDialog, null, {
-                title: s.label,
-                options: opts,
-                selectedIndex: Math.max(0, opts.indexOf(s.value)),
-                cols: 3,
-                footer: '↑↓←→ Move  ↩ Confirm  ESC Cancel',
-                onSelect: (idx) => {
-                    s.value = opts[idx];
-                    this.refreshContent();
-                },
-                onCancel: () => {
-                    this.refreshContent();
-                },
-            });
-        }
+        system.createDialog(SelectDialog, null, {
+            ...s.picker,
+            title: s.label,
+            options: opts,
+            selectedIndex: Math.max(0, opts.indexOf(s.value)),
+            onSelect: (idx) => {
+                s.value = opts[idx];
+                this.refreshContent();
+            },
+            onCancel: () => this.refreshContent(),
+        });
     }
 }
