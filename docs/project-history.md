@@ -89,6 +89,7 @@ the agent guide and development guide, not inferred from older plans.
 | 2026-10-16 | `38905fb` | Add headless frame-stack tests (`tools/test-system.mjs`), fix terminal dirty delegation, and share the overlay hit test via `Screen.topOverlayAt()` |
 | 2026-10-18 | `3f58e50` | Mirror the wall-face reveal to passages: a doorway cell at a visible corridor end shows through the same one-hop neighbor rule, with a synthetic-corridor vision fixture in `tools/test-maze.mjs` |
 | 2026-10-16 | `9af9cea`, `9207389` | Architecture refactor tier 2–3: input routing centralized in `SystemManager.handleInput()` with a routing argument (typed text during command output is queued, not swallowed), eager/lazy commands resolved through `commandHandler()` without registry mutation, `CmdBase.openDifficultyDialog()` and `js/util/seed-args.js` shared helpers, one `reportError()` outlet with failFrame detail on the console, proxy hot-path policy documented, `memory` moved into a directory with placement rules in command-modules |
+| 2026-10-28 | `a0a9734` | Unify horizontal/list/grid selection in SelectDialog; remove three overlapping selection components and six command-specific subclasses; configure numbering, trailing columns, wraparound navigation, paging, abort and shortcuts at call sites; retain Tab peek and cached Mahjong tile buffers; migrate callers and add dialog lifecycle/navigation regressions |
 
 Use `git show <commit>` for the exact implementation.
 

@@ -32,8 +32,13 @@ dialogs, and TSR-style widgets.
 
 - Frame-stack command runner with rAF-based Typewriter output
 - Built-in commands (games, widgets, interactive tests — see below)
-- Dialog framework (`MenuDialog`, `ConfirmDialog`, `InputDialog`, `ShowDialog`,
-  `FieldPickerDialog`, `SettingsDialog`, and more) with overlay compositing
+- Configurable dialog framework with overlay compositing: `SelectDialog`
+  shares horizontal, list, and grid selection; `ConfirmDialog`, `InputDialog`,
+  `ShowDialog`, `FieldPickerDialog`, `SettingsDialog`, and `InfoDialog` cover
+  confirmation, input, text, forms, settings, and custom buffer content
+- Selection dialogs support wraparound arrows, Home/End and paging; optional
+  Tab peek temporarily hides a dialog while held (used by Japanese Mahjong).
+  See [dialog configuration](docs/command-authoring.md#selection-configuration)
 - VirtualBuffer compositing abstraction for nested UI layout
 - TSR widgets (clock, DVD logo) — draggable, position remembered
 - Tab completion for command names; command history (Up/Down)

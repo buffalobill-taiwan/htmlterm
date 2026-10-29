@@ -72,6 +72,10 @@ Read the document that matches the work being done before changing that area.
   PageUp/PageDown otherwise accidentally fall through to quit.
 - Check all terminal layout arithmetic with `isWide()` / `bufWidth()`. Box
   drawing is single-width; CJK and full-width glyphs are double-width.
+- Configure shared dialogs at the call site; do not define dialog subclasses in
+  commands or duplicate selection, scrolling, or frame layout. Use `SelectDialog`
+  for horizontal/list/grid selection and shared options for abort, shortcuts,
+  and Tab peek; see [dialog configuration](docs/command-authoring.md#selection-configuration).
 - Open dialogs only via `openDialog` / `createDialog` (DialogFrame). Never call
   `dialog.open()` from commands or forward dialog keys from `_onKey()`.
 - A dialog reference becoming `null` does not remove its overlay: call

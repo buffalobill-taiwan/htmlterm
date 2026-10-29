@@ -257,6 +257,28 @@ open. Register upper/lowercase explicitly. Escape sequences and navigation are
 handled by shared components, not action callbacks. `InfoDialog` retains its
 legacy q/Q `onQuit` mapping as non-closing shared actions.
 
+For example, a game action picker can return to help or abort without a custom
+`_onKey()` implementation:
+
+```js
+this.openDialog(SelectDialog, 'game-action', {
+    layout: 'list', footer: false, options: ['繼續', '重玩'],
+    peekOnTab: true,
+    onPeekChange: held => this.setPanelsHidden(held),
+    onAbort: () => this.quitGame(),
+    keyActions: {
+        h: { onAction: () => this.showRules() },
+        H: { onAction: () => this.showRules() },
+    },
+    onSelect: index => this.chooseAction(index),
+    onCancel: () => this.resumeGame(),
+});
+```
+
+The example's game methods are caller-owned business callbacks. Peek is disabled
+by default. While peeking, even Ctrl+C and configured actions are ignored;
+otherwise `onAbort` takes precedence over a Ctrl+C entry in `keyActions`.
+
 Use `bufWidth()` for visible CJK-aware width, including strings with SGR. Dialog
 row helpers clear old content and preserve fixed borders. Custom rendering must
 also clear shorter replacement rows and keep writes inside the inner area.

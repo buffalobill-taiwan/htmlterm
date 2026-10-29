@@ -139,10 +139,14 @@ The first two puzzles were
 supplied as `/tmp/傌炮兵圍城.json` and
 `/tmp/雙俥夾車攻.json`.
 
-The endgame selector configures the shared SelectDialog list and scrolling with at most 10 visible puzzles
-and a scrollbar. Up/Down moves the selection, PageUp/PageDown moves by one
-page, and Home/End selects the first/last puzzle. Enter completes the dialog
-before loading the selected puzzle; Escape returns to mode selection.
+The endgame selector configures the shared `SelectDialog` with `layout: 'list'`,
+numbered label/trailing columns, at most 10 visible puzzles, and a scrollbar.
+Up at the first puzzle wraps to the last; Down at the last wraps to the first,
+matching Klotski. PageUp/PageDown moves selection by one page and clamps at the
+ends; Home/End selects the first/last puzzle. Enter completes the dialog before
+loading the selected puzzle; Escape returns to mode selection. The command
+supplies names and step counts, while the shared component handles alignment,
+clipping, selection and scrolling.
 
 The command fetches the index on entering the endgame selector and fetches
 individual puzzles on selection; loaded puzzles are cached for the command
