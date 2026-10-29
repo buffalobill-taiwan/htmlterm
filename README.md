@@ -136,7 +136,7 @@ more than once.
 | `help` | Show command list; `help <cmd>` for details and usage |
 | `klotski` | Play Klotski 華容道 sliding-block puzzle (11 fayaa layouts) |
 | `jpmj` | Play Japanese Mahjong (14-tile riichi style, 6 AI personalities, riichi/dora/honba) |
-| `cardgames` | Open the card-game menu and play Blackjack with animated card reveals |
+| `cardgames` | Play Blackjack with animated reveals or solvable FreeCell with keyboard/mouse controls |
 | `memory` | Play a card-matching Memory game (flip to find matching pairs, three difficulty levels) |
 | `menu` | Open command menu dialog |
 | `mbti` | MBTI personality test (interactive) |
@@ -208,7 +208,7 @@ one-based `(x,y)` coordinates. See [Maze reproduction](docs/development.md#maze-
 
 ### Card games
 
-Run `cardgames` to choose Blackjack. Arrows select Hit/Stand; Enter confirms or
+Run `cardgames` to choose Blackjack or FreeCell. In Blackjack, arrows select Hit/Stand; Enter confirms or
 starts the next round. N returns to the game menu; Q/Escape or Ctrl+C quits. Each round
 uses a freshly shuffled 52-card deck. Aces count as 1 or 11; the dealer stands
 on all 17s, including soft 17. Two-card Blackjack beats other 21s. There is no
@@ -219,6 +219,28 @@ except `10`; the shared renderer also supports jokers (` 〠`), unused here.
 Blackjack hits and the dealer's hole-card reveal use a left-to-right flip, like
 Memory (40ms per column). Dealer draws are shown one at a time. During a flip,
 Hit/Stand is locked; N, Q/Escape and Ctrl+C still cancel immediately.
+
+FreeCell can also be opened with `cardgames freecell [seed]`. Seeds are integers
+0–2147483647; these are this project's deals, not Windows deal numbers. The
+browser generates from a solved position in a worker and verifies a forward
+solution before displaying the deal. The shared offline tool reproduces the
+same seed with its default 64 candidates. Structural screening avoids trivial
+starts, but does not assign a human difficulty level or sample all deals uniformly.
+
+Use arrows to move the cyan cursor and Enter to select a card or alternating,
+descending suffix, then Enter at its destination. Selected cards are yellow.
+Desktop mouse dragging uses the same rules. Four free cells and eight tableau
+columns determine multi-card capacity; an empty destination column is excluded.
+Foundations collect A through K by suit, with conservative automatic collection.
+Foundation cards cannot be taken back except through undo.
+
+Space/Escape cancels selection; U undoes a move including its automatic
+collection. R replays the same initial deal; N asks for a seed (blank is random);
+M returns to the menu; Q/Escape exits. Replacing a played deal asks for
+confirmation; Ctrl+C exits immediately. Home/End selects the first/last card;
+PageUp/PageDown navigates long columns. Scroll arrows beside each column are
+clickable; dragging near the top/bottom scrolls that column. Covered cards retain
+their suit and rank in a one-row header. A win remains available for undo/replay.
 
 ### Keyboard shortcuts
 

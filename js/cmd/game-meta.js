@@ -4,7 +4,7 @@
  * registration without importing the game implementation modules.
  */
 export const GAME_META = {
-    cardgames: { commandName: 'cardgames', help: 'Play card games — Blackjack', menu: 'Card Games', usage: 'cardgames\n         Choose Blackjack; arrows select Hit/Stand, Enter confirms.\n         N: game menu; Q/Esc: quit. No betting, splits or insurance.' },
+    cardgames: { commandName: 'cardgames', help: 'Play card games — Blackjack / FreeCell', menu: 'Card Games', usage: 'cardgames [freecell [seed]]\n         FreeCell seed: 0..2147483647 (solvable, custom deals).\n         Arrows + Enter or mouse drag; U: undo; R: replay; N: new; M: menu.\n         Blackjack: arrows + Enter Hit/Stand; N: menu. Q/Esc: quit.' },
     '2048': {
         commandName: '2048',
         help: 'Play 2048',

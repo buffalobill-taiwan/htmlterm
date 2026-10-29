@@ -174,8 +174,12 @@ stop output for the rest of the session.
 Input is routed, in order, to the top frame handler, active `readLine`, a
 blocked frame (Ctrl+C abort remains available), Typewriter handling, then the
 shell `LineEditor`. Dialogs own key handling while open. Mouse events are first
-offered to `system.handleMouse`; overlay dragging consumes the event, otherwise
-the terminal emits its normal mouse escape sequence.
+offered to `system.handleMouse`. Overlays retain hit-test priority; when none is
+hit, the top command may consume `handleMouse(type, info)` (FreeCell). A consumed
+mousedown captures move/up for that command frame. New frames, window blur and
+frame cleanup cancel the capture with `handleMouse('cancel', null)`; dialogs
+block commands even outside their bounds. Unconsumed events retain the terminal's
+normal mouse escape-sequence behavior.
 
 Key-up handling matches on `e.key` and ignores pure modifier keys, so holding
 Shift/Ctrl/Alt/Meta or toggling CapsLock emits nothing; Tab and Enter do not

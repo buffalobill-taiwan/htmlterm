@@ -485,3 +485,13 @@ Trailing arguments use normal size, aligned with the enlarged text's bottom row.
 wins. Both accept integer scales 2–10, with `--big` as an alias for `--x2`.
 Invalid `--x…` options in the scale-option position report an error. An empty
 scaled `echo` prints a newline. Existing unrelated argument handling is unchanged.
+
+## Desktop command mouse input
+
+FreeCell opts into `handleMouse(type, info)`; other commands need no handler.
+Return true when consuming mousedown to capture subsequent mousemove/mouseup.
+`info` contains terminal-cell `col`, `row`, and encoded `btn` (0 for unmodified
+left button). Overlay dragging has priority and only the top command receives
+input. Handle `cancel` with null info idempotently: remove previews and stop
+edge-scroll timers without committing a move. Dialog pushes, blur and frame
+cleanup cancel capture. Keep keyboard and mouse actions on the same rule path.

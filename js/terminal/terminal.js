@@ -110,6 +110,8 @@ export class Terminal {
         this.textarea.removeEventListener('compositionend', this._compEndHandler);
         this.textarea.removeEventListener('paste', this._pasteHandler);
         this.container.removeEventListener('wheel', this._wheelHandler);
+        window.removeEventListener('blur', this._mouseBlurHandler);
+        this.onMouse?.('cancel', null);
         this.container.removeEventListener('mousedown', this._mouseDownHandler);
         document.removeEventListener('mouseup', this._mouseUpHandler);
         document.removeEventListener('mousemove', this._mouseMoveHandler);
@@ -139,6 +141,7 @@ export class Terminal {
         this._compEndHandler = (e) => this._onCompositionEnd(e);
         this._pasteHandler = (e) => this._onPaste(e);
         this._wheelHandler = (e) => this._onWheel(e);
+        this._mouseBlurHandler = () => { this._mouseButtonDown = false; this.mouseBtn = 0; this.onMouse?.('cancel', null); };
         this._mouseDownHandler = (e) => this._onMouseDown(e);
         this._mouseUpHandler = (e) => this._onMouseUp(e);
         this._mouseMoveHandler = (e) => this._onMouseMove(e);
@@ -151,6 +154,7 @@ export class Terminal {
         this.textarea.addEventListener('compositionend', this._compEndHandler);
         this.textarea.addEventListener('paste', this._pasteHandler);
         this.container.addEventListener('wheel', this._wheelHandler, { passive: true });
+        window.addEventListener('blur', this._mouseBlurHandler);
         this.container.addEventListener('mousedown', this._mouseDownHandler);
         document.addEventListener('mouseup', this._mouseUpHandler);
         document.addEventListener('mousemove', this._mouseMoveHandler);

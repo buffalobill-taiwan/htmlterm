@@ -47,7 +47,7 @@ contains shared dimensions, difficulty settings, and other fixed configuration.
 
 | Directory | Command class | Additional modules |
 |---|---|---|
-| [cardgames](../js/cmd/cardgames/index.js) | `CardgamesCmd` | `blackjack.js`: deck and scoring; `cards.js`: cached 5×3 faces, backs and flip frames; `animation.js`: cancellable RAF reveal overlays |
+| [cardgames](../js/cmd/cardgames/index.js) | `CardgamesCmd` | `blackjack.js`: deck and scoring; `cards.js`: cached 5×3 faces, backs and flip frames; `animation.js`: cancellable RAF reveal overlays; `freecell/`: controller, view/hit testing, transactional rules, shared generator/solver and worker |
 | [game2048](../js/cmd/game2048/index.js) | `Game2048Cmd` | `board.js`: sliding, merging, spawning, and move availability |
 | [gweled](../js/cmd/gweled/index.js) | `GweledCmd` | `board.js`: matches, gravity, legal swaps, and chain scores |
 | [klotski](../js/cmd/klotski/index.js) | `KlotskiCmd` | Level chooser configures shared `SelectDialog`; level data and solutions stay in `js/data/` |
@@ -150,3 +150,15 @@ For rendering moves, compare the 80×25 cells and attributes before and after
 using the same initial state. Preserve class-method descriptors and exported
 names, and check that the dependency graph has no new cycles. Follow the
 [development checklist](development.md#manual-validation) for behavioral changes.
+
+## FreeCell
+
+`cardgames/freecell/engine.js` owns the pure v1 reverse generator, independent
+certificate interpreter and bounded forward solver. Both the worker and the
+Node CLI import it; the CLI keeps its existing named exports. Keep seed streams
+and candidate ordering stable (fixed hash fixtures cover five seeds).
+`rules.js` adds transactional suffix moves and safe auto collection.
+`FreeCellGame.js` owns history, worker cancellation, dialogs and desktop input;
+`view.js` shares coordinates between rendering and hit tests. The controller is
+disposed on menu/exit and command-frame cleanup. Rows are updated only when
+visible cells change; the drag preview owns a separate overlay.

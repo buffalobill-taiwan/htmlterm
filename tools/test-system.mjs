@@ -548,6 +548,31 @@ async function run() {
         assert(H.system._dragTarget === null, 'mouseup clears drag target');
     });
 
+    await record('System: command mouse capture cancels at dialog, blur and frame cleanup', async () => {
+        const H = makeHarness(); await settle();
+        const calls = [];
+        const cmd = H.system.cmdStack.at(-1).cmd;
+        cmd.handleMouse = type => { calls.push(type); return true; };
+        const point = { col: 4, row: 8, btn: 0 };
+        H.system.handleMouse('mousedown', point);
+        H.system.handleMouse('mousemove', point);
+        H.system.handleMouse('mouseup', point);
+        assert(calls.join(',') === 'mousedown,mousemove,mouseup', 'command captures full mouse gesture');
+        H.system.handleMouse('mousedown', point);
+        const dialog = H.system.createDialog(SelectDialog, null, { options: ['OK'] });
+        assert(calls.at(-1) === 'cancel' && !H.system._commandMouse, 'dialog push cancels command capture');
+        const n = calls.length;
+        H.system.handleMouse('mousedown', { col: 0, row: 24, btn: 0 });
+        assert(calls.length === n, 'dialog blocks command even outside its rectangle');
+        dialog.close(); await settle();
+        H.system.handleMouse('mousedown', point);
+        H.system.handleMouse('cancel', null);
+        assert(calls.at(-1) === 'cancel' && !H.system._commandMouse, 'blur cancels');
+        H.system.handleMouse('mousedown', point);
+        H.system.dispose();
+        assert(calls.at(-1) === 'cancel' && !H.system._commandMouse, 'dispose cancels');
+    });
+
     await record('System: peek-held overlay does not capture the drag', () => {
         const H = makeHarness();
         const overlay = {

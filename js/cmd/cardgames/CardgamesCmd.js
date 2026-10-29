@@ -6,6 +6,8 @@ import { GAME_META } from '../game-meta.js';
 import { cardBuffer } from './cards.js';
 import { flipCard } from './animation.js';
 import { score, natural, outcome, shuffledDeck } from './blackjack.js';
+import { FreeCellGame } from './freecell/FreeCellGame.js';
+import { parseSeed } from '../../util/random.js';
 const META = GAME_META.cardgames;
 
 export class CardgamesCmd extends CmdBase {
@@ -16,22 +18,34 @@ export class CardgamesCmd extends CmdBase {
     execute(args) {
         const p = this.parseArgs(args);
         if (p.hasHelp) return this.showHelp();
-        if (p.rest.length) return this.error('Usage: cardgames');
+        if (args.some(a => a.startsWith('-'))) return this.error('Usage: cardgames [freecell [seed]]');
+        if (p.rest.length && (p.rest[0] !== 'freecell' || p.rest.length > 2 || (p.rest.length === 2 && parseSeed(p.rest[1]) === null))) return this.error('Usage: cardgames [freecell [seed]]');
         this.open();
         this._stats = { win: 0, loss: 0, draw: 0 };
         this._vb = new VirtualBuffer(80, 23);
         term.write('\x1B[2J\x1B[H\x1B[?25l');
-        this._menu();
+        this.addCleanup(() => { this._freecell?.dispose(); this._freecell = null; });
+        if (p.rest.length) this._startFreeCell(p.rest.length === 2 ? Number(p.rest[1]) : undefined);
+        else this._menu();
     }
+    _startFreeCell(seed) {
+        this._freecell?.dispose();
+        this._freecell = new FreeCellGame(this);
+        this._freecell.start(seed);
+    }
+    handleMouse(type, info) { return this._freecell?.handleMouse(type, info) || false; }
     _menu() {
+        this._freecell?.dispose();
+        this._freecell = null;
+        term.write('\x1B[2J');
         this._cancelFlip?.();
         this._flipping = null;
         this._phase = 'menu';
         this._draw();
         this._dialog = this.openDialog(SelectDialog, 'cardgames-menu', {
             title: 'Card Games', layout: 'list', width: 36,
-            options: ['Blackjack 二十一點'],
-            onSelect: () => { this._dialog = null; this._deal(); },
+            options: ['Blackjack 二十一點', 'FreeCell 新接龍'],
+            onSelect: index => { this._dialog = null; if (index === 1) this._startFreeCell(); else this._deal(); },
             onCancel: () => { this._dialog = null; this._quit(); },
         });
     }
@@ -113,6 +127,7 @@ export class CardgamesCmd extends CmdBase {
         term.writeVB(vb);
     }
     _onKey(data) {
+        if (this._freecell) return this._freecell.key(data);
         if (data === '\x1B' || /^[qQ]$/.test(data)) return this._quit();
         if (/^[nN]$/.test(data)) return this._menu();
         if (this._phase === 'result') {
@@ -133,6 +148,8 @@ export class CardgamesCmd extends CmdBase {
         }
     }
     _quit() {
+        this._freecell?.dispose();
+        this._freecell = null;
         this._cancelFlip?.();
         this._flipping = null;
         if (this._dialog) { this._dialog.close(); this._dialog = null; }

@@ -42,3 +42,24 @@ export function cardFlipFrames(card) {
     }
     return flips.get(key);
 }
+
+const stacks = new Map();
+// A covered card keeps its suit/rank in the top border. Cache every appearance
+// so cursor movement and dragging only copy immutable cells.
+export function stackCardBuffer(id, header = false, style = 0) {
+    const key = `${id}:${header}:${style}`;
+    if (!stacks.has(key)) {
+        const card = id === null ? null : { suit: Math.floor(id / 13), rank: id % 13 + 1 };
+        const base = cardBuffer(card), vb = new VirtualBuffer(5, header ? 1 : 3);
+        if (header && card) {
+            const color = card.suit === 1 || card.suit === 2 ? 31 : 30;
+            vb.writeStr(0, 0, `\x1B[30;47m┌\x1B[${color}m${'♠♥♦♣'[card.suit]}${ranks[card.rank]}\x1B[30m┐`);
+        } else for (let r = 0; r < vb.height; r++) for (let c = 0; c < 5; c++) vb.setCell(r, c, base.getCell(r, c));
+        if (style) for (let r = 0; r < vb.height; r++) for (let c = 0; c < 5; c++) {
+            const cell = vb.getCell(r, c);
+            vb.setCell(r, c, { ...cell, bg: style === 2 ? 3 : 6 });
+        }
+        stacks.set(key, vb);
+    }
+    return stacks.get(key);
+}

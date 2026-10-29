@@ -10,7 +10,7 @@ below run in a host terminal from the repository root, not in the demo shell.
 The demo targets a desktop browser with a keyboard and a viewport large enough
 for the 80×25 grid. Mobile and accessibility work are explicitly out of scope:
 
-- No touch/pointer input and no responsive narrow-viewport layout. A viewport
+- No touch input or responsive narrow-viewport layout; FreeCell supports desktop mouse dragging. A viewport
   smaller than the grid clips content; this is a known, accepted limitation
   (see the troubleshooting row below), not a defect to fix.
 - No ARIA/`role` markup, screen-reader support, or focus management beyond the
@@ -300,3 +300,68 @@ leaving and starting `cardgames` again resets them.
 For Blackjack animation, check player hits, dealer hole-card reveal and multiple
 dealer draws. Repeated Enter must not draw extra cards during a flip. Test N,
 Q/Escape and Ctrl+C during animation: no overlay or delayed result may survive.
+
+## FreeCell generation and validation
+
+`tools/freecell-solve.mjs` and the browser FreeCell worker share
+`js/cmd/cardgames/freecell/engine.js`. It starts from four completed foundations, performs reversible moves
+through tableau columns and free cells, and finishes with empty cells and
+foundations and column lengths 7,7,7,7,6,6,6,6. The inverse move trace is a
+solution certificate. A separate forward interpreter checks every move,
+card uniqueness and the final foundations; exact-state loops are removed.
+
+```sh
+node tools/freecell-solve.mjs 123456
+node tools/freecell-solve.mjs 123456 --json > /tmp/freecell.json
+node tools/freecell-solve.mjs --verify /tmp/freecell.json
+node tools/freecell-solve.mjs --solve /tmp/freecell.json --nodes 100000
+node tools/freecell-solve.mjs 0 --batch 100
+node tools/test-freecell.mjs
+```
+
+Seeds range from 0 to 2147483647. Generator version and candidate count are
+part of reproducibility: the default is 64 candidates. Use `--candidates N`
+(up to 4096) to widen generation. The tool fails explicitly if no candidate
+passes its structural screen; it does not substitute an unverified deal.
+`--solution` includes the certificate in text output; `--json` includes it
+along with the board, metrics and independent search result. JSON cards are
+0–51: suits spades/hearts/diamonds/clubs, each A through K; columns are ordered
+from the top to the exposed bottom. Moves use `{from,to}` locations, each with
+`zone` (`column`, `cell`, `foundation`) and zero-based `index`. Certificates
+use single-card moves, so no supermove capacity assumptions are required.
+
+Quality screening rejects boards with more than eight immediately safe
+foundation cards, buried A/2/3 depth below 24, or fewer than 40 lower-card /
+higher-blocker pairs. Ranking rewards buried low cards and blockers, penalizes
+already-built alternating pairs, adjacent same-suit cards and automatic
+progress. Among the eight best structural candidates, prefer the one requiring
+more work in a fixed 256-node independent search probe. These are heuristics,
+not proof of human difficulty or shortest-solution length. Reverse generation
+is biased and does not sample all deals uniformly.
+
+The independent forward solver uses legal single-card moves, conservative
+safe-foundation closure, and symmetry reduction for columns/free cells. It
+never reads the generation certificate. `--nodes N` controls its search budget
+(default 10000, maximum 1000000); a 400-move search-depth guard also applies.
+Budget/depth exhaustion is `unknown`, not `unsolvable` and not a difficulty
+rating. Every independently discovered solution is replay-checked as well.
+Batch output counts verified deals, automatically solved deals, independent
+search successes/unknowns, structural scores and total generation time.
+
+Initial v1 sample (seeds 0–99, 64 candidates, 10000 search nodes): all 100
+certificates verified, zero automatic-only wins, structural scores 132–195;
+independent search solved 67 and left 33 unknown. Total generation time was
+15.37 seconds on the development machine (timing is not a portability promise).
+This establishes solvability and the stated screening criteria, not a measured
+human difficulty level; playtesting is still needed before choosing game labels
+such as Easy/Medium/Hard.
+
+FreeCell validation: run `node tools/test-freecell.mjs` for fixed v1 seed hashes,
+certificate replay, supermove capacity (including empty destinations),
+transactional rejection, safe foundations, win detection and cached card headers.
+In the browser, exercise `cardgames` → FreeCell and `cardgames freecell 42`:
+keyboard and mouse moves, U (including auto collection), R, N with seed 0 and
+invalid text, M, long-column Home/End/paging/scroll arrows/drag-edge scrolling,
+and win/undo. Cancel dragging via outside release, Space/Escape, window blur,
+a dialog and Ctrl+C. Cancel generation and reopen to check for stale results.
+Also replay Blackjack and dialog/widget dragging after shared mouse-routing changes.

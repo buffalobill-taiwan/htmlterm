@@ -155,6 +155,7 @@ export class SystemManager {
     }
 
     _pushFrame(frame) {
+        this.cancelCommandMouse();
         this.cmdStack.push(frame);
     }
 
@@ -424,13 +425,48 @@ export class SystemManager {
         if (i >= 0) this.dialogRestoreHooks.splice(i, 1);
     }
 
+    cancelCommandMouse() {
+        const capture = this._commandMouse;
+        this._commandMouse = null;
+        if (capture) {
+            capture.removeCleanup?.();
+            capture.frame.cmd?.handleMouse?.('cancel', null);
+        }
+    }
+
     handleMouse(type, info) {
         if (this._disposed) return false;
+        if (type === 'cancel') {
+            this.cancelCommandMouse();
+            if (this._dragTarget) { this._dragTarget.endDrag(); this._dragTarget = null; }
+            return false;
+        }
+        const top = this.cmdStack[this.cmdStack.length - 1];
+        const capture = this._commandMouse;
+        if (capture) {
+            if (type === 'mousedown') this.cancelCommandMouse();
+            else if (capture.frame !== top || top.done || top.cmd.closed) this.cancelCommandMouse();
+            else if (type === 'mousemove' || type === 'mouseup') {
+                if (type === 'mouseup') {
+                    this._commandMouse = null;
+                    capture.removeCleanup?.();
+                }
+                return !!top.cmd.handleMouse(type, info);
+            }
+        }
         if (type === 'mousedown') {
             // Shared overlay hit test; peek-transparent dialogs (owner holding
             // Tab) are skipped rather than blocking the drag below them.
             const ov = this.term.topOverlayAt(info.col, info.row, o => o.owner?._peekHeld);
-            if (!ov) return false;
+            if (!ov) {
+                if (!top?.done && !top?.dialog && top?.cmd?.handleMouse?.(type, info)) {
+                    const capture = { frame: top };
+                    this._commandMouse = capture;
+                    capture.removeCleanup = this.addCommandCleanup(top.cmd, () => this.cancelCommandMouse());
+                    return true;
+                }
+                return false;
+            }
             const owner = ov.owner;
             if (owner && typeof owner.startDrag === 'function') {
                 this._dragTarget = owner;
@@ -509,6 +545,7 @@ export class SystemManager {
     }
 
     dispose() {
+        this.cancelCommandMouse();
         if (this._disposed) return;
         this._disposed = true;
         this.running = false;
