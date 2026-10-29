@@ -12,6 +12,7 @@ Seed: 0..2147483647. Defaults: 64 candidates, 10000 independent search nodes.
 Cards: integers 0..51, suits spades/hearts/diamonds/clubs, ranks A..K.
 Columns are top-to-bottom. --json includes board, replayable solution and metrics.
 Quality screen: at most 8 automatic cards, buried-low depth >=24, blockers >=40.
+At most 22 adjacent pairs may differ by 0–2 ranks; ranking favors fewer such pairs.
 Top 8 structural candidates receive a separate 256-node search probe.
 Quality scores/search effort are heuristics, NOT a difficulty guarantee.
 --batch tests consecutive seeds and prints aggregate generation/search results.`;
@@ -60,7 +61,7 @@ function main(args) {
         unknown: results.filter(r=>r.search.status==='unknown').length },null,2));
     else {
         const r=results[0], label=c=>'SHDC'[suit(c)]+['A','2','3','4','5','6','7','8','9','10','J','Q','K'][rank(c)-1];
-        console.log(`FreeCell seed ${seed}, generator v1, verified solution ${r.solution.length} moves`);
+        console.log(`FreeCell seed ${seed}, generator v${r.version}, verified solution ${r.solution.length} moves`);
         r.board.columns.forEach((col,i)=>console.log(`${i+1}: ${col.map(label).join(' ')}`));
         console.log(JSON.stringify({metrics:r.metrics,search:r.search,generationMs:r.generationMs},null,2));
         if (flags.has('--solution')) console.log(JSON.stringify(r.solution,null,2));

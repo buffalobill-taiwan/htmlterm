@@ -1,28 +1,66 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-const v1Hashes = {
-    "0": "50049b9c815db7d820c23561ce7f29503206d23b07b8f3386e2dcbaf37529786",
-    "1": "6e31ecdc33fd15dfb9530d0d092f0b01711dd3b82ef109d71b53c2bd6d695c8a",
-    "42": "749b4d35a5c513da7ce6762451da9a60742220beaeabac6d955fde67ee630881",
-    "123456": "d80fc283716b498f0837ae9432b857d5a10fe499ac3a01f924c604890740c61d",
-    "2147483647": "1045c5a4b7f995577e6ee58bb5c53fcad83257df7208622874d12b203f51048e"
+const v2Hashes = {
+    "0": "c68092ac47f7e8c49e723217c66a125d78f9e86b0bb4cd01e2edbfc7c5bff0dd",
+    "1": "81572fd5856cbb81b74ca8449d8819d8daa1e0a8e3bc7bcabdb42fb6680ab41f",
+    "42": "fdaab5018a718e0b810a049cc16d8ab4f5a9a82b3baeb4e5a976c89ee5f4d476",
+    "123456": "479dc7c4202d43a49c88c72d43492b4d71974dc4d54b634e7bc963dca63c1d06",
+    "2147483647": "0997c02b2184a731b4a78fb85b97d6b74abfed9eedca783a26862241f4df76c6"
 };
-import { generate, verify, solve, applyMove, validate } from './freecell-solve.mjs';
+import { generate, verify, solve, applyMove, validate, metrics } from './freecell-solve.mjs';
 for (const seed of [0,1,42,123456,2147483647]) {
     const result = generate(seed);
-    assert.equal(createHash('sha256').update(JSON.stringify(result)).digest('hex'), v1Hashes[seed]);
+    assert.equal(result.version, 2);
+    assert.equal(createHash('sha256').update(JSON.stringify(result)).digest('hex'), v2Hashes[seed]);
     validate(result.board, true);
     assert.equal(verify(result.board,result.solution),true);
     assert.deepEqual(generate(seed),result);
     assert.ok(result.metrics.automaticCards <= 8);
     assert.ok(result.metrics.buriedLow >= 24);
     assert.ok(result.metrics.blockers >= 40);
+    assert.ok(result.metrics.closePairs <= 22);
     const search=solve(result.board,1000);
     assert.notEqual(search.status,'unsolvable');
     if(search.solution)verify(result.board,search.solution);
     assert.throws(()=>verify(result.board,result.solution.slice(1)));
     console.log(`seed ${seed}: verified ${result.solution.length} moves, probe ${search.status}`);
 }
+// Pin v2 output across both ends of the public candidate-count range.
+for (const [seed, count, hash] of [
+    [1, 1, 'bff69d3e72418b3a891c280da10688b6fa58ee8a4fd2636a964eac7a77f36e34'],
+    [0, 8, '3b697cb975db9352e773d521b9236ea6fe599950682a7e54f29a80fce37503a0'],
+    [0, 128, 'b0c9ce32930136b08d7a9df7a80b37089e8e92400c55d022aeaa97ac75fa6cbe'],
+    [42, 4096, 'c09ff3e762f293509edb61f68b499de3b85eda3a8380b4507222aad6b9699bed'],
+]) {
+    const result = generate(seed, count);
+    assert.equal(createHash('sha256').update(JSON.stringify(result)).digest('hex'), hash);
+    assert.equal(verify(result.board, result.solution), true);
+}
+assert.throws(() => generate(2147483647, 1), /No candidate passed/);
+assert.throws(() => generate(0, 1), /No candidate passed/);
+// Count proximity independently of the generator metric. v1 averaged 30.49
+// close pairs over these seeds; guard against returning to layered rank bands.
+let closeTotal = 0, gapTotal = 0;
+for (let seed = 0; seed < 100; seed++) {
+    const result = generate(seed);
+    let close = 0;
+    for (const col of result.board.columns) for (let i = 1; i < col.length; i++) {
+        const gap = Math.abs(col[i] % 13 - col[i - 1] % 13);
+        if (gap <= 2) close++;
+        gapTotal += gap;
+    }
+    assert.equal(result.metrics.closePairs, close);
+    assert.ok(close <= 22);
+    assert.equal(verify(result.board, result.solution), true);
+    closeTotal += close;
+}
+assert.ok(closeTotal / 100 < 18, 'Nearby ranks should not dominate the board');
+assert.ok(gapTotal / 4400 > 3, 'Adjacent ranks should span a wider range');
+// Equal ranks and gaps of two count in both directions, regardless of suit;
+// A/K and gaps of three do not. These partial columns isolate the metric.
+assert.equal(metrics({ columns: [[0,13],[1,16],[6,17],[12,26],[8,24],[],[],[]],
+    cells: [null,null,null,null], foundations: [0,0,0,0] }).closePairs, 3);
+console.log(`FreeCell rank distribution: ${(closeTotal / 100).toFixed(2)} close pairs per deal`);
 const empty=()=>({columns:Array.from({length:8},()=>[]),cells:[null,null,null,null],foundations:[0,0,0,0]});
 const move=(a,b)=>({from:{zone:'column',index:a},to:{zone:'column',index:b}});
 let s=empty();s.columns[0]=[5];s.columns[1]=[6];assert.throws(()=>applyMove(s,move(0,1)));

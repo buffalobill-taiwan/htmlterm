@@ -317,10 +317,13 @@ node tools/freecell-solve.mjs --verify /tmp/freecell.json
 node tools/freecell-solve.mjs --solve /tmp/freecell.json --nodes 100000
 node tools/freecell-solve.mjs 0 --batch 100
 node tools/test-freecell.mjs
+node tools/test-freecell-animation.mjs
 ```
 
 Seeds range from 0 to 2147483647. Generator version and candidate count are
-part of reproducibility: the default is 64 candidates. Use `--candidates N`
+part of reproducibility: the current generator is v2, with 64 candidates by
+default. The same seed now produces a different deal from v1; exported v1
+board/certificate JSON can still be replay-verified. Use `--candidates N`
 (up to 4096) to widen generation. The tool fails explicitly if no candidate
 passes its structural screen; it does not substitute an unverified deal.
 `--solution` includes the certificate in text output; `--json` includes it
@@ -330,14 +333,36 @@ from the top to the exposed bottom. Moves use `{from,to}` locations, each with
 `zone` (`column`, `cell`, `foundation`) and zero-based `index`. Certificates
 use single-card moves, so no supermove capacity assumptions are required.
 
+To avoid layers of nearby ranks, v2 assigns each suit a seeded random draw
+weight (`0.1 + random²`), multiplied by its remaining foundation cards. This
+lets the four suits descend at different rates while reducing the chance of
+leaving one suit for the end. Both reverse relocation and foundation extraction
+prefer an empty destination or a rank gap greater than two with 85% probability
+when such destinations exist. All reversible choices remain eligible. The final
+free-cell flush remains random, and the resulting complete board is screened.
+
 Quality screening rejects boards with more than eight immediately safe
 foundation cards, buried A/2/3 depth below 24, or fewer than 40 lower-card /
-higher-blocker pairs. Ranking rewards buried low cards and blockers, penalizes
+higher-blocker pairs. It also rejects more than 22 `closePairs` out of the 44
+vertical adjacencies: a close pair differs by 0, 1 or 2 ranks in either direction,
+regardless of suit/color (A=1, K=13, no wraparound). Each close pair costs 12
+ranking points. Ranking also rewards buried low cards and blockers, penalizes
 already-built alternating pairs, adjacent same-suit cards and automatic
 progress. Among the eight best structural candidates, prefer the one requiring
 more work in a fixed 256-node independent search probe. These are heuristics,
 not proof of human difficulty or shortest-solution length. Reverse generation
 is biased and does not sample all deals uniformly.
+
+The generator reuses immutable location references and scratch lists when
+enumerating reverse moves, and retains only the eight best candidates and their
+certificates. Candidate ties retain generation order. v2 keeps these allocation
+optimizations; the extra spacing evaluation adds some work per reverse step.
+
+A v1/v2 comparison of seeds 0–99 (64 candidates) reduced mean close pairs
+from 30.49 to 15.27 per initial deal, and from 27.86 to 12.80 after opening
+auto-collection. v2 generation and certificate verification succeeded for all
+seeds 0–999, with no deal exceeding 22 close pairs. These are distribution and
+solvability checks, not evidence of uniform shuffling or human difficulty.
 
 The independent forward solver uses legal single-card moves, conservative
 safe-foundation closure, and symmetry reduction for columns/free cells. It
@@ -356,8 +381,9 @@ This establishes solvability and the stated screening criteria, not a measured
 human difficulty level; playtesting is still needed before choosing game labels
 such as Easy/Medium/Hard.
 
-FreeCell validation: run `node tools/test-freecell.mjs` for fixed v1 seed hashes,
-certificate replay, supermove capacity (including empty destinations),
+FreeCell validation: run `node tools/test-freecell.mjs` for fixed v2 seed hashes
+(including candidate counts 1, 8, 128 and 4096 and a quality-screen rejection),
+100-seed rank-distribution checks, certificate replay, supermove capacity (including empty destinations),
 transactional rejection, safe foundations, win detection and cached card headers.
 In the browser, exercise `cardgames` → FreeCell and `cardgames freecell 42`:
 keyboard and mouse moves, U (including auto collection), R, N with seed 0 and
@@ -365,3 +391,24 @@ invalid text, M, long-column Home/End/paging/scroll arrows/drag-edge scrolling,
 and win/undo. Cancel dragging via outside release, Space/Escape, window blur,
 a dialog and Ctrl+C. Cancel generation and reopen to check for stale results.
 Also replay Blackjack and dialog/widget dragging after shared mouse-routing changes.
+
+v2 browser check (2026-10-29 working tree): headless Chromium 149.0.7827.55,
+1280×900, served over local HTTP. Entered `cardgames freecell 42`, visually
+inspected the screenshot, and compared the worker's initial board and the visible
+auto-collected state with the shared engine. Also opened seeds 0 and 2147483647
+and returned to the shell with Q. All matched; no page JavaScript errors occurred.
+
+For automatic-collection animation, run `node tools/test-freecell-animation.mjs`
+for controlled RAF timing, sequential column/cell flights, input lock, first-move
+activation, undo and synchronous cleanup. In the browser, verify that opening
+and restarting preserve all 52 cards, then move a card to a free cell. Safe cards
+must fly one at a time at 20ms per grid step, with the foundation count changing
+on landing. Try arrows, Enter, mouse, U/R/N/M/Q/Escape during flight: none should
+act or replay afterward. After landing, U must restore the complete prior board.
+Use Ctrl+C during flight and reopen to check that no old overlay or callback
+survives. Check a long scrolled source pile and the final winning card as well.
+The first-move/flight changes were checked in the same Chromium/viewport above:
+seed 42 stayed intact on opening, keyboard movement into a free cell triggered
+sequential collection, keys and mouse clicks were ignored in flight, and undo,
+restart and Ctrl+C/reopen passed without page errors. Controlled RAF tests also
+cover scrolled sources, collection from free cells, and the winning landing.

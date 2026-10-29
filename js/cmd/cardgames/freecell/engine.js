@@ -3,6 +3,8 @@ import { mulberry32, parseSeed } from '../../../util/random.js';
 const LIMITS = [7, 7, 7, 7, 6, 6, 6, 6];
 const suit = c => Math.floor(c / 13);
 const rank = c => c % 13 + 1;
+const nearRank = (a, b) => Math.abs(rank(a) - rank(b)) <= 2;
+const SPACING_CHANCE = 0.85;
 const color = c => [0, 1, 1, 0][suit(c)];
 const fits = (c, below) => below === undefined || (rank(below) === rank(c) + 1 && color(c) !== color(below));
 const clone = s => ({ columns: s.columns.map(c => [...c]), cells: [...s.cells], foundations: [...s.foundations] });
@@ -74,53 +76,83 @@ function auto(s, moves = []) {
     return moves;
 }
 export function metrics(board) {
-    let buriedLow = 0, blockers = 0, builtPairs = 0, sameSuitPairs = 0;
+    let buriedLow = 0, blockers = 0, builtPairs = 0, sameSuitPairs = 0, closePairs = 0;
     for (const col of board.columns) for (let i = 0; i < col.length; i++) {
         if (rank(col[i]) <= 3) buriedLow += col.length - i - 1;
         for (let j = i + 1; j < col.length; j++) if (rank(col[j]) > rank(col[i])) blockers++;
         if (i && fits(col[i], col[i - 1])) builtPairs++;
         if (i && suit(col[i]) === suit(col[i - 1])) sameSuitPairs++;
+        if (i && nearRank(col[i], col[i - 1])) closePairs++;
     }
     const state = clone(board); auto(state);
     const automaticCards = state.foundations.reduce((a, b) => a + b, 0);
-    return { buriedLow, blockers, builtPairs, sameSuitPairs, automaticCards,
-        score: buriedLow * 3 + blockers * 2 - builtPairs * 2 - automaticCards * 4 - sameSuitPairs * 3 };
+    return { buriedLow, blockers, builtPairs, sameSuitPairs, automaticCards, closePairs,
+        score: buriedLow * 3 + blockers * 2 - builtPairs * 2 - automaticCards * 4 - sameSuitPairs * 3 - closePairs * 12 };
 }
 
 function candidate(rng) {
     const state = { columns: Array.from({ length: 8 }, () => []), cells: Array(4).fill(null), foundations: Array(4).fill(13) };
     const reverse = [];
+    // Unequal suit rates break the synchronized K-to-A layers. Weight by the
+    // remaining cards as well, so one slow suit need not dominate the tail.
+    const weights = Array.from({ length: 4 }, () => 0.1 + rng() ** 2);
     const choose = xs => xs[Math.floor(rng() * xs.length)];
+    // Locations are immutable. Reuse them and the scratch lists across all
+    // reverse steps instead of allocating every possible move at each step.
+    const columns = Array.from({ length: 8 }, (_, index) => ({ zone: 'column', index }));
+    const cells = Array.from({ length: 4 }, (_, index) => ({ zone: 'cell', index }));
+    const sources = [], destinations = [], pairs = [], spaced = [], suits = [], slots = [], spacedSlots = [];
     // Every reverse move removes an exposed card from a location where its
     // forward return would be legal. Extraction has a quota, guaranteeing termination.
     for (let dealt = 0; dealt < 52; dealt++) {
         for (let step = 0; step < 24; step++) {
-            const sources = state.columns.flatMap((col, index) => col.length && fits(col.at(-1), col.at(-2)) ? [{ zone: 'column', index }] : []);
-            state.cells.forEach((c, index) => { if (c !== null) sources.push({ zone: 'cell', index }); });
-            const destinations = state.columns.flatMap((col, index) => col.length < LIMITS[index] ? [{ zone: 'column', index }] : []);
+            sources.length = 0; destinations.length = 0; pairs.length = 0; spaced.length = 0;
+            for (let i = 0; i < 8; i++) {
+                const col = state.columns[i];
+                if (col.length && fits(col.at(-1), col.at(-2))) sources.push(columns[i]);
+                if (col.length < LIMITS[i]) destinations.push(columns[i]);
+            }
+            for (let i = 0; i < 4; i++) if (state.cells[i] !== null) sources.push(cells[i]);
             const emptyCell = state.cells.indexOf(null);
-            if (emptyCell >= 0) destinations.push({ zone: 'cell', index: emptyCell });
-            const moves = sources.flatMap(from => destinations.filter(to =>
-                !(from.zone === to.zone && from.index === to.index) && !(from.zone === 'cell' && to.zone === 'cell')).map(to => ({ from, to })));
-            if (!moves.length) break;
-            const { from, to } = choose(moves);
+            if (emptyCell >= 0) destinations.push(cells[emptyCell]);
+            // Prefer separating nearby ranks, but keep every reversible move
+            // eligible. Destination spacing does not alter inverse legality.
+            for (const from of sources) for (const to of destinations) {
+                if (from !== to && !(from.zone === 'cell' && to.zone === 'cell')) {
+                    pairs.push(from, to);
+                    const c = from.zone === 'column' ? state.columns[from.index].at(-1) : state.cells[from.index];
+                    const below = to.zone === 'column' ? state.columns[to.index].at(-1) : undefined;
+                    if (below === undefined || !nearRank(c, below)) spaced.push(from, to);
+                }
+            }
+            if (!pairs.length) break;
+            const choices = spaced.length && rng() < SPACING_CHANCE ? spaced : pairs;
+            const offset = Math.floor(rng() * (choices.length / 2)) * 2;
+            const from = choices[offset], to = choices[offset + 1];
             const card = from.zone === 'column' ? state.columns[from.index].pop() : state.cells[from.index];
             if (from.zone === 'cell') state.cells[from.index] = null;
             if (to.zone === 'column') state.columns[to.index].push(card); else state.cells[to.index] = card;
             reverse.push({ from: to, to: from });
         }
-        const suits = state.foundations.flatMap((n, i) => n ? [i] : []);
-        const su = choose(suits), c = su * 13 + state.foundations[su] - 1;
-        const slots = state.columns.flatMap((col, i) => col.length < LIMITS[i] ? [i] : []);
-        const build = slots.filter(i => fits(c, state.columns[i].at(-1)));
-        const target = choose(build.length && rng() < 0.7 ? build : slots);
+        suits.length = 0; slots.length = 0; spacedSlots.length = 0;
+        for (let i = 0; i < 4; i++) if (state.foundations[i]) suits.push(i);
+        let pick = rng() * suits.reduce((sum, i) => sum + weights[i] * state.foundations[i], 0);
+        const su = suits.find(i => (pick -= weights[i] * state.foundations[i]) < 0) ?? suits.at(-1);
+        const c = su * 13 + state.foundations[su] - 1;
+        for (let i = 0; i < 8; i++) if (state.columns[i].length < LIMITS[i]) {
+            slots.push(i);
+            const below = state.columns[i].at(-1);
+            if (below === undefined || !nearRank(c, below)) spacedSlots.push(i);
+        }
+        const target = choose(spacedSlots.length && rng() < SPACING_CHANCE ? spacedSlots : slots);
         state.columns[target].push(c); state.foundations[su]--;
         reverse.push({ from: { zone: 'column', index: target }, to: { zone: 'foundation', index: su } });
     }
     // Restore the standard start shape. The forward inverse parks these cards
     // in empty free cells; each cell is used exactly once during this flush.
     for (let i = 0; i < 4; i++) if (state.cells[i] !== null) {
-        const slots = state.columns.flatMap((col, j) => col.length < LIMITS[j] ? [j] : []);
+        slots.length = 0;
+        for (let j = 0; j < 8; j++) if (state.columns[j].length < LIMITS[j]) slots.push(j);
         const target = choose(slots);
         state.columns[target].push(state.cells[i]); state.cells[i] = null;
         reverse.push({ from: { zone: 'column', index: target }, to: { zone: 'cell', index: i } });
@@ -148,20 +180,23 @@ export function generate(seed, candidates = 64) {
     const pool = [];
     for (let i = 0; i < candidates; i++) {
         const result = candidate(rng); result.metrics = metrics(result.board);
-        if (result.metrics.automaticCards > 8 || result.metrics.buriedLow < 24 || result.metrics.blockers < 40) continue;
+        if (result.metrics.automaticCards > 8 || result.metrics.buriedLow < 24 || result.metrics.blockers < 40 || result.metrics.closePairs > 22) continue;
         pool.push(result);
+        // Only these eight can reach the search probe. Stable sorting keeps
+        // earlier candidates first on ties.
+        pool.sort((a,b) => b.metrics.score - a.metrics.score);
+        if (pool.length > 8) pool.pop();
     }
     if (!pool.length) throw Error('No candidate passed the structural quality screen; increase --candidates');
-    pool.sort((a,b) => b.metrics.score - a.metrics.score);
     let best, effort = -1;
-    for (const result of pool.slice(0, 8)) {
+    for (const result of pool) {
         const probe = solve(result.board, 256);
         if (probe.status === 'unsolvable') throw Error('Generator/search disagreement');
         if (probe.nodes > effort) { best = result; effort = probe.nodes; }
     }
     best.solution = shorten(best.board, best.solution);
     verify(best.board, best.solution);
-    return { version: 1, seed, candidates, ...best, verified: true };
+    return { version: 2, seed, candidates, ...best, verified: true };
 }
 
 // A separate, bounded forward search. Budget exhaustion is UNKNOWN, not UNSOLVABLE.

@@ -3,6 +3,10 @@ import { VirtualBuffer, _blankCell } from '../../../util/VirtualBuffer.js';
 import { stackCardBuffer } from '../cards.js';
 
 const xAt = i => 4 + 9 * i;
+export function cardPosition(game, ref) {
+    return { x: xAt(ref.index + (ref.zone === 'foundation' ? 4 : 0)),
+        y: ref.zone === 'column' ? 6 + game.state.columns[ref.index].length - 1 - game.scroll[ref.index] : 2 };
+}
 function paste(vb, face, x, y, bottom = 25) {
     for (let r = 0; r < face.height && y + r < bottom; r++) for (let c = 0; c < 5; c++) vb.setCell(y + r, x + c, face.getCell(r, c));
 }
@@ -24,17 +28,19 @@ export function drawBoard(game) {
     if (state) {
         for (let i = 0; i < 8; i++) {
             const zone = i < 4 ? 'cell' : 'foundation', index = i % 4;
-            const card = i < 4 ? state.cells[i] : state.foundations[index] ? index * 13 + state.foundations[index] - 1 : null;
+            const hidden = game.flight?.from;
+            const card = i < 4 ? (hidden?.zone === 'cell' && hidden.index === i ? null : state.cells[i]) : state.foundations[index] ? index * 13 + state.foundations[index] - 1 : null;
             vb.writeStr(1, xAt(i), i < 4 ? '空格' : '收牌');
             if (card === null) empty(vb, xAt(i), 2, i < 4 ? ' · ' : ' ' + '♠♥♦♣'[index] + ' ', style(game, zone, index));
             else paste(vb, stackCardBuffer(card, false, style(game, zone, index)), xAt(i), 2);
             const col = state.columns[i];
+            const length = col.length - (hidden?.zone === 'column' && hidden.index === i ? 1 : 0);
             game.scroll[i] = Math.max(0, Math.min(game.scroll[i], Math.max(0, col.length - 14)));
             const start = game.scroll[i];
             vb.writeStr(5, xAt(i) + 2, String(i + 1));
-            if (!col.length) empty(vb, xAt(i), 6, '   ', style(game, 'column', i));
-            for (let j = start; j < col.length && 6 + j - start < 22; j++)
-                paste(vb, stackCardBuffer(col[j], j < col.length - 1, style(game, 'column', i, j)), xAt(i), 6 + j - start, 22);
+            if (!length) empty(vb, xAt(i), 6, '   ', style(game, 'column', i));
+            for (let j = start; j < length && 6 + j - start < 22; j++)
+                paste(vb, stackCardBuffer(col[j], j < length - 1, style(game, 'column', i, j)), xAt(i), 6 + j - start, 22);
             if (start) vb.writeStr(6, xAt(i) + 6, '↑');
             if (col.length - start + 2 > 16) vb.writeStr(21, xAt(i) + 6, '↓');
         }

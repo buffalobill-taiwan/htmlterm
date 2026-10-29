@@ -15,7 +15,7 @@ export function capacity(state, to) {
 }
 // Transactional: failed moves never change the input. Auto moves belong to the
 // same transaction, so a single undo restores the entire previous position.
-export function moveCards(state, from, to) {
+export function moveCards(state, from, to, collect = true) {
     if (!to || !['column', 'cell', 'foundation'].includes(to.zone) || !Number.isInteger(to.index) || to.index < 0 || to.index >= (to.zone === 'column' ? 8 : 4)) throw Error('無效的目的地');
     if (from.zone === to.zone && from.index === to.index) throw Error('請選擇不同的位置');
     const cards = selectedCards(state, from);
@@ -30,6 +30,7 @@ export function moveCards(state, from, to) {
         next.columns[from.index].splice(from.card);
         next.columns[to.index].push(...cards);
     }
-    auto(next);
+    // The UI defers collection so each automatic move can be animated.
+    if (collect) auto(next);
     return next;
 }

@@ -108,3 +108,25 @@ actions during a reveal but keeps menu/exit keys active. Cancellation removes
 the overlay and suppresses the completion callback; frame cleanup also stops
 the animation. The board and score are refreshed at transition boundaries,
 not on every animation frame.
+
+## FreeCell automatic collection
+
+New games and restarts keep the complete opening board. The first successful
+player move starts automatic collection; navigation, selection and rejected
+moves do not. The UI calls `moveCards(..., false)` to defer its immediate
+collection, then obtains the safe move sequence from `auto()` on a clone.
+
+`freecell/animation.js` flies one cached 5×3 card face at a time using a
+`RAFAnimationManager` overlay. A straight grid path advances one step every
+20ms, with `max(abs(dx), abs(dy))` steps and rounded coordinates; delayed frames
+catch up using elapsed time. Only the old and new card rows are marked dirty.
+The board hides the source face during flight but retains the complete logical
+state until landing, when `applyMove` updates the foundation. Long source piles
+scroll to expose the departing card. Board rendering happens at flight boundaries.
+
+All game keys and mouse actions are ignored throughout the collection sequence,
+including undo, restart, menu and exit; they are not queued. Global Ctrl+C still
+aborts the command and synchronously removes the overlay and RAF callback.
+One undo restores the player move and its entire collection sequence, including
+the untouched opening after undoing the first move. Winning is announced only
+after the final card lands. Offline rule callers retain immediate collection.

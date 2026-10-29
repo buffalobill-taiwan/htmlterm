@@ -3,9 +3,10 @@ import { VirtualBuffer } from '../../../util/VirtualBuffer.js';
 import { parseSeed } from '../../../util/random.js';
 import { InputDialog } from '../../../dialog/InputDialog.js';
 import { ConfirmDialog } from '../../../dialog/ConfirmDialog.js';
-import { clone, auto, solved } from './engine.js';
+import { clone, auto, solved, applyMove } from './engine.js';
 import { moveCards, selectedCards } from './rules.js';
-import { drawBoard, hitTest, drawGhost } from './view.js';
+import { drawBoard, hitTest, drawGhost, cardPosition } from './view.js';
+import { flyCard } from './animation.js';
 
 export class FreeCellGame {
     constructor(cmd) {
@@ -17,6 +18,7 @@ export class FreeCellGame {
         this.status = '';
     }
     start(seed = Math.floor(Math.random() * 0x80000000)) {
+        this.cancelCollection();
         this.cancelDrag();
         this.worker?.terminate();
         this.state = null; this.selected = null; this.seed = seed; this.history = [];
@@ -41,11 +43,42 @@ export class FreeCellGame {
         worker.postMessage(seed);
     }
     restart() {
+        this.cancelCollection();
         this.cancelDrag();
-        this.state = clone(this.initial); auto(this.state);
+        this.state = clone(this.initial);
         this.history = []; this.selected = null; this.scroll.fill(0);
         this.cursor = { zone: 'column', index: 0, card: 0 };
         this.status = '選擇牌，再選擇目的地；也可用滑鼠拖曳'; this.draw();
+    }
+    collect(status) {
+        this.cancelDrag();
+        const moves = auto(clone(this.state));
+        let index = 0;
+        this.collecting = moves.length > 0;
+        const next = () => {
+            if (this.disposed) return;
+            this.flight = null; this.cancelFlight = null;
+            if (index === moves.length) {
+                this.collecting = false;
+                this.status = solved(this.state) ? '恭喜完成！U 悔棋、R 重玩、N 新局' : status;
+                this.ensureVisible(); this.draw(); return;
+            }
+            const move = moves[index++], from = move.from;
+            if (from.zone === 'column') this.scroll[from.index] = Math.max(0, this.state.columns[from.index].length - 14);
+            const card = from.zone === 'column' ? this.state.columns[from.index].at(-1) : this.state.cells[from.index];
+            const origin = cardPosition(this, from), destination = cardPosition(this, move.to);
+            this.flight = move;
+            this.status = '自動收牌中…'; this.draw();
+            this.cancelFlight = flyCard(this.cmd, card, origin, destination, () => {
+                applyMove(this.state, move);
+                next();
+            });
+        };
+        next();
+    }
+    cancelCollection() {
+        this.cancelFlight?.(); this.cancelFlight = null;
+        this.flight = null; this.collecting = false;
     }
     draw() { if (!this.disposed) drawBoard(this); }
     ensureVisible() {
@@ -65,13 +98,14 @@ export class FreeCellGame {
         this.selected = { ...ref }; this.status = '選擇目的地，Enter 放牌；Space 取消'; return true;
     }
     move(to) {
+        if (this.collecting) return false;
         try {
-            const next = moveCards(this.state, this.selected, to);
+            const next = moveCards(this.state, this.selected, to, false);
             this.history.push({ state: this.state, cursor: { ...this.cursor }, scroll: [...this.scroll] });
             this.state = next; this.selected = null;
             this.cursor = { ...to, card: to.zone === 'column' ? Math.max(0, next.columns[to.index].length - 1) : 0 };
-            this.status = solved(next) ? '恭喜完成！U 悔棋、R 重玩、N 新局' : '已移牌（安全的牌會自動收至右上方）';
-            this.ensureVisible(); return true;
+            this.ensureVisible();
+            this.collect('已移牌（安全的牌會自動收至右上方）'); return true;
         } catch (error) { this.status = error.message; return false; }
     }
     confirm(action) {
@@ -98,6 +132,7 @@ export class FreeCellGame {
         });
     }
     key(data) {
+        if (this.collecting) return;
         if (data === '\x1B' || data === ' ') {
             if (this.drag || this.selected) { this.cancelDrag(); this.selected = null; this.status = '已取消選牌'; this.draw(); return; }
             if (data === ' ') return;
@@ -144,6 +179,7 @@ export class FreeCellGame {
     }
     handleMouse(type, info) {
         if (type === 'cancel') { this.cancelDrag(); this.draw(); return true; }
+        if (this.collecting) return true;
         if (!this.state || this.disposed) return false;
         if (type === 'mousedown') {
             if (info.btn !== 0) return false;
@@ -189,6 +225,7 @@ export class FreeCellGame {
         this.drag = null;
     }
     dispose() {
+        this.cancelCollection();
         this.cancelDrag(); this.worker?.terminate(); this.worker = null; this.disposed = true;
     }
 }
