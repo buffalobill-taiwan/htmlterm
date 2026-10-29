@@ -316,74 +316,90 @@ node tools/freecell-solve.mjs 123456 --json > /tmp/freecell.json
 node tools/freecell-solve.mjs --verify /tmp/freecell.json
 node tools/freecell-solve.mjs --solve /tmp/freecell.json --nodes 100000
 node tools/freecell-solve.mjs 0 --batch 100
+node tools/freecell-solve.mjs 42 --search --nodes 10000
 node tools/test-freecell.mjs
 node tools/test-freecell-animation.mjs
 ```
 
 Seeds range from 0 to 2147483647. Generator version and candidate count are
-part of reproducibility: the current generator is v2, with 64 candidates by
-default. The same seed now produces a different deal from v1; exported v1
+part of reproducibility: the current generator is v3, with 64 candidates by
+default. The same seed now produces a different deal from v1/v2; exported older
 board/certificate JSON can still be replay-verified. Use `--candidates N`
 (up to 4096) to widen generation. The tool fails explicitly if no candidate
 passes its structural screen; it does not substitute an unverified deal.
 `--solution` includes the certificate in text output; `--json` includes it
-along with the board, metrics and independent search result. JSON cards are
+along with the board, structural metrics and certificate resource usage. JSON cards are
 0–51: suits spades/hearts/diamonds/clubs, each A through K; columns are ordered
 from the top to the exposed bottom. Moves use `{from,to}` locations, each with
 `zone` (`column`, `cell`, `foundation`) and zero-based `index`. Certificates
 use single-card moves, so no supermove capacity assumptions are required.
 
-To avoid layers of nearby ranks, v2 assigns each suit a seeded random draw
-weight (`0.1 + random²`), multiplied by its remaining foundation cards. This
-lets the four suits descend at different rates while reducing the chance of
-leaving one suit for the end. Both reverse relocation and foundation extraction
-prefer an empty destination or a rank gap greater than two with 85% probability
-when such destinations exist. All reversible choices remain eligible. The final
-free-cell flush remains random, and the resulting complete board is screened.
+v3 keeps the seeded unequal suit draw rates (`0.1 + random²`, multiplied by
+remaining foundation cards), but makes reserves part of the construction:
+
+- A card entering a free cell stays there for 3–14 foundation-extraction rounds,
+  so later cards can be placed before it returns to the tableau.
+- Foundation cards can also enter an empty free cell directly (80% preference
+  when one is available). The forward inverse legally collects that reserve card.
+- One seeded column stays empty until 36 foundation cards have been extracted.
+  The other seven can hold at least 45, so this staging reservation cannot block
+  the extraction quota. It allows late reverse staging / earlier forward clearing.
+- Reverse moves never remove a tableau card whose forward return would be
+  illegal. Lone-card transfers between empty columns and cell-to-cell transfers
+  are skipped. Final reserve flushing restores the standard 7/6-card layout.
+
+Destination selection no longer favors particular rank gaps. Each candidate
+still has a bounded 52 extractions × at most 24 relocation steps, plus four flushes.
 
 Quality screening rejects boards with more than eight immediately safe
 foundation cards, buried A/2/3 depth below 24, or fewer than 40 lower-card /
-higher-blocker pairs. It also rejects more than 22 `closePairs` out of the 44
-vertical adjacencies: a close pair differs by 0, 1 or 2 ranks in either direction,
-regardless of suit/color (A=1, K=13, no wraparound). Each close pair costs 12
-ranking points. Ranking also rewards buried low cards and blockers, penalizes
-already-built alternating pairs, adjacent same-suit cards and automatic
-progress. Among the eight best structural candidates, prefer the one requiring
-more work in a fixed 256-node independent search probe. These are heuristics,
-not proof of human difficulty or shortest-solution length. Reverse generation
-is biased and does not sample all deals uniformly.
+higher-blocker pairs. Structural score rewards buried low cards (×3), blockers
+(×2) and the sum of each column's rank span (×5), and penalizes built pairs (×2),
+automatic cards (×4), same-suit neighbors (×3), and rank gaps 0–2 (×2). The old
+hard limit of 22 close pairs is removed; rank span guards against narrow bands.
+
+For the eight best structural candidates, erase exact-state loops and replay the
+existing reverse certificate to compute `construction`:
+`parkedCards` counts distinct cards moved into reserves before their foundation
+is ready; `releasedCards` counts those later moved from reserves to columns;
+`earlyEmptyColumns` counts distinct empty columns used as destinations before
+26 cards have been collected; `peakOccupiedCells` records simultaneous reserve
+occupancy. Select by structural score plus these four values weighted 4, 3, 3, 8
+respectively, retaining the earlier candidate on ties. Counting distinct cards
+and columns prevents repeated detours from inflating the usage score.
+
+Generation never invokes a forward solver. Replaying the selected certificate
+with `verify()` checks implementation correctness; the inverse construction is
+the source of solvability. Resource usage describes this particular solution,
+not a minimum required by every solution or a human difficulty rating. Reverse
+generation remains biased and does not sample all deals uniformly.
 
 The generator reuses immutable location references and scratch lists when
 enumerating reverse moves, and retains only the eight best candidates and their
-certificates. Candidate ties retain generation order. v2 keeps these allocation
-optimizations; the extra spacing evaluation adds some work per reverse step.
+certificates. Candidate ties retain generation order.
 
-A v1/v2 comparison of seeds 0–99 (64 candidates) reduced mean close pairs
-from 30.49 to 15.27 per initial deal, and from 27.86 to 12.80 after opening
-auto-collection. v2 generation and certificate verification succeeded for all
-seeds 0–999, with no deal exceeding 22 close pairs. These are distribution and
-solvability checks, not evidence of uniform shuffling or human difficulty.
+A v2/v3 comparison of seeds 0–99 (64 candidates) increased mean column rank
+span from 6.8625 to 8.125, distinct parked blockers from 2.53 to 17.36, and peak
+reserve occupancy from 1.99 to 4. Mean close pairs changed from 15.27 to 17.83;
+this version prioritizes dependencies and broader columns over minimizing every
+nearby pair. Generation and certificate replay passed for seeds 0–999 (about
+4.45 seconds total on the development machine, not a timing guarantee).
 
 The independent forward solver uses legal single-card moves, conservative
 safe-foundation closure, and symmetry reduction for columns/free cells. It
-never reads the generation certificate. `--nodes N` controls its search budget
+never reads the generation certificate. It runs only with `--search` during
+generation/batches, or explicitly via `--solve file.json`. `--nodes N` controls its search budget
 (default 10000, maximum 1000000); a 400-move search-depth guard also applies.
 Budget/depth exhaustion is `unknown`, not `unsolvable` and not a difficulty
 rating. Every independently discovered solution is replay-checked as well.
-Batch output counts verified deals, automatically solved deals, independent
-search successes/unknowns, structural scores and total generation time.
+Batch output counts verified deals, automatically solved deals, structural scores,
+rank span, parked blockers, peak reserve occupancy and total generation time.
+Independent search successes/unknowns are included only with `--search`.
 
-Initial v1 sample (seeds 0–99, 64 candidates, 10000 search nodes): all 100
-certificates verified, zero automatic-only wins, structural scores 132–195;
-independent search solved 67 and left 33 unknown. Total generation time was
-15.37 seconds on the development machine (timing is not a portability promise).
-This establishes solvability and the stated screening criteria, not a measured
-human difficulty level; playtesting is still needed before choosing game labels
-such as Easy/Medium/Hard.
-
-FreeCell validation: run `node tools/test-freecell.mjs` for fixed v2 seed hashes
+FreeCell validation: run `node tools/test-freecell.mjs` for fixed v3 seed hashes
 (including candidate counts 1, 8, 128 and 4096 and a quality-screen rejection),
-100-seed rank-distribution checks, certificate replay, supermove capacity (including empty destinations),
+100-seed rank/resource-distribution checks, distinct-resource counting, CLI search
+opt-in, certificate replay, supermove capacity (including empty destinations),
 transactional rejection, safe foundations, win detection and cached card headers.
 In the browser, exercise `cardgames` → FreeCell and `cardgames freecell 42`:
 keyboard and mouse moves, U (including auto collection), R, N with seed 0 and
@@ -397,6 +413,14 @@ v2 browser check (2026-10-29 working tree): headless Chromium 149.0.7827.55,
 inspected the screenshot, and compared the worker's initial board and the visible
 auto-collected state with the shared engine. Also opened seeds 0 and 2147483647
 and returned to the shell with Q. All matched; no page JavaScript errors occurred.
+
+v3 browser check (2026-10-30 working tree): Chromium 149.0.7827.55 at 1280×900
+over local HTTP. Seeds 0, 42 and 2147483647 matched the shared generator and
+retained their complete opening boards. Inspected the seed-42 screenshot and
+checked a keyboard move/undo. Replayed its certificate through the live game
+controller to victory with animation and safe auto-collection enabled: 59 moves
+were played, and 44 certificate moves were already handled by auto-collection.
+There were no page JavaScript errors.
 
 For automatic-collection animation, run `node tools/test-freecell-animation.mjs`
 for controlled RAF timing, sequential column/cell flights, input lock, first-move

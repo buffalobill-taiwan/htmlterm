@@ -1,66 +1,100 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-const v2Hashes = {
-    "0": "c68092ac47f7e8c49e723217c66a125d78f9e86b0bb4cd01e2edbfc7c5bff0dd",
-    "1": "81572fd5856cbb81b74ca8449d8819d8daa1e0a8e3bc7bcabdb42fb6680ab41f",
-    "42": "fdaab5018a718e0b810a049cc16d8ab4f5a9a82b3baeb4e5a976c89ee5f4d476",
-    "123456": "479dc7c4202d43a49c88c72d43492b4d71974dc4d54b634e7bc963dca63c1d06",
-    "2147483647": "0997c02b2184a731b4a78fb85b97d6b74abfed9eedca783a26862241f4df76c6"
+import { execFileSync } from 'node:child_process';
+const v3Hashes = {
+    "0": "857cf0a24694e6e7d48a59d07ae1c0bc2184d4210b8ccd711ce1dadae8f78890",
+    "1": "1179cfa77bb779210b84524cf5ecb6c4bffd83db0f127d2c34058042f811d1bb",
+    "42": "009caeeb7243c90794d5e7a261044ef1f8c02d165f0bdd80a65d2ebb1b46a4f7",
+    "123456": "a7cd3c443789545aa2956344c4ab6c51cb72cada279bdd1587a6274eebde1972",
+    "2147483647": "a58f3eba688e7a4c6cda07249942827ae61b7209a22c36aea9e365e139cc2f4d"
 };
-import { generate, verify, solve, applyMove, validate, metrics } from './freecell-solve.mjs';
+import { generate, verify, applyMove, validate, metrics, constructionMetrics } from './freecell-solve.mjs';
 for (const seed of [0,1,42,123456,2147483647]) {
     const result = generate(seed);
-    assert.equal(result.version, 2);
-    assert.equal(createHash('sha256').update(JSON.stringify(result)).digest('hex'), v2Hashes[seed]);
+    assert.equal(result.version, 3);
+    assert.equal(createHash('sha256').update(JSON.stringify(result)).digest('hex'), v3Hashes[seed]);
     validate(result.board, true);
     assert.equal(verify(result.board,result.solution),true);
     assert.deepEqual(generate(seed),result);
     assert.ok(result.metrics.automaticCards <= 8);
     assert.ok(result.metrics.buriedLow >= 24);
     assert.ok(result.metrics.blockers >= 40);
-    assert.ok(result.metrics.closePairs <= 22);
-    const search=solve(result.board,1000);
-    assert.notEqual(search.status,'unsolvable');
-    if(search.solution)verify(result.board,search.solution);
     assert.throws(()=>verify(result.board,result.solution.slice(1)));
-    console.log(`seed ${seed}: verified ${result.solution.length} moves, probe ${search.status}`);
+    console.log(`seed ${seed}: verified ${result.solution.length} reverse moves`);
 }
-// Pin v2 output across both ends of the public candidate-count range.
+// Pin v3 output across both ends of the public candidate-count range.
 for (const [seed, count, hash] of [
-    [1, 1, 'bff69d3e72418b3a891c280da10688b6fa58ee8a4fd2636a964eac7a77f36e34'],
-    [0, 8, '3b697cb975db9352e773d521b9236ea6fe599950682a7e54f29a80fce37503a0'],
-    [0, 128, 'b0c9ce32930136b08d7a9df7a80b37089e8e92400c55d022aeaa97ac75fa6cbe'],
-    [42, 4096, 'c09ff3e762f293509edb61f68b499de3b85eda3a8380b4507222aad6b9699bed'],
+    [0, 1, '6dc251f46415e3b060c9758a499352f6d51624738b8908993080b8268e1c7342'],
+    [0, 8, '46a0194b13ca66718e526cfbefd9d6bc69e2cf6bce918d2d068a282ec66c873b'],
+    [0, 128, '53e35b687fa08b6efb5bb4e23cab4e5cba65e1189f7d23465675fdda3f693f91'],
+    [42, 4096, 'dc4623aabffde2ffe0bf46a380ef26412d2f4b6cc9098fefbe25c929ac0e66c1'],
 ]) {
     const result = generate(seed, count);
     assert.equal(createHash('sha256').update(JSON.stringify(result)).digest('hex'), hash);
     assert.equal(verify(result.board, result.solution), true);
 }
-assert.throws(() => generate(2147483647, 1), /No candidate passed/);
-assert.throws(() => generate(0, 1), /No candidate passed/);
-// Count proximity independently of the generator metric. v1 averaged 30.49
-// close pairs over these seeds; guard against returning to layered rank bands.
-let closeTotal = 0, gapTotal = 0;
+assert.throws(() => generate(13, 1), /No candidate passed/);
+// Distribution and certificate-resource regression checks, not human difficulty.
+let closeTotal = 0, spanTotal = 0, parkedTotal = 0, peakTotal = 0;
 for (let seed = 0; seed < 100; seed++) {
     const result = generate(seed);
-    let close = 0;
+    let close = 0, span = 0;
+    for (const col of result.board.columns) {
+        const ranks = col.map(c => c % 13);
+        span += Math.max(...ranks) - Math.min(...ranks);
+    }
     for (const col of result.board.columns) for (let i = 1; i < col.length; i++) {
         const gap = Math.abs(col[i] % 13 - col[i - 1] % 13);
         if (gap <= 2) close++;
-        gapTotal += gap;
     }
     assert.equal(result.metrics.closePairs, close);
-    assert.ok(close <= 22);
+    assert.equal(result.metrics.rankSpan, span);
     assert.equal(verify(result.board, result.solution), true);
+    // Independently count distinct blocked cards and peak reserve occupancy.
+    const replay = structuredClone(result.board), parked = new Set();
+    let peak = 0;
+    for (const move of result.solution) {
+        if (move.to.zone === 'cell') {
+            const c = replay.columns[move.from.index].at(-1);
+            if (c % 13 > replay.foundations[Math.floor(c / 13)]) parked.add(c);
+        }
+        applyMove(replay, move);
+        peak = Math.max(peak, 4 - replay.cells.filter(c => c === null).length);
+    }
+    assert.equal(result.construction.parkedCards, parked.size);
+    assert.equal(result.construction.peakOccupiedCells, peak);
+    spanTotal += span; parkedTotal += parked.size; peakTotal += peak;
     closeTotal += close;
 }
-assert.ok(closeTotal / 100 < 18, 'Nearby ranks should not dominate the board');
-assert.ok(gapTotal / 4400 > 3, 'Adjacent ranks should span a wider range');
+assert.ok(closeTotal / 100 < 22, 'Nearby ranks should not dominate the board');
+assert.ok(spanTotal / 800 > 7.5, 'Columns should not concentrate in narrow rank bands');
+assert.ok(parkedTotal / 100 > 12, 'Certificates should park unresolved blockers');
+assert.ok(peakTotal / 100 >= 3.5, 'Certificates should use the four reserves together');
 // Equal ranks and gaps of two count in both directions, regardless of suit;
 // A/K and gaps of three do not. These partial columns isolate the metric.
 assert.equal(metrics({ columns: [[0,13],[1,16],[6,17],[12,26],[8,24],[],[],[]],
     cells: [null,null,null,null], foundations: [0,0,0,0] }).closePairs, 3);
 console.log(`FreeCell rank distribution: ${(closeTotal / 100).toFixed(2)} close pairs per deal`);
+const resourceBoard = { columns: [[2],[1],[13],[16],[],
+    Array.from({length:52},(_,i)=>i).filter(c=>![2,1,13,16].includes(c)),[],[]],
+    cells: [null,null,null,null], foundations: [0,0,0,0] };
+validate(resourceBoard);
+const resourceBefore = structuredClone(resourceBoard);
+const ref = (zone,index) => ({zone,index});
+const transfer = (from,to) => ({from,to});
+const resourceMoves = [
+    transfer(ref('column',0),ref('cell',0)), transfer(ref('column',1),ref('cell',1)),
+    transfer(ref('column',2),ref('foundation',1)), transfer(ref('cell',0),ref('column',3)),
+    transfer(ref('column',3),ref('cell',0)), transfer(ref('cell',0),ref('column',3)),
+    transfer(ref('cell',1),ref('column',4)),
+];
+assert.deepEqual(constructionMetrics(resourceBoard,resourceMoves),
+    {parkedCards:2,releasedCards:2,earlyEmptyColumns:1,peakOccupiedCells:2});
+assert.deepEqual(resourceBoard,resourceBefore, 'Certificate analysis is read-only');
+const cli = args => JSON.parse(execFileSync(process.execPath,
+    [new URL('./freecell-solve.mjs',import.meta.url).pathname,...args], {encoding:'utf8'}));
+assert.equal(Object.hasOwn(cli(['42','--json']),'search'),false);
+assert.equal(cli(['42','--json','--search','--nodes','1']).search.status,'unknown');
 const empty=()=>({columns:Array.from({length:8},()=>[]),cells:[null,null,null,null],foundations:[0,0,0,0]});
 const move=(a,b)=>({from:{zone:'column',index:a},to:{zone:'column',index:b}});
 let s=empty();s.columns[0]=[5];s.columns[1]=[6];assert.throws(()=>applyMove(s,move(0,1)));

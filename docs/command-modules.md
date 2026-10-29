@@ -153,10 +153,14 @@ names, and check that the dependency graph has no new cycles. Follow the
 
 ## FreeCell
 
-`cardgames/freecell/engine.js` owns the pure v1 reverse generator, independent
-certificate interpreter and bounded forward solver. Both the worker and the
-Node CLI import it; the CLI keeps its existing named exports. Keep seed streams
-and candidate ordering stable (fixed hash fixtures cover five seeds).
+`cardgames/freecell/engine.js` owns the pure v3 reverse generator, independent
+certificate interpreter and optional bounded forward solver. Generation uses
+delayed reserve release and a staging column, then ranks existing certificates
+by reserve/blocker usage without running the solver. Both the worker and Node
+CLI import it; `constructionMetrics` exposes certificate resource counts, and
+CLI forward search is opt-in with `--search` or `--solve`. Keep seed streams
+and candidate ordering stable within a generator version (fixed hash fixtures
+cover five seeds).
 `rules.js` adds transactional suffix moves and safe auto collection.
 `FreeCellGame.js` owns history, worker cancellation, dialogs and desktop input;
 `view.js` shares coordinates between rendering and hit tests. The controller is

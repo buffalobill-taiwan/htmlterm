@@ -3,25 +3,26 @@ import { pathToFileURL } from 'node:url';
 import { readFileSync } from 'node:fs';
 import { parseSeed } from '../js/util/random.js';
 import { generate, verify, solve, suit, rank } from '../js/cmd/cardgames/freecell/engine.js';
-export { generate, verify, solve, applyMove, validate, metrics } from '../js/cmd/cardgames/freecell/engine.js';
+export { generate, verify, solve, applyMove, validate, metrics, constructionMetrics } from '../js/cmd/cardgames/freecell/engine.js';
 
-const usage = `Usage: node tools/freecell-solve.mjs <seed> [--candidates N] [--nodes N] [--batch N] [--json] [--solution]
+const usage = `Usage: node tools/freecell-solve.mjs <seed> [--candidates N] [--batch N] [--json] [--solution] [--search] [--nodes N]
        node tools/freecell-solve.mjs --verify file.json
        node tools/freecell-solve.mjs --solve file.json [--nodes N]
-Seed: 0..2147483647. Defaults: 64 candidates, 10000 independent search nodes.
+Seed: 0..2147483647. Defaults: 64 candidates; generation does not run a solver.
 Cards: integers 0..51, suits spades/hearts/diamonds/clubs, ranks A..K.
 Columns are top-to-bottom. --json includes board, replayable solution and metrics.
 Quality screen: at most 8 automatic cards, buried-low depth >=24, blockers >=40.
-At most 22 adjacent pairs may differ by 0–2 ranks; ranking favors fewer such pairs.
-Top 8 structural candidates receive a separate 256-node search probe.
-Quality scores/search effort are heuristics, NOT a difficulty guarantee.
---batch tests consecutive seeds and prints aggregate generation/search results.`;
+Top 8 structural candidates are ranked by their loop-shortened reverse certificates.
+Reserve occupancy, distinct parked blockers and early empty columns are heuristics,
+NOT proof that every solution needs these resources or a difficulty guarantee.
+--search optionally runs independent search (default 10000 nodes, set with --nodes).
+--batch tests consecutive seeds and prints aggregate generation/certificate results.`;
 function main(args) {
     if (args.includes('--help')) { console.log(usage); return; }
     const flags = new Map(), positional = [];
     for (let i = 0; i < args.length; i++) {
         const a = args[i];
-        if (['--json', '--solution'].includes(a)) flags.set(a, true);
+        if (['--json', '--solution', '--search'].includes(a)) flags.set(a, true);
         else if (['--candidates','--nodes','--batch','--verify','--solve'].includes(a)) {
             if (flags.has(a) || !args[i+1] || args[i+1].startsWith('--')) throw Error('Missing/duplicate option: '+a);
             flags.set(a,args[++i]);
@@ -48,22 +49,30 @@ function main(args) {
     for (let i = 0; i < count; i++) {
         const start = performance.now(), result = generate(seed+i,candidates);
         result.generationMs = Math.round(performance.now()-start);
-        const search = solve(result.board,nodes);
-        if (search.solution) verify(result.board,search.solution);
-        result.search = { status: search.status, nodes: search.nodes, moves: search.solution?.length ?? null };
-        if (search.status === 'unsolvable') throw Error('Search contradicts verified certificate');
+        if (flags.has('--search')) {
+            const search = solve(result.board,nodes);
+            if (search.solution) verify(result.board,search.solution);
+            result.search = { status: search.status, nodes: search.nodes, moves: search.solution?.length ?? null };
+            if (search.status === 'unsolvable') throw Error('Search contradicts verified certificate');
+        }
         results.push(result);
     }
     if (flags.has('--json')) console.log(JSON.stringify(count === 1 ? results[0] : results,null,2));
     else if (count > 1) console.log(JSON.stringify({ count, verified: results.length, automaticOnly: results.filter(r=>r.metrics.automaticCards===52).length,
         scoreRange: [Math.min(...results.map(r=>r.metrics.score)),Math.max(...results.map(r=>r.metrics.score))],
-        generationMs: results.reduce((a,r)=>a+r.generationMs,0), solvedIndependently: results.filter(r=>r.search.status==='solved').length,
-        unknown: results.filter(r=>r.search.status==='unknown').length },null,2));
+        generationMs: results.reduce((a,r)=>a+r.generationMs,0),
+        meanColumnRankSpan: results.reduce((a,r)=>a+r.metrics.rankSpan/8,0)/count,
+        meanParkedCards: results.reduce((a,r)=>a+r.construction.parkedCards,0)/count,
+        meanPeakOccupiedCells: results.reduce((a,r)=>a+r.construction.peakOccupiedCells,0)/count,
+        ...(flags.has('--search') ? {
+            solvedIndependently: results.filter(r=>r.search.status==='solved').length,
+            unknown: results.filter(r=>r.search.status==='unknown').length,
+        } : {}) },null,2));
     else {
         const r=results[0], label=c=>'SHDC'[suit(c)]+['A','2','3','4','5','6','7','8','9','10','J','Q','K'][rank(c)-1];
         console.log(`FreeCell seed ${seed}, generator v${r.version}, verified solution ${r.solution.length} moves`);
         r.board.columns.forEach((col,i)=>console.log(`${i+1}: ${col.map(label).join(' ')}`));
-        console.log(JSON.stringify({metrics:r.metrics,search:r.search,generationMs:r.generationMs},null,2));
+        console.log(JSON.stringify({metrics:r.metrics,construction:r.construction,search:r.search,generationMs:r.generationMs},null,2));
         if (flags.has('--solution')) console.log(JSON.stringify(r.solution,null,2));
     }
 }
