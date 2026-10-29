@@ -93,3 +93,18 @@ allocations/GC, and DOM updates; dirty-row tracking alone is not evidence that
 an entire frame is allocation-free. Historical counts in project-history.md are
 not current benchmarks. See [manual validation](development.md#manual-validation)
 for the functional checks to run alongside profiling.
+
+## Card-game reveal animation
+
+`cardgames/cards.js` caches 5×3 card faces, backs and six reveal frames per
+card. Fullwidth ranks use immutable single-column clip cells so a reveal can
+advance across half a glyph without altering the cached face. The RAF overlay
+reads these cached cells directly and dirties only the card's three rows.
+
+`cardgames/animation.js` advances one column every 40ms, retaining the final
+frame until 240ms before completing. Each dealer draw waits for the preceding
+reveal; the hole card uses the same animation. The command disables game
+actions during a reveal but keeps menu/exit keys active. Cancellation removes
+the overlay and suppresses the completion callback; frame cleanup also stops
+the animation. The board and score are refreshed at transition boundaries,
+not on every animation frame.

@@ -136,6 +136,7 @@ more than once.
 | `help` | Show command list; `help <cmd>` for details and usage |
 | `klotski` | Play Klotski 華容道 sliding-block puzzle (11 fayaa layouts) |
 | `jpmj` | Play Japanese Mahjong (14-tile riichi style, 6 AI personalities, riichi/dora/honba) |
+| `cardgames` | Open the card-game menu and play Blackjack with animated card reveals |
 | `memory` | Play a card-matching Memory game (flip to find matching pairs, three difficulty levels) |
 | `menu` | Open command menu dialog |
 | `mbti` | MBTI personality test (interactive) |
@@ -204,6 +205,20 @@ From a host terminal, `node tools/maze-solve.mjs 123456 hard --puzzle --path`
 prints the solution, ordered zero-based `row,col` route and original maze.
 Add `--ptt` for PTT fullwidth output. The game's position display instead uses
 one-based `(x,y)` coordinates. See [Maze reproduction](docs/development.md#maze-reproduction).
+
+### Card games
+
+Run `cardgames` to choose Blackjack. Arrows select Hit/Stand; Enter confirms or
+starts the next round. N returns to the game menu; Q/Escape or Ctrl+C quits. Each round
+uses a freshly shuffled 52-card deck. Aces count as 1 or 11; the dealer stands
+on all 17s, including soft 17. Two-card Blackjack beats other 21s. There is no
+betting, splitting, doubling or insurance. Session win/loss/draw counts reset
+when the command is restarted. Cards occupy 5×3 cells with fullwidth ranks
+except `10`; the shared renderer also supports jokers (` 〠`), unused here.
+
+Blackjack hits and the dealer's hole-card reveal use a left-to-right flip, like
+Memory (40ms per column). Dealer draws are shown one at a time. During a flip,
+Hit/Stand is locked; N, Q/Escape and Ctrl+C still cancel immediately.
 
 ### Keyboard shortcuts
 

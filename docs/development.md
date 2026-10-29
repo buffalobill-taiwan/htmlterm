@@ -49,6 +49,7 @@ not a promised minimum version. Browser source files use ES modules; some offlin
 node tools/import-check.mjs # dynamic import: paths, syntax, module side effects
 node tools/test-headless.mjs # Parser/Screen, VirtualBuffer, seeds, seed args, lazy commands
 node tools/test-system.mjs  # frame stack: prompts, input replay, busy, dialogs, lazy, errors
+node tools/test-cardgames.mjs # Blackjack rules, deck, card widths and cached flip frames
 node tools/test-maze.mjs     # Maze scoring fixtures, tree topology, branch distribution
 node tools/test-cchess-mahjong.mjs # Chinese chess / Japanese mahjong tile and rule checks
 git diff --check
@@ -284,3 +285,18 @@ and tile/confirmation dialogs with held Tab, plus menu → calc/quiz/time.
 Verify cancellation returns to the right parent, position keys still restore
 dragged dialogs, and no overlay remains after closing. Check difficulty dialogs
 still return their original value objects. No game-rule changes are involved.
+
+## Card games validation
+
+Run `node tools/test-cardgames.mjs` for deck/scoring/card-width checks, cached
+flip-frame reuse and wide-rank column clipping.
+In the browser, run `cardgames`, select Blackjack, exercise Hit/Stand, next round,
+N back to the menu, and Escape/Ctrl+C. Confirm the dealer hole card is hidden
+during the player turn and session counters reset when reopening the command.
+Check natural Blackjack versus a three-card 21, multiple aces, busts, ties,
+and the dealer standing on soft 17. Returning to the menu keeps the counters;
+leaving and starting `cardgames` again resets them.
+
+For Blackjack animation, check player hits, dealer hole-card reveal and multiple
+dealer draws. Repeated Enter must not draw extra cards during a flip. Test N,
+Q/Escape and Ctrl+C during animation: no overlay or delayed result may survive.

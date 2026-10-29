@@ -4,6 +4,7 @@
  * registration without importing the game implementation modules.
  */
 export const GAME_META = {
+    cardgames: { commandName: 'cardgames', help: 'Play card games — Blackjack', menu: 'Card Games', usage: 'cardgames\n         Choose Blackjack; arrows select Hit/Stand, Enter confirms.\n         N: game menu; Q/Esc: quit. No betting, splits or insurance.' },
     '2048': {
         commandName: '2048',
         help: 'Play 2048',

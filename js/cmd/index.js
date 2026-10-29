@@ -41,3 +41,5 @@ export const MazeCmd = defineLazy(G.maze, () => import('./maze/index.js').then(m
 export const OthelloCmd = defineLazy(G.othello, () => import('./othello/index.js').then(m => m.OthelloCmd));
 export const CChessCmd = defineLazy(G.cchess, () => import('./cchess/index.js').then(m => m.CChessCmd));
 export const JpmjCmd = defineLazy(G.jpmj, () => import('./jpmj/index.js').then(m => m.JpmjCmd));
+
+export const CardgamesCmd = defineLazy(G.cardgames, () => import('./cardgames/index.js').then(m => m.CardgamesCmd));

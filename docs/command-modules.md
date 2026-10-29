@@ -47,6 +47,7 @@ contains shared dimensions, difficulty settings, and other fixed configuration.
 
 | Directory | Command class | Additional modules |
 |---|---|---|
+| [cardgames](../js/cmd/cardgames/index.js) | `CardgamesCmd` | `blackjack.js`: deck and scoring; `cards.js`: cached 5×3 faces, backs and flip frames; `animation.js`: cancellable RAF reveal overlays |
 | [game2048](../js/cmd/game2048/index.js) | `Game2048Cmd` | `board.js`: sliding, merging, spawning, and move availability |
 | [gweled](../js/cmd/gweled/index.js) | `GweledCmd` | `board.js`: matches, gravity, legal swaps, and chain scores |
 | [klotski](../js/cmd/klotski/index.js) | `KlotskiCmd` | Level chooser configures shared `SelectDialog`; level data and solutions stay in `js/data/` |
