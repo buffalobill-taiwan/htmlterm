@@ -41,6 +41,35 @@ try {
     tick(); assert.deepEqual([overlay.x, overlay.y], [6, 4]);
     tick(); assert.equal(completed, 1); assert.equal(overlays.size, 0);
     assert.ok(dirty.every(r => r >= 3 && r <= 8), 'Only old/new card rows are dirty');
+    // Short flights retain 20ms/cell. Longer flights span exactly 15 updates,
+    // including distances that do not divide evenly and travel to the left.
+    for (const [from, to] of [
+        [{ x: 4, y: 6 }, { x: 19, y: 2 }],
+        [{ x: 4, y: 6 }, { x: 20, y: 2 }],
+        [{ x: 4, y: 6 }, { x: 40, y: 2 }],
+        [{ x: 67, y: 19 }, { x: 4, y: 2 }],
+    ]) {
+        let landed = false;
+        flyCard(cmd, 0, from, to, () => { landed = true; });
+        const flying = [...overlays][0];
+        tick();
+        const started = time;
+        for (let i = 1; i < 15; i++) {
+            tick(); assert.equal(landed, false);
+            assert.ok(Number.isInteger(flying.x) && Number.isInteger(flying.y));
+            if (i === 1 && Math.abs(to.x - from.x) >= 30)
+                assert.ok(Math.abs(flying.x - from.x) >= 2, 'Long flights cross multiple cells per update');
+        }
+        tick();
+        assert.equal(time - started, 300);
+        assert.equal(landed, true);
+        assert.deepEqual([flying.x, flying.y], [to.x, to.y]);
+        assert.equal(overlays.size, 0);
+    }
+    let caughtUp = false;
+    flyCard(cmd, 0, { x: 4, y: 6 }, { x: 67, y: 2 }, () => { caughtUp = true; });
+    tick(); tick(400);
+    assert.equal(caughtUp, true, 'Delayed RAF catches up instead of extending flight');
     const cancel = flyCard(cmd, 0, { x: 4, y: 6 }, { x: 40, y: 2 }, () => completed++);
     tick(); cancel(); drain();
     assert.equal(completed, 1); assert.equal(overlays.size, 0);

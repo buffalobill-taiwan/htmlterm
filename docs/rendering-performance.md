@@ -117,9 +117,12 @@ moves do not. The UI calls `moveCards(..., false)` to defer its immediate
 collection, then obtains the safe move sequence from `auto()` on a clone.
 
 `freecell/animation.js` flies one cached 5×3 card face at a time using a
-`RAFAnimationManager` overlay. A straight grid path advances one step every
-20ms, with `max(abs(dx), abs(dy))` steps and rounded coordinates; delayed frames
-catch up using elapsed time. Only the old and new card rows are marked dirty.
+`RAFAnimationManager` overlay. A straight grid path has
+`max(abs(dx), abs(dy))` steps and rounded coordinates. Flights up to 15 steps
+advance one step every 20ms; longer flights spread all steps across 15 updates,
+crossing multiple cells per update for a 300ms duration cap. Delayed RAF frames
+catch up using elapsed time and finish on the first update at or after the
+deadline. Only the old and new card rows are marked dirty.
 The board hides the source face during flight but retains the complete logical
 state until landing, when `applyMove` updates the foundation. Long source piles
 scroll to expose the departing card. Board rendering happens at flight boundaries.

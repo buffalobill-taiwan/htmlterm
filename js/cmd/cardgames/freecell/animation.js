@@ -2,11 +2,12 @@ import { RAFAnimationManager } from '../../../system/RAFAnimationHelper.js';
 import { term } from '../../../system/sys.js';
 import { stackCardBuffer } from '../cards.js';
 
-// One terminal-grid step per 20ms along a straight, eight-direction path.
+// Update every 20ms, spreading long flights over at most 15 ticks (300ms).
 export function flyCard(cmd, card, from, to, done) {
     const face = stackCardBuffer(card);
     const dx = to.x - from.x, dy = to.y - from.y;
     const steps = Math.max(Math.abs(dx), Math.abs(dy));
+    const ticks = Math.min(steps, 15);
     const manager = new RAFAnimationManager(cmd, {
         x: from.x, y: from.y, w: 5, h: 3, hideCursor: false, holdBusy: false,
     });
@@ -19,7 +20,8 @@ export function flyCard(cmd, card, from, to, done) {
     const finish = () => { if (complete && !cancelled && active()) done(); };
     manager.start(ts => {
         if (start === null) start = ts;
-        const next = Math.min(steps, Math.floor((ts - start) / 20));
+        const elapsedTicks = Math.min(ticks, Math.floor((ts - start) / 20));
+        const next = ticks ? Math.floor(steps * elapsedTicks / ticks) : 0;
         if (next !== progress) {
             dirty();
             progress = next;

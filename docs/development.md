@@ -402,7 +402,8 @@ For automatic-collection animation, run `node tools/test-freecell-animation.mjs`
 for controlled RAF timing, sequential column/cell flights, input lock, first-move
 activation, undo and synchronous cleanup. In the browser, verify that opening
 and restarting preserve all 52 cards, then move a card to a free cell. Safe cards
-must fly one at a time at 20ms per grid step, with the foundation count changing
+must fly one at a time at 20ms per grid step (long flights cross multiple cells
+per update to cap their duration at 300ms), with the foundation count changing
 on landing. Try arrows, Enter, mouse, U/R/N/M/Q/Escape during flight: none should
 act or replay afterward. After landing, U must restore the complete prior board.
 Use Ctrl+C during flight and reopen to check that no old overlay or callback
