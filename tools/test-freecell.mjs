@@ -1,80 +1,74 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-const v3Hashes = {
-    "0": "857cf0a24694e6e7d48a59d07ae1c0bc2184d4210b8ccd711ce1dadae8f78890",
-    "1": "1179cfa77bb779210b84524cf5ecb6c4bffd83db0f127d2c34058042f811d1bb",
-    "42": "009caeeb7243c90794d5e7a261044ef1f8c02d165f0bdd80a65d2ebb1b46a4f7",
-    "123456": "a7cd3c443789545aa2956344c4ab6c51cb72cada279bdd1587a6274eebde1972",
-    "2147483647": "a58f3eba688e7a4c6cda07249942827ae61b7209a22c36aea9e365e139cc2f4d"
+import { readFileSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { generate, verify, applyMove, applyReverseMove, validate, metrics, constructionMetrics } from './freecell-generate.mjs';
+const v4Hashes = {
+    0: 'b7dfad9f4402f137b020c5e525d3e33c8d8a3a5d20e78e48aab5157e2717a6f0',
+    1: '4736ca3e1cbabb40fe6b533e676677a48ebb0043edc783dafa71b7fa9fc20e7e',
+    42: '7f77f6f33351d353d072e596e05a453d8d7a01849d5a9c03f68c7ac739c5e566',
+    123456: 'd00fbbfbc3063276f2b16e5cc222d8b2412aa83deafff6e2a3997bbe998742d3',
+    2147483647: '95a7cae5478225aa036e7c24c696868d06d41c6c2cddf6abfa18f1376b265be3',
 };
-import { generate, verify, applyMove, validate, metrics, constructionMetrics } from './freecell-solve.mjs';
-for (const seed of [0,1,42,123456,2147483647]) {
+for (const seed of [0, 1, 42, 123456, 2147483647]) {
     const result = generate(seed);
-    assert.equal(result.version, 3);
-    assert.equal(createHash('sha256').update(JSON.stringify(result)).digest('hex'), v3Hashes[seed]);
-    validate(result.board, true);
-    assert.equal(verify(result.board,result.solution),true);
-    assert.deepEqual(generate(seed),result);
-    assert.ok(result.metrics.automaticCards <= 8);
-    assert.ok(result.metrics.buriedLow >= 24);
-    assert.ok(result.metrics.blockers >= 40);
-    assert.throws(()=>verify(result.board,result.solution.slice(1)));
-    console.log(`seed ${seed}: verified ${result.solution.length} reverse moves`);
+    assert.equal(result.version, 4);
+    assert.equal(createHash('sha256').update(JSON.stringify(result)).digest('hex'), v4Hashes[seed]);
+    assert.deepEqual(generate(seed), result);
+    assert.equal(Object.hasOwn(result, 'candidates'), false);
+    assert.throws(() => verify(result.board, result.solution.slice(1)));
 }
-// Pin v3 output across both ends of the public candidate-count range.
-for (const [seed, count, hash] of [
-    [0, 1, '6dc251f46415e3b060c9758a499352f6d51624738b8908993080b8268e1c7342'],
-    [0, 8, '46a0194b13ca66718e526cfbefd9d6bc69e2cf6bce918d2d068a282ec66c873b'],
-    [0, 128, '53e35b687fa08b6efb5bb4e23cab4e5cba65e1189f7d23465675fdda3f693f91'],
-    [42, 4096, 'dc4623aabffde2ffe0bf46a380ef26412d2f4b6cc9098fefbe25c929ac0e66c1'],
-]) {
-    const result = generate(seed, count);
-    assert.equal(createHash('sha256').update(JSON.stringify(result)).digest('hex'), hash);
-    assert.equal(verify(result.board, result.solution), true);
+function fixture(name) {
+    const data = JSON.parse(readFileSync(new URL(`./fixtures/${name}.json`, import.meta.url), 'utf8'));
+    const location = i => ({ zone: i < 8 ? 'column' : i < 12 ? 'cell' : 'foundation', index: i < 8 ? i : i < 12 ? i - 8 : i - 12 });
+    return { board: data.board, solution: data.moves.map(([from, to]) => ({ from: location(from), to: location(to) })) };
 }
-assert.throws(() => generate(13, 1), /No candidate passed/);
-// Distribution and certificate-resource regression checks, not human difficulty.
-let closeTotal = 0, spanTotal = 0, parkedTotal = 0, peakTotal = 0;
-for (let seed = 0; seed < 100; seed++) {
-    const result = generate(seed);
-    let close = 0, span = 0;
-    for (const col of result.board.columns) {
-        const ranks = col.map(c => c % 13);
-        span += Math.max(...ranks) - Math.min(...ranks);
-    }
-    for (const col of result.board.columns) for (let i = 1; i < col.length; i++) {
-        const gap = Math.abs(col[i] % 13 - col[i - 1] % 13);
-        if (gap <= 2) close++;
-    }
-    assert.equal(result.metrics.closePairs, close);
-    assert.equal(result.metrics.rankSpan, span);
-    assert.equal(verify(result.board, result.solution), true);
-    // Independently count distinct blocked cards and peak reserve occupancy.
-    const replay = structuredClone(result.board), parked = new Set();
-    let peak = 0;
-    for (const move of result.solution) {
-        if (move.to.zone === 'cell') {
-            const c = replay.columns[move.from.index].at(-1);
-            if (c % 13 > replay.foundations[Math.floor(c / 13)]) parked.add(c);
-        }
+function roundTrip({ board, solution }) {
+    assert.equal(verify(board, solution), true);
+    const replay = structuredClone(board), states = [structuredClone(board)];
+    for (const move of solution) {
         applyMove(replay, move);
-        peak = Math.max(peak, 4 - replay.cells.filter(c => c === null).length);
+        states.push(structuredClone(replay));
     }
-    assert.equal(result.construction.parkedCards, parked.size);
-    assert.equal(result.construction.peakOccupiedCells, peak);
-    spanTotal += span; parkedTotal += parked.size; peakTotal += peak;
-    closeTotal += close;
+    for (let i = solution.length - 1; i >= 0; i--) {
+        const { from, to } = solution[i];
+        applyReverseMove(replay, { from: to, to: from });
+        validate(replay);
+        assert.deepEqual(replay, states[i], `Reverse step ${solution.length - i} restores its exact predecessor`);
+    }
+    assert.deepEqual(replay, board);
+    return states;
 }
-assert.ok(closeTotal / 100 < 22, 'Nearby ranks should not dominate the board');
-assert.ok(spanTotal / 800 > 7.5, 'Columns should not concentrate in narrow rank bands');
-assert.ok(parkedTotal / 100 > 12, 'Certificates should park unresolved blockers');
-assert.ok(peakTotal / 100 >= 3.5, 'Certificates should use the four reserves together');
+const microsoft = fixture('freecell-ms1'), legacy = fixture('freecell-v3');
+const msStates = roundTrip(microsoft);
+assert.equal(microsoft.solution.length, 161);
+assert.equal(Math.max(...msStates.flatMap(s => s.columns.map(col => col.length))), 12);
+// Fifth column: reverse free-cell return 6C -> 8H and tableau return 8H -> 4H.
+// Neither reverse destination is a legal forward tableau placement.
+assert.deepEqual(msStates[0].columns[4], [30, 26, 10, 16, 20, 44]);
+roundTrip(legacy);
+let totalMoves = 0, overflowDeals = 0;
+for (let seed = 0; seed < 1000; seed++) {
+    const result = generate(seed);
+    validate(result.board, true);
+    assert.equal(verify(result.board, result.solution), true);
+    assert.ok(result.shuffle.transitionChecks <= 100000);
+    assert.equal(result.shuffle.effectiveMoves, result.solution.length - 52);
+    totalMoves += result.solution.length;
+    if (result.shuffle.peakColumnLength > 7) overflowDeals++;
+    if (seed < 10) roundTrip(result);
+}
+// Aggregate mixing regression, not a per-deal difficulty gate or shortest solution claim.
+assert.ok(totalMoves / 1000 > 150, 'The reverse walk should retain substantially more moves than v3');
+assert.ok(overflowDeals > 0, 'Intermediate columns must be allowed beyond their opening sizes');
+console.log(`FreeCell: 1000 verified seeds, mean ${(totalMoves / 1000).toFixed(2)} moves; MS #1 and v3 round trips passed`);
+
 // Equal ranks and gaps of two count in both directions, regardless of suit;
 // A/K and gaps of three do not. These partial columns isolate the metric.
 assert.equal(metrics({ columns: [[0,13],[1,16],[6,17],[12,26],[8,24],[],[],[]],
     cells: [null,null,null,null], foundations: [0,0,0,0] }).closePairs, 3);
-console.log(`FreeCell rank distribution: ${(closeTotal / 100).toFixed(2)} close pairs per deal`);
 const resourceBoard = { columns: [[2],[1],[13],[16],[],
     Array.from({length:52},(_,i)=>i).filter(c=>![2,1,13,16].includes(c)),[],[]],
     cells: [null,null,null,null], foundations: [0,0,0,0] };
@@ -92,17 +86,43 @@ assert.deepEqual(constructionMetrics(resourceBoard,resourceMoves),
     {parkedCards:2,releasedCards:2,earlyEmptyColumns:1,peakOccupiedCells:2});
 assert.deepEqual(resourceBoard,resourceBefore, 'Certificate analysis is read-only');
 const cli = args => JSON.parse(execFileSync(process.execPath,
-    [new URL('./freecell-solve.mjs',import.meta.url).pathname,...args], {encoding:'utf8'}));
+    [new URL('./freecell-generate.mjs',import.meta.url).pathname,...args], {encoding:'utf8', stdio: ['ignore', 'pipe', 'pipe']}));
 assert.equal(Object.hasOwn(cli(['42','--json']),'search'),false);
-assert.equal(cli(['42','--json','--search','--nodes','1']).search.status,'unknown');
+for (const flag of ['--candidates', '--search', '--solve', '--nodes']) {
+    assert.throws(() => cli(['42', flag, '1']), /Unknown option/);
+}
+assert.throws(() => cli(['2147483647', '--batch', '2']), /Batch exceeds/);
+assert.throws(() => cli(['0', '--batch', '0']), /Invalid --batch/);
+const directory = mkdtempSync(join(tmpdir(), 'htmlterm-freecell-'));
+try {
+    const file = join(directory, 'certificate.json');
+    writeFileSync(file, JSON.stringify(legacy));
+    assert.deepEqual(cli(['--verify', file]), { verified: true });
+    writeFileSync(file, JSON.stringify({ ...legacy, solution: legacy.solution.slice(1) }));
+    assert.throws(() => cli(['--verify', file]));
+} finally { rmSync(directory, { recursive: true, force: true }); }
 const empty=()=>({columns:Array.from({length:8},()=>[]),cells:[null,null,null,null],foundations:[0,0,0,0]});
 const move=(a,b)=>({from:{zone:'column',index:a},to:{zone:'column',index:b}});
 let s=empty();s.columns[0]=[5];s.columns[1]=[6];assert.throws(()=>applyMove(s,move(0,1)));
 s=empty();s.columns[0]=[5];s.columns[1]=[19];applyMove(s,move(0,1));assert.equal(s.columns[1].at(-1),5);
 s=empty();s.columns[0]=[1];assert.throws(()=>applyMove(s,{from:{zone:'column',index:0},to:{zone:'foundation',index:0}}));
 s=empty();s.columns[0]=[0];applyMove(s,{from:{zone:'column',index:0},to:{zone:'foundation',index:0}});assert.equal(s.foundations[0],1);
-assert.throws(()=>generate(-1));assert.throws(()=>generate(0,0));
+for (const seed of [-1, 2147483648, 1.5, NaN, 'bad']) assert.throws(() => generate(seed));
 console.log('FreeCell generation, independent replay, rule rejection and determinism passed');
+
+// Reverse rules check the source, not the tableau destination; rejects are atomic.
+s=empty(); s.columns[0]=[7,19]; s.columns[1]=[0];
+let reverseBefore=structuredClone(s);
+applyReverseMove(s,move(0,1)); assert.deepEqual(s.columns[1],[0,19]);
+applyMove(s,move(1,0)); assert.deepEqual(s,reverseBefore);
+s=empty(); s.columns[0]=[7,6]; reverseBefore=structuredClone(s);
+assert.throws(()=>applyReverseMove(s,move(0,1)), /return card/); assert.deepEqual(s,reverseBefore);
+s=empty(); s.cells=[0,1,null,null]; reverseBefore=structuredClone(s);
+assert.throws(()=>applyReverseMove(s,{from:{zone:'cell',index:0},to:{zone:'cell',index:1}}), /Occupied/);
+assert.deepEqual(s,reverseBefore);
+assert.throws(()=>applyReverseMove(s,{from:{zone:'foundation',index:0},to:{zone:'column',index:0}}), /Empty/);
+assert.throws(()=>applyReverseMove(s,{from:{zone:'cell',index:0},to:{zone:'foundation',index:0}}), /destination/);
+assert.throws(()=>applyReverseMove(s,{from:{zone:'column',index:8},to:{zone:'cell',index:0}}), /location/);
 
 // Runtime multi-card rules, transactional errors and conservative foundations.
 const { moveCards, selectedCards, capacity } = await import('../js/cmd/cardgames/freecell/rules.js');

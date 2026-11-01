@@ -224,8 +224,10 @@ FreeCell can also be opened with `cardgames freecell [seed]`. Seeds are integers
 0–2147483647; these are this project's deals, not Windows deal numbers. The
 browser generates from a solved position in a worker and verifies a forward
 solution before displaying the deal. The shared offline tool reproduces the
-same seed with its default 64 candidates. Structural screening avoids trivial
-starts, but does not assign a human difficulty level or sample all deals uniformly.
+same seed using one continuous reverse construction, with deeper loop-avoiding
+moves and temporary long columns. Every deal has a replay-verified solution;
+there is no candidate ranking, difficulty threshold or forward search.
+Use `node tools/freecell-generate.mjs <seed>` for offline generation.
 
 Use arrows to move the cyan cursor and Enter to select a card or alternating,
 descending suffix, then Enter at its destination. Selected cards are yellow.

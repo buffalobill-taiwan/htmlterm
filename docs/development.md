@@ -303,124 +303,114 @@ Q/Escape and Ctrl+C during animation: no overlay or delayed result may survive.
 
 ## FreeCell generation and validation
 
-`tools/freecell-solve.mjs` and the browser FreeCell worker share
-`js/cmd/cardgames/freecell/engine.js`. It starts from four completed foundations, performs reversible moves
-through tableau columns and free cells, and finishes with empty cells and
-foundations and column lengths 7,7,7,7,6,6,6,6. The inverse move trace is a
-solution certificate. A separate forward interpreter checks every move,
-card uniqueness and the final foundations; exact-state loops are removed.
+`tools/freecell-generate.mjs` and the browser FreeCell worker share
+`js/cmd/cardgames/freecell/engine.js`. The v4 generator constructs one board
+backward from four completed foundations and records the inverse of every move.
+`verify()` independently replays those forward moves, checks card completeness
+and uniqueness at each step, and requires all four foundations to finish at K.
+There is no forward search, candidate pool, ranking or difficulty rejection.
 
 ```sh
-node tools/freecell-solve.mjs 123456
-node tools/freecell-solve.mjs 123456 --json > /tmp/freecell.json
-node tools/freecell-solve.mjs --verify /tmp/freecell.json
-node tools/freecell-solve.mjs --solve /tmp/freecell.json --nodes 100000
-node tools/freecell-solve.mjs 0 --batch 100
-node tools/freecell-solve.mjs 42 --search --nodes 10000
+node tools/freecell-generate.mjs 123456
+node tools/freecell-generate.mjs 123456 --json > /tmp/freecell.json
+node tools/freecell-generate.mjs --verify /tmp/freecell.json
+node tools/freecell-generate.mjs 0 --batch 1000
 node tools/test-freecell.mjs
 node tools/test-freecell-animation.mjs
 ```
 
-Seeds range from 0 to 2147483647. Generator version and candidate count are
-part of reproducibility: the current generator is v3, with 64 candidates by
-default. The same seed now produces a different deal from v1/v2; exported older
-board/certificate JSON can still be replay-verified. Use `--candidates N`
-(up to 4096) to widen generation. The tool fails explicitly if no candidate
-passes its structural screen; it does not substitute an unverified deal.
-`--solution` includes the certificate in text output; `--json` includes it
-along with the board, structural metrics and certificate resource usage. JSON cards are
-0–51: suits spades/hearts/diamonds/clubs, each A through K; columns are ordered
-from the top to the exposed bottom. Moves use `{from,to}` locations, each with
-`zone` (`column`, `cell`, `foundation`) and zero-based `index`. Certificates
-use single-card moves, so no supermove capacity assumptions are required.
+Seeds range from 0 to 2147483647. The same seed produces the same v4 board and
+certificate in the browser and CLI; it produces a different board from v3.
+Older saved board/certificate JSON remains verifiable. The old
+`freecell-solve.mjs`, `solve()` export and `--candidates`, `--search`, `--solve`,
+`--nodes` options have been removed. The replacement CLI generates deals and
+replays certificates; it does not search for solutions to arbitrary boards.
 
-v3 keeps the seeded unequal suit draw rates (`0.1 + random²`, multiplied by
-remaining foundation cards), but makes reserves part of the construction:
+### Reverse moves and closing the layout
 
-- A card entering a free cell stays there for 3–14 foundation-extraction rounds,
-  so later cards can be placed before it returns to the tableau.
-- Foundation cards can also enter an empty free cell directly (80% preference
-  when one is available). The forward inverse legally collects that reserve card.
-- One seeded column stays empty until 36 foundation cards have been extracted.
-  The other seven can hold at least 45, so this staging reservation cannot block
-  the extraction quota. It allows late reverse staging / earlier forward clearing.
-- Reverse moves never remove a tableau card whose forward return would be
-  illegal. Lone-card transfers between empty columns and cell-to-cell transfers
-  are skipped. Final reserve flushing restores the standard 7/6-card layout.
+`applyReverseMove(state, {from, to})` accepts the actual reverse direction:
 
-Destination selection no longer favors particular rank gaps. Each candidate
-still has a bounded 52 extractions × at most 24 relocation steps, plus four flushes.
+- From a tableau, remove only an exposed card that could legally be put back
+  on the newly exposed card (or into the now empty column).
+- From a free cell, remove its card; from a foundation, remove its highest card.
+- The destination is an empty free cell or a tableau. A reverse tableau
+  destination does **not** need alternating color or descending rank.
+- Reject invalid locations, empty sources, occupied cells, same-location moves
+  and reverse destinations in the foundations before modifying the state.
 
-Quality screening rejects boards with more than eight immediately safe
-foundation cards, buried A/2/3 depth below 24, or fewer than 40 lower-card /
-higher-blocker pairs. Structural score rewards buried low cards (×3), blockers
-(×2) and the sum of each column's rank span (×5), and penalizes built pairs (×2),
-automatic cards (×4), same-suit neighbors (×3), and rank gaps 0–2 (×2). The old
-hard limit of 22 close pairs is removed; rank span guards against narrow bands.
+Generation allows columns longer than their final 7/6-card sizes, including
+across successive foundation extractions. Above that final size it only adds
+cards that fit the previous top: otherwise an immovable mismatch would prevent
+closing the layout. This is a construction constraint, not part of the general
+reverse-move interpreter. At the very end, peel these reversible overflow runs
+into underfilled columns, then empty the free cells into the remaining slots.
+With exactly 52 cards extracted, the vacancies equal overflow plus occupied
+cells, guaranteeing the standard 7,7,7,7,6,6,6,6 layout. No intermediate flush,
+fixed holding delay or reserved-column schedule is used.
 
-For the eight best structural candidates, erase exact-state loops and replay the
-existing reverse certificate to compute `construction`:
-`parkedCards` counts distinct cards moved into reserves before their foundation
-is ready; `releasedCards` counts those later moved from reserves to columns;
-`earlyEmptyColumns` counts distinct empty columns used as destinations before
-26 cards have been collected; `peakOccupiedCells` records simultaneous reserve
-occupancy. Select by structural score plus these four values weighted 4, 3, 3, 8
-respectively, retaining the earlier candidate on ties. Counting distinct cards
-and columns prevents repeated detours from inflating the usage score.
+### Mixing and determinism
 
-Generation never invokes a forward solver. Replaying the selected certificate
-with `verify()` checks implementation correctness; the inverse construction is
-the source of solvability. Resource usage describes this particular solution,
-not a minimum required by every solution or a human difficulty rating. Reverse
-generation remains biased and does not sample all deals uniformly.
+Between foundation extractions, and once after the last one, take up to 256
+reverse relocations. Choose an unfinished foundation uniformly for extraction.
+Move sampling favors a tableau destination that preserves a reversible run
+(weight 64), then a free cell (4), then an arbitrary tableau placement (1).
+This keeps cards movable longer; it does not score or compare complete boards.
 
-The generator reuses immutable location references and scratch lists when
-enumerating reverse moves, and retains only the eight best candidates and their
-certificates. Candidate ties retain generation order.
+A canonical key ignores free-cell and column permutations, so immediate undo,
+loops and pure slot renaming do not consume accepted random-walk steps. Sample
+successors without replacement and check at most 100,000 across the entire
+construction. Stop a walk when no unseen successor remains; if the budget runs
+out, finish the remaining extractions and close the layout normally. No minimum
+step count is required, and no seed is rejected for being too easy. Stop decisions
+use operation counts, never elapsed time. Each accepted reverse move records its
+single-card forward inverse. Finally erase exact-state loops from the certificate
+and replay-verify it before returning the board.
 
-A v2/v3 comparison of seeds 0–99 (64 candidates) increased mean column rank
-span from 6.8625 to 8.125, distinct parked blockers from 2.53 to 17.36, and peak
-reserve occupancy from 1.99 to 4. Mean close pairs changed from 15.27 to 17.83;
-this version prioritizes dependencies and broader columns over minimizing every
-nearby pair. Generation and certificate replay passed for seeds 0–999 (about
-4.45 seconds total on the development machine, not a timing guarantee).
+`--json` includes `board`, `solution`, `shuffle`, `metrics` and `construction`.
+Cards are 0–51: spades/hearts/diamonds/clubs, each A–K. Columns are ordered from
+the top to the exposed bottom. Moves use `{from,to}` with a `zone` of `column`,
+`cell` or `foundation` and a zero-based `index`.
 
-The independent forward solver uses legal single-card moves, conservative
-safe-foundation closure, and symmetry reduction for columns/free cells. It
-never reads the generation certificate. It runs only with `--search` during
-generation/batches, or explicitly via `--solve file.json`. `--nodes N` controls its search budget
-(default 10000, maximum 1000000); a 400-move search-depth guard also applies.
-Budget/depth exhaustion is `unknown`, not `unsolvable` and not a difficulty
-rating. Every independently discovered solution is replay-checked as well.
-Batch output counts verified deals, automatically solved deals, structural scores,
-rank span, parked blockers, peak reserve occupancy and total generation time.
-Independent search successes/unknowns are included only with `--search`.
+`shuffle.transitionChecks` counts probed successors, `reverseMoves` counts
+construction moves including extractions and closing, and `peakColumnLength`
+records the longest intermediate column. `effectiveMoves` is the shortened
+certificate length minus its 52 foundation collections, not a shortest-solution
+length. Structural and certificate resource metrics are descriptive only; their
+former ranking score has been removed. Batch output reports verified deal count,
+mean/median solution length, retained relocations and generation time.
 
-FreeCell validation: run `node tools/test-freecell.mjs` for fixed v3 seed hashes
-(including candidate counts 1, 8, 128 and 4096 and a quality-screen rejection),
-100-seed rank/resource-distribution checks, distinct-resource counting, CLI search
-opt-in, certificate replay, supermove capacity (including empty destinations),
-transactional rejection, safe foundations, win detection and cached card headers.
-In the browser, exercise `cardgames` → FreeCell and `cardgames freecell 42`:
-keyboard and mouse moves, U (including auto collection), R, N with seed 0 and
-invalid text, M, long-column Home/End/paging/scroll arrows/drag-edge scrolling,
-and win/undo. Cancel dragging via outside release, Space/Escape, window blur,
-a dialog and Ctrl+C. Cancel generation and reopen to check for stale results.
-Also replay Blackjack and dialog/widget dragging after shared mouse-routing changes.
+### Validation
 
-v2 browser check (2026-10-29 working tree): headless Chromium 149.0.7827.55,
-1280×900, served over local HTTP. Entered `cardgames freecell 42`, visually
-inspected the screenshot, and compared the worker's initial board and the visible
-auto-collected state with the shared engine. Also opened seeds 0 and 2147483647
-and returned to the shell with Q. All matched; no page JavaScript errors occurred.
+`tools/test-freecell.mjs` pins five v4 seeds including both endpoints, generates
+and verifies seeds 0–999, checks exact forward/reverse round trips, invalid
+reverse moves and unchanged state after rejection. The Microsoft #1 fixture is
+a 161-single-card expansion of the published solution linked in the fixture:
+it restores irregular adjacencies and temporarily reaches a 12-card column.
+A v3 fixture covers older certificates and the CLI `--verify` interface.
+The fixture's compact location codes are columns 0–7, cells 8–11 and
+foundations 12–15; these are expanded by the test, not a new runtime format.
+Existing supermove, transactional move, safe collection, win and cached-card
+checks remain. Removed CLI flags must fail explicitly.
 
-v3 browser check (2026-10-30 working tree): Chromium 149.0.7827.55 at 1280×900
-over local HTTP. Seeds 0, 42 and 2147483647 matched the shared generator and
-retained their complete opening boards. Inspected the seed-42 screenshot and
-checked a keyboard move/undo. Replayed its certificate through the live game
-controller to victory with animation and safe auto-collection enabled: 59 moves
-were played, and 44 certificate moves were already handled by auto-collection.
-There were no page JavaScript errors.
+For seeds 0–999, v4 retained an average of 187.247 single-card solution moves
+(median 185), including the 52 foundation collections. All 1000 replayed
+successfully; intermediate columns reached 10 cards. This is a measure of the
+construction trace, not a claim about human difficulty or optimal move count.
+
+In the browser, exercise `cardgames freecell 42` and seeds 0 and 2147483647;
+compare the worker board to the CLI, check keyboard/mouse move and undo,
+restart, new seed, menu and Ctrl+C. Reopen after cancelling generation and
+confirm that no stale worker result replaces the new game. Opening and restarting
+must preserve all 52 cards without automatic collection. Replay a certificate
+through the live controller to check moves, animation, collection and victory.
+
+v4 browser check (2026-11-01 working tree): Chromium 149.0.7827.55,
+1280×900 over local HTTP. Seeds 0, 42 and 2147483647 matched the shared engine.
+Keyboard and desktop mouse moves, undo, restart, the seed dialog, replacing a
+pending worker and Ctrl+C cancellation/reopen passed. The seed-42 certificate
+completed through the live controller: 63 moves were played, and 99 trace
+entries concerned cards already safely auto-collected. No page JavaScript
+errors occurred; opening and victory screenshots were inspected.
 
 For automatic-collection animation, run `node tools/test-freecell-animation.mjs`
 for controlled RAF timing, sequential column/cell flights, input lock, first-move
