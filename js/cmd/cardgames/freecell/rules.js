@@ -3,6 +3,7 @@ import { applyMove, fits, clone, auto, suit, rank } from './engine.js';
 // Locations include a zero-based card offset when selecting a tableau suffix.
 export function selectedCards(state, from) {
     if (from.zone === 'cell') return state.cells[from.index] == null ? [] : [state.cells[from.index]];
+    if (from.zone === 'foundation') return state.foundations[from.index] > 0 ? [from.index * 13 + state.foundations[from.index] - 1] : [];
     if (from.zone !== 'column') return [];
     const col = state.columns[from.index];
     if (!col || !Number.isInteger(from.card) || from.card < 0 || from.card >= col.length) return [];

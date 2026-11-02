@@ -141,3 +141,24 @@ for(let id=0;id<52;id++)for(const header of [false,true])for(const style of [0,1
  assert.equal(stackCardBuffer(id,header,style),vb);
 }
 console.log('FreeCell supermove capacity, immutable moves, safe foundations, win and cached stacked cards passed');
+
+// Foundation extraction: the top card of a foundation can be pulled back to a
+// column or free cell; only the top card, and an empty foundation yields none.
+assert.deepEqual(selectedCards(empty(), {zone:'foundation',index:0}), []);
+s=empty(); s.foundations=[3,0,0,0]; // spades A,2,3 collected; top card = 3♠ = 2
+assert.deepEqual(selectedCards(s,{zone:'foundation',index:0}), [2]);
+assert.deepEqual(selectedCards(s,{zone:'foundation',index:1}), []);
+s=empty(); s.foundations=[3,0,0,0]; applyMove(s,{from:{zone:'foundation',index:0},to:{zone:'column',index:0}});
+assert.equal(s.foundations[0],2); assert.deepEqual(s.columns[0],[2]);
+s=empty(); s.foundations=[0,2,0,0]; applyMove(s,{from:{zone:'foundation',index:1},to:{zone:'cell',index:0}});
+assert.equal(s.foundations[1],1); assert.equal(s.cells[0],14); // 2♥ = 1*13+1
+s=empty(); assert.throws(()=>applyMove(s,{from:{zone:'foundation',index:0},to:{zone:'column',index:0}}), /Empty/);
+s=empty(); s.foundations=[1,0,0,0]; assert.throws(()=>applyMove(s,{from:{zone:'foundation',index:0},to:{zone:'foundation',index:1}}), /foundation/);
+s=empty(); s.foundations=[3,0,0,0]; s.columns[0]=[5]; assert.throws(()=>applyMove(s,{from:{zone:'foundation',index:0},to:{zone:'column',index:0}}), /tableau/);
+s=empty(); s.foundations=[3,0,0,0]; s.cells=[12,null,null,null]; let snap=clone(s);
+assert.throws(()=>moveCards(s,{zone:'foundation',index:0},{zone:'cell',index:0})); assert.deepEqual(s,snap);
+s=empty(); s.foundations=[3,0,0,0]; snap=clone(s);
+applyMove(s,{from:{zone:'foundation',index:0},to:{zone:'column',index:0}});
+applyMove(s,{from:{zone:'column',index:0},to:{zone:'foundation',index:0}});
+assert.deepEqual(s,snap);
+console.log('FreeCell foundation extraction (pull top card back) passed');

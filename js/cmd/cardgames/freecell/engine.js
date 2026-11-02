@@ -32,15 +32,17 @@ export function applyMove(s, move) {
     for (const ref of [from, to]) {
         if (!ref || !['column', 'cell', 'foundation'].includes(ref.zone) || !Number.isInteger(ref.index) || ref.index < 0 || ref.index >= (ref.zone === 'column' ? 8 : 4)) throw Error('Invalid location');
     }
-    if (from.zone === 'foundation' || (from.zone === to.zone && from.index === to.index)) throw Error('Invalid source');
+    if (from.zone === to.zone && from.index === to.index) throw Error('Invalid source');
     const src = pile(s, from);
-    const c = src ? src.at(-1) : s.cells[from.index];
+    const c = src ? src.at(-1) : from.zone === 'foundation' ? (s.foundations[from.index] ? from.index * 13 + s.foundations[from.index] - 1 : null) : s.cells[from.index];
     if (c === null || c === undefined) throw Error('Empty source');
     const dst = pile(s, to);
     if (dst && !fits(c, dst.at(-1))) throw Error('Invalid tableau move');
     if (to.zone === 'cell' && s.cells[to.index] !== null) throw Error('Occupied cell');
     if (to.zone === 'foundation' && (suit(c) !== to.index || rank(c) !== s.foundations[to.index] + 1)) throw Error('Invalid foundation move');
-    if (src) src.pop(); else s.cells[from.index] = null;
+    if (src) src.pop();
+    else if (from.zone === 'foundation') s.foundations[from.index]--;
+    else s.cells[from.index] = null;
     if (dst) dst.push(c);
     else if (to.zone === 'cell') s.cells[to.index] = c;
     else s.foundations[to.index]++;

@@ -100,12 +100,16 @@ export class FreeCellGame {
     move(to) {
         if (this.collecting) return false;
         try {
+            const fromFoundation = this.selected?.zone === 'foundation';
             const next = moveCards(this.state, this.selected, to, false);
             this.history.push({ state: this.state, cursor: { ...this.cursor }, scroll: [...this.scroll] });
             this.state = next; this.selected = null;
             this.cursor = { ...to, card: to.zone === 'column' ? Math.max(0, next.columns[to.index].length - 1) : 0 };
             this.ensureVisible();
-            this.collect('已移牌（安全的牌會自動收至右上方）'); return true;
+            // 從收牌區移回的牌不觸發自動收牌，讓玩家自行運用該張牌。
+            if (fromFoundation) { this.cancelDrag(); this.status = '已移牌（從收牌區移回，不自動收牌）'; this.draw(); }
+            else this.collect('已移牌（安全的牌會自動收至右上方）');
+            return true;
         } catch (error) { this.status = error.message; return false; }
     }
     quickMove(from) {
