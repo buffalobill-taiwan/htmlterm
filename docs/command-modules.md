@@ -153,14 +153,20 @@ names, and check that the dependency graph has no new cycles. Follow the
 
 ## FreeCell
 
-`cardgames/freecell/engine.js` owns the pure v4 reverse generator and independent
-forward certificate interpreter. `applyReverseMove()` checks the reverse source,
-not the destination tableau's rank/color relation. Generation follows one seeded
-path, avoiding repeated/symmetric states, and keeps temporary long columns until
-final normalization. There is no candidate pool, difficulty gate or forward solver.
-Both the worker and `tools/freecell-generate.mjs` import it. `metrics` and
-`constructionMetrics` are read-only diagnostics, never selection criteria.
-Keep seed streams stable within a generator version (fixed hashes cover five seeds).
+`cardgames/freecell/engine.js` owns the pure v7 bold reverse generator and
+independent forward certificate interpreter. Each 7-card Ace column is a 3- or
+4-card descending base, the Ace, one or two middle cards, and a king; each 6-card
+ordinary column is five descending cards and a destination. The top middle fits
+the destination and a second middle fits the top middle, so the opening forces
+four king-to-cell moves plus one or two tableau moves per Ace column before an
+Ace can be reached. A seed fixes how many columns use two middles (1–3), and the
+four destinations must use at least two distinct ranks.
+`generate()` ranks 16 deterministic candidates by `difficulty()` and returns the
+best valid board; there is no forward solver. `applyReverseMove()` checks the
+reverse source, not the destination tableau's rank/color relation. Both the
+worker and `tools/freecell-generate.mjs` import it. `metrics`, `difficulty` and
+`constructionMetrics` are read-only diagnostics. Keep seed streams stable within
+a generator version (fixed hashes cover five seeds).
 `rules.js` adds transactional suffix moves and safe auto collection.
 `FreeCellGame.js` owns history, worker cancellation, dialogs and desktop input;
 `view.js` shares coordinates between rendering and hit tests. The controller is

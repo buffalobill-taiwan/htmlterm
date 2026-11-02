@@ -115,145 +115,244 @@ export function metrics(board) {
     return { buriedLow, blockers, builtPairs, sameSuitPairs, automaticCards, closePairs, rankSpan };
 }
 
-// A fixed work budget, never a wall-clock cutoff or a required solution length.
-const SHUFFLE_CHECKS = 100000;
-const WALK_STEPS = 256;
-const LOCATIONS = Array.from({ length: 16 }, (_, i) => Object.freeze({
-    zone: i < 8 ? 'column' : i < 12 ? 'cell' : 'foundation', index: i < 8 ? i : i < 12 ? i - 8 : i - 12,
-}));
-
-// Ignore free-cell and tableau permutations: renaming slots is not more mixing.
-function positionKey(s) {
-    return s.foundations.join(',') + '|' + s.cells.filter(c => c !== null).sort((a, b) => a - b).join(',') +
-        '|' + s.columns.map(col => col.join(',')).sort().join(';');
+// Bold reverse construction with mixed one-, two- and three-card middle chains.
+// Each of the four 7-card Ace columns holds a 2- to 4-card base, the Ace, one to
+// three middle cards, and a lock card. Each paired 6-card normal column holds
+// five ordinary cards and a destination. For chain length L, the middle ranks
+// alternate r, r-1, ... and the base size is 5-L. The top middle fits the
+// destination (opposite colour, one rank higher), and each lower middle fits the
+// one above it. The four lock cards use seed-fixed rank patterns from 7, 9, 11
+// and 13, with one or two kings; every pair differs by at least two ranks, so no
+// lock card can be placed on the tableau or on another lock. The opening forces
+// four lock-to-cell moves before any middle can be reached. Ordinary cards fill
+// the bases and five-card normal tops with a random spread of ranks, which keeps
+// the columns irregular while rank-by-rank collection stays legal. The
+// certificate is built and replayed, never searched.
+const ATTEMPTS = 16;
+const CHAIN_PATTERNS = [
+    [3, 2, 1, 1],
+    [3, 1, 1, 1],
+    [3, 2, 2, 1],
+    [3, 3, 1, 1],
+    [3, 3, 2, 1],
+    [3, 2, 2, 2],
+];
+const LOCK_PATTERNS = [
+    [7, 9, 11, 13],
+    [7, 11, 13, 13],
+    [9, 11, 13, 13],
+    [7, 9, 13, 13],
+];
+const descending = (a, b) => rank(b) - rank(a) || a - b;
+const suitsOfColor = c => c === 0 ? [0, 3] : [1, 2];
+const cardOf = (s, r) => s * 13 + r - 1;
+function shuffleInPlace(cards, rng) {
+    for (let i = cards.length - 1; i > 0; i--) {
+        const j = Math.floor(rng() * (i + 1));
+        [cards[i], cards[j]] = [cards[j], cards[i]];
+    }
+    return cards;
 }
-function transfer(s, from, to) {
-    const c = from < 8 ? s.columns[from].pop() : s.cells[from - 8];
-    if (from >= 8) s.cells[from - 8] = null;
-    if (to < 8) s.columns[to].push(c); else s.cells[to - 8] = c;
+
+// Read-only structural description used to rank deterministic candidates.
+// It is a heuristic, not a solver or a proof that a deal needs a given move.
+export function difficulty(board) {
+    let blockers = 0, sameSuitHard = 0, buriedLow = 0, builtPairs = 0, nearPairs = 0;
+    for (const col of board.columns) {
+        for (let i = 0; i < col.length; i++) {
+            if (rank(col[i]) <= 3) buriedLow += col.length - i - 1;
+            for (let j = i + 1; j < col.length; j++) {
+                if (rank(col[j]) > rank(col[i])) blockers++;
+                if (suit(col[i]) === suit(col[j]) && rank(col[j]) > rank(col[i])) sameSuitHard++;
+                if (nearRank(col[i], col[j])) nearPairs++;
+            }
+            if (i && fits(col[i], col[i - 1])) builtPairs++;
+        }
+    }
+    return { blockers, sameSuitHard, buriedLow, builtPairs, nearPairs,
+        score: blockers * 6 + sameSuitHard * 10 + buriedLow * 5 - builtPairs * 12 - nearPairs };
 }
 
-class ReverseWalk {
-    constructor(rng) {
-        this.rng = rng;
-        this.state = { columns: Array.from({ length: 8 }, () => []), cells: Array(4).fill(null), foundations: Array(4).fill(13) };
-        this.trace = [];
-        this.seen = new Set([positionKey(this.state)]);
-        this.pairs = [];
-        this.weights = [];
-        this.stats = { transitionChecks: 0, reverseMoves: 0, peakColumnLength: 0 };
+function construct(seed, chainPattern, lockPattern) {
+    const rng = mulberry32(seed);
+    const lengths = shuffleInPlace([...(chainPattern || CHAIN_PATTERNS[seed % CHAIN_PATTERNS.length])], rng);
+    const lockRanks = lockPattern || LOCK_PATTERNS[(seed >>> 4) % LOCK_PATTERNS.length];
+    const used = new Set();
+    const lockCards = [];
+    for (const r of lockRanks) {
+        const candidates = [0, 1, 2, 3].map(s => cardOf(s, r)).filter(c => !used.has(c));
+        const c = candidates[Math.floor(rng() * candidates.length)];
+        used.add(c);
+        lockCards.push(c);
     }
-    remember(move) {
-        this.trace.push(move);
-        this.seen.add(positionKey(this.state));
-        this.stats.reverseMoves++;
-        for (const col of this.state.columns) this.stats.peakColumnLength = Math.max(this.stats.peakColumnLength, col.length);
+    shuffleInPlace(lockCards, rng);
+    const lockSet = new Set(lockCards);
+
+    const available = new Set();
+    for (let c = 0; c < 52; c++) {
+        const r = rank(c);
+        if (r === 1 || lockSet.has(c)) continue;
+        available.add(c);
     }
-    move(from, to) {
-        applyReverseMove(this.state, { from: LOCATIONS[from], to: LOCATIONS[to] });
-        this.remember({ from: LOCATIONS[to], to: LOCATIONS[from] });
+
+    const chains = lengths.map((length, i) => ({ length, aceColumn: i, normalColumn: 4 + i }));
+    shuffleInPlace(chains, rng);
+
+    const destinationRanks = [];
+    for (const chain of chains) {
+        let picked = null;
+        const ranks = [];
+        for (let r = chain.length + 1; r <= 6; r++) ranks.push(r);
+        shuffleInPlace(ranks, rng);
+        for (const r of ranks) {
+            // Never let all four normal columns share one bottom rank.
+            if (destinationRanks.length === 3 && destinationRanks.every(x => x === r + 1)) continue;
+            const colors = shuffleInPlace([0, 1], rng);
+            for (const destinationColor of colors) {
+                const middleColor = destinationColor === 0 ? 1 : 0;
+                const destinations = shuffleInPlace([...suitsOfColor(destinationColor)], rng);
+                const middles = shuffleInPlace([...suitsOfColor(middleColor)], rng);
+                const seconds = chain.length >= 2 ? shuffleInPlace([...suitsOfColor(destinationColor)], rng) : [];
+                const thirds = chain.length >= 3 ? shuffleInPlace([...suitsOfColor(middleColor)], rng) : [];
+                for (const ds of destinations) {
+                    const destination = cardOf(ds, r + 1);
+                    if (!available.has(destination)) continue;
+                    for (const ms of middles) {
+                        const top = cardOf(ms, r);
+                        if (!available.has(top)) continue;
+                        if (chain.length === 1) { picked = { r, destination, top, second: null, third: null }; break; }
+                        for (const ss of seconds) {
+                            const second = cardOf(ss, r - 1);
+                            if (!available.has(second)) continue;
+                            if (chain.length === 2) { picked = { r, destination, top, second, third: null }; break; }
+                            for (const ts of thirds) {
+                                const third = cardOf(ts, r - 2);
+                                if (!available.has(third)) continue;
+                                picked = { r, destination, top, second, third };
+                                break;
+                            }
+                            if (picked) break;
+                        }
+                        if (picked) break;
+                    }
+                    if (picked) break;
+                }
+                if (picked) break;
+            }
+            if (picked) break;
+        }
+        if (!picked) return null;
+        available.delete(picked.destination);
+        available.delete(picked.top);
+        if (picked.second !== null) available.delete(picked.second);
+        if (picked.third !== null) available.delete(picked.third);
+        destinationRanks.push(picked.r + 1);
+        Object.assign(chain, picked);
     }
-    step() {
-        const s = this.state, pairs = this.pairs, weights = this.weights;
-        pairs.length = 0; weights.length = 0;
-        let total = 0;
-        const emptyCell = s.cells.indexOf(null);
-        for (let from = 0; from < 12; from++) {
-            const col = from < 8 ? s.columns[from] : null;
-            const card = col ? col.at(-1) : s.cells[from - 8];
-            if (card == null || (col && !fits(card, col.at(-2)))) continue;
-            for (let to = 0; to < 12; to++) {
-                if (from === to) continue;
-                if (to >= 8 && (from >= 8 || to !== emptyCell + 8)) continue;
-                const dst = to < 8 ? s.columns[to] : null;
-                if (col?.length === 1 && dst?.length === 0) continue;
-                // Overflow is allowed only on a legal descending run. It can
-                // always be peeled back into vacancies when closing the walk.
-                if (dst && dst.length >= LIMITS[to] && !fits(card, dst.at(-1))) continue;
-                // Keep reversible runs mobile longer before freezing new
-                // arbitrary adjacencies. This weights moves, never whole deals.
-                const weight = !dst ? 4 : fits(card, dst.at(-1)) ? 64 : 1;
-                pairs.push(from, to); weights.push(weight); total += weight;
+
+    // Fill each normal top with five distinct ranks above its destination. A
+    // random spread keeps the columns from looking like contiguous run-outs.
+    const normalGroups = new Map();
+    const ordered = [...chains].sort((a, b) => rank(b.destination) - rank(a.destination));
+    for (const chain of ordered) {
+        const eligible = [...available].filter(c => rank(c) > rank(chain.destination));
+        const byRank = new Map();
+        for (const c of eligible) {
+            const r = rank(c);
+            if (!byRank.has(r)) byRank.set(r, []);
+            byRank.get(r).push(c);
+        }
+        const ranks = [...byRank.keys()];
+        if (ranks.length < 5) return null;
+        shuffleInPlace(ranks, rng);
+        const group = [];
+        for (const r of ranks.slice(0, 5)) {
+            const bucket = byRank.get(r);
+            shuffleInPlace(bucket, rng);
+            group.push(bucket[0]);
+        }
+        for (const c of group) available.delete(c);
+        normalGroups.set(chain.normalColumn, group.sort(descending));
+    }
+
+    const remaining = [...available];
+    const extra = chains.reduce((n, chain) => n + chain.length - 1, 0);
+    if (remaining.length !== 16 - extra) return null;
+    shuffleInPlace(remaining, rng);
+    const baseGroups = new Map();
+    const chainByAce = new Map(chains.map(chain => [chain.aceColumn, chain]));
+    let cursor = 0;
+    for (let i = 0; i < 4; i++) {
+        const size = 5 - chainByAce.get(i).length;
+        baseGroups.set(i, remaining.slice(cursor, cursor + size).sort(descending));
+        cursor += size;
+    }
+
+    const aces = shuffleInPlace([0, 13, 26, 39], rng);
+    const columns = Array.from({ length: 8 }, () => []);
+    for (let i = 0; i < 4; i++) {
+        const chain = chainByAce.get(i);
+        const middles = [];
+        if (chain.third !== null) middles.push(chain.third);
+        if (chain.second !== null) middles.push(chain.second);
+        middles.push(chain.top);
+        columns[i] = [...baseGroups.get(i), aces[i], ...middles, lockCards[i]];
+    }
+    for (const chain of chains) {
+        columns[chain.normalColumn] = [...normalGroups.get(chain.normalColumn), chain.destination];
+    }
+    const board = { columns, cells: [null, null, null, null], foundations: [0, 0, 0, 0] };
+
+    try {
+        const state = clone(board);
+        const solution = [];
+        const push = move => { applyMove(state, move); solution.push(move); };
+        for (let i = 0; i < 4; i++) {
+            push({ from: { zone: 'column', index: i }, to: { zone: 'cell', index: i } });
+        }
+        for (const chain of chains) {
+            push({ from: { zone: 'column', index: chain.aceColumn }, to: { zone: 'column', index: chain.normalColumn } });
+            if (chain.second !== null) {
+                push({ from: { zone: 'column', index: chain.aceColumn }, to: { zone: 'column', index: chain.normalColumn } });
+            }
+            if (chain.third !== null) {
+                push({ from: { zone: 'column', index: chain.aceColumn }, to: { zone: 'column', index: chain.normalColumn } });
             }
         }
-        // Weighted sampling without replacement; only checked successors consume
-        // the global budget. Failed probes are undone without changing the trace.
-        while (weights.length && this.stats.transitionChecks < SHUFFLE_CHECKS) {
-            let pick = this.rng() * total, index = 0;
-            while (index < weights.length - 1 && (pick -= weights[index]) >= 0) index++;
-            const from = pairs[index * 2], to = pairs[index * 2 + 1];
-            total -= weights[index];
-            weights[index] = weights.at(-1); weights.pop();
-            pairs[index * 2] = pairs.at(-2); pairs[index * 2 + 1] = pairs.at(-1); pairs.length -= 2;
-            transfer(s, from, to);
-            this.stats.transitionChecks++;
-            const visited = this.seen.has(positionKey(s));
-            transfer(s, to, from);
-            if (visited) continue;
-            this.move(from, to);
-            return true;
+        for (let i = 0; i < 4; i++) {
+            push({ from: { zone: 'column', index: i }, to: { zone: 'foundation', index: suit(aces[i]) } });
         }
-        return false;
-    }
-    // Overflow cards are removable by construction. Together with the free
-    // cells, their count cannot exceed the remaining standard-layout vacancies.
-    settle() {
-        const s = this.state;
-        for (let from = 0; from < 12; from++) {
-            while (from < 8 ? s.columns[from].length > LIMITS[from] : s.cells[from - 8] !== null) {
-                const slots = [];
-                for (let i = 0; i < 8; i++) if (s.columns[i].length < LIMITS[i]) slots.push(i);
-                if (!slots.length) throw Error('Reverse walk lost its closing vacancies');
-                this.move(from, slots[Math.floor(this.rng() * slots.length)]);
+        for (let r = 2; r <= 13; r++) {
+            // Free a lock card before the same rank's column cards can need the
+            // next rank of that suit.
+            for (let i = 0; i < 4; i++) {
+                const card = state.cells[i];
+                if (card !== null && rank(card) === r) {
+                    push({ from: { zone: 'cell', index: i }, to: { zone: 'foundation', index: suit(card) } });
+                }
+            }
+            let progress = true;
+            while (progress) {
+                progress = false;
+                for (let column = 0; column < 8; column++) {
+                    const card = state.columns[column].at(-1);
+                    if (card !== undefined && rank(card) === r) {
+                        push({ from: { zone: 'column', index: column }, to: { zone: 'foundation', index: suit(card) } });
+                        progress = true;
+                    }
+                }
             }
         }
+        if (!solved(state)) return null;
+        verify(board, solution);
+        return { board, solution, chains, lockCards, extra };
+    } catch {
+        return null;
     }
 }
 
-function construct(rng) {
-    const walk = new ReverseWalk(rng), s = walk.state;
-    const destinations = [], weights = [];
-    for (let dealt = 0; dealt < 52; dealt++) {
-        for (let step = 0; step < WALK_STEPS; step++) if (!walk.step()) break;
-        const suits = [0, 1, 2, 3].filter(i => s.foundations[i]);
-        const su = suits[Math.floor(rng() * suits.length)];
-        const card = su * 13 + s.foundations[su] - 1;
-        destinations.length = 0; weights.length = 0;
-        let total = 0;
-        for (let i = 0; i < 8; i++) {
-            const col = s.columns[i], matches = fits(card, col.at(-1));
-            // Do not freeze an unremovable card beyond the final column size.
-            // Long reversible suffixes may persist across foundation extractions.
-            if (col.length >= LIMITS[i] && !matches) continue;
-            const weight = matches ? 64 : 1;
-            destinations.push(i); weights.push(weight); total += weight;
-        }
-        const emptyCell = s.cells.indexOf(null);
-        if (emptyCell >= 0) { destinations.push(emptyCell + 8); weights.push(4); total += 4; }
-        let pick = rng() * total, index = 0;
-        while (index < weights.length - 1 && (pick -= weights[index]) >= 0) index++;
-        walk.move(su + 12, destinations[index]);
-    }
-    // Keep mixing after the last extraction; restore standard dimensions only
-    // once, at the end. Overflow runs peel into the guaranteed vacant slots.
-    for (let step = 0; step < WALK_STEPS; step++) if (!walk.step()) break;
-    walk.settle();
-    return { board: s, solution: walk.trace.reverse(), shuffle: walk.stats };
-}
-
-// Erase exact state loops, so random wandering cannot inflate certificate length.
-function shorten(board, moves) {
-    const state = clone(board), path = [], keys = [JSON.stringify(state)];
-    const seen = new Map([[keys[0], 0]]);
-    for (const move of moves) {
-        applyMove(state, move);
-        const key = JSON.stringify(state), previous = seen.get(key);
-        if (previous !== undefined) {
-            while (keys.length > previous + 1) seen.delete(keys.pop());
-            path.length = previous;
-        } else { path.push(move); seen.set(key, path.length); keys.push(key); }
-    }
-    return path;
+function candidateSeed(seed, attempt) {
+    return (seed ^ Math.imul(attempt + 1, 0x9e3779b1)) >>> 0;
 }
 // Describe this certificate, not the minimum resources required by all solutions.
 // Count distinct cards/columns so repeated detours do not inflate resource usage.
@@ -264,7 +363,7 @@ export function constructionMetrics(board, solution) {
         const { from, to } = move;
         const c = from.zone === 'column' ? state.columns[from.index].at(-1) : state.cells[from.index];
         if (to.zone === 'cell' && rank(c) > state.foundations[suit(c)] + 1) parked.add(c);
-        if (from.zone === 'cell' && to.zone === 'column' && parked.has(c)) released.add(c);
+        if (from.zone === 'cell' && (to.zone === 'column' || to.zone === 'foundation') && parked.has(c)) released.add(c);
         if (to.zone === 'column' && !state.columns[to.index].length &&
             state.foundations.reduce((a, b) => a + b, 0) < 26) staging.add(to.index);
         applyMove(state, move);
@@ -275,13 +374,38 @@ export function constructionMetrics(board, solution) {
 }
 
 export function generate(seed) {
-    if (parseSeed(seed) === null) throw Error('Invalid seed');
-    const result = construct(mulberry32(seed));
-    result.solution = shorten(result.board, result.solution);
-    result.shuffle.effectiveMoves = result.solution.length - 52;
-    verify(result.board, result.solution);
-    return { version: 4, seed, ...result, metrics: metrics(result.board),
-        construction: constructionMetrics(result.board, result.solution), verified: true };
+    const parsed = parseSeed(seed);
+    if (parsed === null) throw Error('Invalid seed');
+    const chainPattern = CHAIN_PATTERNS[parsed % CHAIN_PATTERNS.length];
+    const lockPattern = LOCK_PATTERNS[(parsed >>> 4) % LOCK_PATTERNS.length];
+    let best = null, valid = 0;
+    for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
+        const candidate = construct(candidateSeed(seed, attempt), chainPattern, lockPattern);
+        if (!candidate) continue;
+        valid++;
+        const score = difficulty(candidate.board).score;
+        if (!best || score > best.score) best = { ...candidate, score, attempt };
+    }
+    // Structural fallback. Selection never rejects a valid candidate on quality.
+    if (!best) {
+        const candidate = construct(seed, chainPattern, lockPattern);
+        if (!candidate) throw Error('Bold construction failed');
+        best = { ...candidate, score: difficulty(candidate.board).score, attempt: ATTEMPTS };
+    }
+    const solution = best.solution;
+    const boardMetrics = metrics(best.board);
+    if (boardMetrics.automaticCards !== 0) throw Error('Bold construction exposed a safe card');
+    verify(best.board, solution);
+    const lockRanks = best.lockCards.map(rank).sort((a, b) => a - b);
+    const middleCounts = [1, 2, 3].map(n => best.chains.filter(chain => chain.length === n).length);
+    return { version: 8, seed, board: best.board, solution,
+        selection: { attempts: ATTEMPTS, valid, chosen: best.attempt, score: best.score,
+            effectiveMoves: solution.length - 52,
+            middleColumns: { 1: middleCounts[0], 2: middleCounts[1], 3: middleCounts[2] },
+            extraMiddleCards: best.extra, lockCards: [...best.lockCards].sort((a, b) => a - b),
+            lockRanks,
+            peakColumnLength: Math.max(...best.board.columns.map(col => col.length)) },
+        metrics: boardMetrics, construction: constructionMetrics(best.board, solution), verified: true };
 }
 
 export { suit, rank, fits, clone, solved, auto };

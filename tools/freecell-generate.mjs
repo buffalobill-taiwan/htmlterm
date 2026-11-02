@@ -2,17 +2,17 @@
 import { pathToFileURL } from 'node:url';
 import { readFileSync } from 'node:fs';
 import { parseSeed } from '../js/util/random.js';
-import { generate, verify, suit, rank } from '../js/cmd/cardgames/freecell/engine.js';
-export { generate, verify, applyMove, applyReverseMove, validate, metrics, constructionMetrics } from '../js/cmd/cardgames/freecell/engine.js';
+import { generate, verify, suit, rank, difficulty } from '../js/cmd/cardgames/freecell/engine.js';
+export { generate, verify, applyMove, applyReverseMove, validate, metrics, difficulty, constructionMetrics } from '../js/cmd/cardgames/freecell/engine.js';
 
 const usage = `Usage: node tools/freecell-generate.mjs <seed> [--batch N] [--json] [--solution]
        node tools/freecell-generate.mjs --verify file.json
-Seed: 0..2147483647. One reverse construction per seed, with a replay-verified solution.
+Seed: 0..2147483647. Each seed ranks 16 reverse constructions with mixed one- and two-card middle chains; the selected board has a replay-verified solution.
 Cards: integers 0..51, suits spades/hearts/diamonds/clubs, ranks A..K.
-Columns are top-to-bottom. --json includes board, solution and construction statistics.
---batch generates consecutive seeds and reports retained moves and generation time.
+Columns are top-to-bottom. --json includes board, solution, selection and construction statistics.
+--batch generates consecutive seeds and reports automatic cards, blockers, chain mix and generation time.
 --verify replays a saved certificate, including those exported by older versions.
-There is no candidate ranking, difficulty threshold or forward search.`;
+There is no forward search or per-deal quality rejection; selection ranks only valid candidates.`;
 function main(args) {
     if (args.includes('--help')) { console.log(usage); return; }
     const flags = new Map(), positional = [];
@@ -48,9 +48,15 @@ function main(args) {
         console.log(JSON.stringify({ count, verified: results.length,
             meanSolutionMoves: mean(r => r.solution.length),
             medianSolutionMoves: (moves[Math.floor((count - 1) / 2)] + moves[Math.floor(count / 2)]) / 2,
-            meanEffectiveMoves: mean(r => r.shuffle.effectiveMoves),
-            meanTransitionChecks: mean(r => r.shuffle.transitionChecks),
-            maxColumnLengthDuringConstruction: Math.max(...results.map(r => r.shuffle.peakColumnLength)),
+            meanEffectiveMoves: mean(r => r.selection.effectiveMoves),
+            meanDoubleMiddleColumns: mean(r => r.selection.doubleMiddleColumns),
+            bottomPatterns: new Set(results.map(r =>
+                r.board.columns.slice(4).map(card => rank(card.at(-1))).sort((a, b) => a - b).join(','))).size,
+            meanBlockers: mean(r => r.metrics.blockers),
+            meanAutomaticCards: mean(r => r.metrics.automaticCards),
+            meanBuiltPairs: mean(r => r.metrics.builtPairs),
+            meanSameSuitHard: mean(r => difficulty(r.board).sameSuitHard),
+            meanSelectionScore: mean(r => r.selection.score),
             meanGenerationMs: mean(r => r.generationMs),
             maxGenerationMs: Math.max(...results.map(r => r.generationMs)),
         }, null, 2));
@@ -58,7 +64,7 @@ function main(args) {
         const r = results[0], label = c => 'SHDC'[suit(c)] + ['A','2','3','4','5','6','7','8','9','10','J','Q','K'][rank(c) - 1];
         console.log(`FreeCell seed ${seed}, generator v${r.version}, verified solution ${r.solution.length} moves`);
         r.board.columns.forEach((col, i) => console.log(`${i + 1}: ${col.map(label).join(' ')}`));
-        console.log(JSON.stringify({ shuffle: r.shuffle, metrics: r.metrics, construction: r.construction, generationMs: r.generationMs }, null, 2));
+        console.log(JSON.stringify({ selection: r.selection, metrics: r.metrics, construction: r.construction, generationMs: r.generationMs }, null, 2));
         if (flags.has('--solution')) console.log(JSON.stringify(r.solution, null, 2));
     }
 }

@@ -224,10 +224,14 @@ FreeCell can also be opened with `cardgames freecell [seed]`. Seeds are integers
 0–2147483647; these are this project's deals, not Windows deal numbers. The
 browser generates from a solved position in a worker and verifies a forward
 solution before displaying the deal. The shared offline tool reproduces the
-same seed using one continuous reverse construction, with deeper loop-avoiding
-moves and temporary long columns. Every deal has a replay-verified solution;
-there is no candidate ranking, difficulty threshold or forward search.
-Use `node tools/freecell-generate.mjs <seed>` for offline generation.
+same seed using bold reverse construction: each Ace is buried under a king and
+one or two chained middle cards, so all four free cells plus at least five
+tableau moves are needed before the Aces can be collected. Each seed uses a
+different mix of one- and two-middle columns, and the four bottom ranks never
+all match. Each seed ranks 16 deterministic candidates by a structural
+difficulty score. Every deal has a replay-verified solution; there is no forward
+search or per-deal quality rejection. Use
+`node tools/freecell-generate.mjs <seed>` for offline generation.
 
 Use arrows to move the cyan cursor and Enter to select a card or alternating,
 descending suffix, then Enter at its destination. Selected cards are yellow.

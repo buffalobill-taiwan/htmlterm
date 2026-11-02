@@ -4,20 +4,28 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { generate, verify, applyMove, applyReverseMove, validate, metrics, constructionMetrics } from './freecell-generate.mjs';
-const v4Hashes = {
-    0: 'b7dfad9f4402f137b020c5e525d3e33c8d8a3a5d20e78e48aab5157e2717a6f0',
-    1: '4736ca3e1cbabb40fe6b533e676677a48ebb0043edc783dafa71b7fa9fc20e7e',
-    42: '7f77f6f33351d353d072e596e05a453d8d7a01849d5a9c03f68c7ac739c5e566',
-    123456: 'd00fbbfbc3063276f2b16e5cc222d8b2412aa83deafff6e2a3997bbe998742d3',
-    2147483647: '95a7cae5478225aa036e7c24c696868d06d41c6c2cddf6abfa18f1376b265be3',
+import { generate, verify, applyMove, applyReverseMove, validate, metrics, difficulty, constructionMetrics } from './freecell-generate.mjs';
+import { rank, suit, clone, auto, solved } from '../js/cmd/cardgames/freecell/engine.js';
+const v7Hashes = {
+    0: 'efbd2bb7a65108e9267fabbd07865e73e0ed44a1e2af1e50cc7ec8b97cba96ae',
+    1: '9c55235b0cc315239f73332f375e9db8ef6a1edb56329679a0882ede0f05196a',
+    42: '5160e6b638c8614a27a41941e7a29d6f73264c36ce56a01006b2f0c766fe8f86',
+    123456: '9f908fb91d43307820b84546054d457a7fddf041fd31eb5e786d43f2cb7dcc13',
+    2147483647: '3f6811e4ec658fd9c5468ef5113d5e9c29a17c441935cf9310d089e66fadad60',
 };
 for (const seed of [0, 1, 42, 123456, 2147483647]) {
     const result = generate(seed);
-    assert.equal(result.version, 4);
-    assert.equal(createHash('sha256').update(JSON.stringify(result)).digest('hex'), v4Hashes[seed]);
+    assert.equal(result.version, 7);
+    assert.equal(createHash('sha256').update(JSON.stringify(result)).digest('hex'), v7Hashes[seed]);
     assert.deepEqual(generate(seed), result);
-    assert.equal(Object.hasOwn(result, 'candidates'), false);
+    assert.equal(result.selection.attempts, 16);
+    assert.equal(result.selection.valid, 16);
+    assert.equal(result.selection.effectiveMoves, result.solution.length - 52);
+    assert.ok(result.selection.doubleMiddleColumns >= 1 && result.selection.doubleMiddleColumns <= 3);
+    assert.equal(result.selection.doubleMiddleColumns, result.solution.length - 60);
+    assert.equal(result.metrics.automaticCards, 0);
+    assert.deepEqual(result.construction,
+        { parkedCards: 4, releasedCards: 4, earlyEmptyColumns: 0, peakOccupiedCells: 4 });
     assert.throws(() => verify(result.board, result.solution.slice(1)));
 }
 function fixture(name) {
@@ -49,21 +57,101 @@ assert.equal(Math.max(...msStates.flatMap(s => s.columns.map(col => col.length))
 // Neither reverse destination is a legal forward tableau placement.
 assert.deepEqual(msStates[0].columns[4], [30, 26, 10, 16, 20, 44]);
 roundTrip(legacy);
-let totalMoves = 0, overflowDeals = 0;
+// The collect-only policy that defeated v5: park Kings, then take any legal
+// foundation card. A v7 board must not be solvable this way.
+function greedySolves(board) {
+    const state = clone(board);
+    for (let step = 0; step < 1000; step++) {
+        auto(state);
+        if (solved(state)) return true;
+        let moved = false;
+        for (let column = 0; column < 8; column++) {
+            const card = state.columns[column].at(-1);
+            if (card != null && rank(card) === 13) {
+                const cell = state.cells.indexOf(null);
+                if (cell >= 0) {
+                    applyMove(state, { from: { zone: 'column', index: column }, to: { zone: 'cell', index: cell } });
+                    moved = true;
+                    break;
+                }
+            }
+        }
+        if (moved) continue;
+        let collected = false;
+        for (const zone of ['column', 'cell']) {
+            const count = zone === 'column' ? 8 : 4;
+            for (let i = 0; i < count; i++) {
+                const card = zone === 'column' ? state.columns[i].at(-1) : state.cells[i];
+                if (card == null) continue;
+                if (rank(card) === state.foundations[suit(card)] + 1) {
+                    applyMove(state, { from: { zone, index: i }, to: { zone: 'foundation', index: suit(card) } });
+                    collected = true;
+                    break;
+                }
+            }
+            if (collected) break;
+        }
+        if (collected) continue;
+        return false;
+    }
+    return false;
+}
+let totalMoves = 0, totalBlockers = 0, totalBuilt = 0, totalHard = 0, totalAuto = 0, totalT = 0;
+const bottomPatterns = new Set();
 for (let seed = 0; seed < 1000; seed++) {
     const result = generate(seed);
     validate(result.board, true);
     assert.equal(verify(result.board, result.solution), true);
-    assert.ok(result.shuffle.transitionChecks <= 100000);
-    assert.equal(result.shuffle.effectiveMoves, result.solution.length - 52);
+    assert.equal(result.selection.valid, 16);
+    assert.equal(result.selection.effectiveMoves, result.solution.length - 52);
+    assert.equal(result.selection.peakColumnLength, 7);
+    assert.equal(greedySolves(result.board), false, `Seed ${seed} must not be collect-only`);
+    const t = result.selection.doubleMiddleColumns;
+    assert.ok(t >= 1 && t <= 3);
+    assert.equal(result.solution.length, 60 + t, 'Certificate has one extra move per second middle');
+    let doubles = 0;
+    for (let column = 0; column < 4; column++) {
+        const cards = result.board.columns[column];
+        assert.equal(cards.length, 7);
+        assert.equal(rank(cards[6]), 13);
+        const ace = cards.findIndex(card => rank(card) === 1);
+        assert.ok(ace === 3 || ace === 4, 'Ace column holds one or two middles above the Ace');
+        if (ace === 3) doubles++;
+        const base = cards.slice(0, ace);
+        assert.deepEqual(base, [...base].sort((a, b) => rank(b) - rank(a) || a - b), 'Base must stay descending');
+    }
+    assert.equal(doubles, t, 'doubleMiddleColumns must match the board');
+    const bottoms = [];
+    for (let column = 4; column < 8; column++) {
+        const cards = result.board.columns[column];
+        assert.equal(cards.length, 6);
+        const top = cards.slice(0, 5);
+        assert.deepEqual(top, [...top].sort((a, b) => rank(b) - rank(a) || a - b), 'Normal top must stay descending');
+        assert.ok(rank(cards[5]) >= 3 && rank(cards[5]) <= 7);
+        bottoms.push(rank(cards[5]));
+    }
+    assert.ok(new Set(bottoms).size > 1, `Seed ${seed} must not repeat the uniform bottom rank`);
+    bottomPatterns.add([...bottoms].sort((a, b) => a - b).join(','));
+    const shape = difficulty(result.board);
     totalMoves += result.solution.length;
-    if (result.shuffle.peakColumnLength > 7) overflowDeals++;
+    totalT += t;
+    totalBlockers += shape.blockers;
+    totalBuilt += shape.builtPairs;
+    totalHard += shape.sameSuitHard;
+    totalAuto += result.metrics.automaticCards;
     if (seed < 10) roundTrip(result);
 }
-// Aggregate mixing regression, not a per-deal difficulty gate or shortest solution claim.
-assert.ok(totalMoves / 1000 > 150, 'The reverse walk should retain substantially more moves than v3');
-assert.ok(overflowDeals > 0, 'Intermediate columns must be allowed beyond their opening sizes');
-console.log(`FreeCell: 1000 verified seeds, mean ${(totalMoves / 1000).toFixed(2)} moves; MS #1 and v3 round trips passed`);
+// The v7 certificate is four king placements, 4+t middle placements, the Ace
+// collections, 44 ordinary collections and four king collections.
+assert.equal(totalMoves, 60000 + totalT, 'Every v7 deal has the same certificate shape plus its second middles');
+assert.equal(totalT, 1999, 't must be uniform across the first 1000 seeds');
+assert.ok(bottomPatterns.size >= 30, 'Bottom ranks must vary widely');
+assert.equal(totalAuto, 0, 'No v7 opening may expose a safe card');
+// Aggregate difficulty regression, not a per-deal quality gate or solver claim.
+assert.ok(totalBlockers / 1000 > 42, 'V7 must retain substantial blockers');
+assert.ok(totalHard / 1000 > 11.5, 'V7 must retain same-suit inversions');
+assert.ok(totalBuilt / 1000 < 7, 'V7 must not expose long easy descending runs');
+console.log(`FreeCell: 1000 verified seeds, ${bottomPatterns.size} bottom patterns, mean ${(totalMoves / 1000).toFixed(2)} moves, ${(totalBlockers / 1000).toFixed(1)} blockers, greedy solve rate 0; MS #1 and v3 round trips passed`);
 
 // Equal ranks and gaps of two count in both directions, regardless of suit;
 // A/K and gaps of three do not. These partial columns isolate the metric.
@@ -126,7 +214,6 @@ assert.throws(()=>applyReverseMove(s,{from:{zone:'column',index:8},to:{zone:'cel
 
 // Runtime multi-card rules, transactional errors and conservative foundations.
 const { moveCards, selectedCards, capacity } = await import('../js/cmd/cardgames/freecell/rules.js');
-const { auto, clone, solved } = await import('../js/cmd/cardgames/freecell/engine.js');
 const { stackCardBuffer } = await import('../js/cmd/cardgames/cards.js');
 const from = { zone:'column', index:0, card:0 }, dest = { zone:'column', index:1 };
 s=empty();s.columns=[[7,19,5],[21],[30],[31],[32],[33],[34],[35]];s.cells=[40,41,null,null];
