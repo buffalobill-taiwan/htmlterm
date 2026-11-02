@@ -1,4 +1,4 @@
-import { applyMove, fits, clone, auto } from './engine.js';
+import { applyMove, fits, clone, auto, suit, rank } from './engine.js';
 
 // Locations include a zero-based card offset when selecting a tableau suffix.
 export function selectedCards(state, from) {
@@ -12,6 +12,17 @@ export function selectedCards(state, from) {
 export function capacity(state, to) {
     const empty = state.columns.filter((c, i) => !c.length && !(to.zone === 'column' && to.index === i)).length;
     return (state.cells.filter(c => c === null).length + 1) * 2 ** empty;
+}
+// Double-click shortcut: foundation if legal, otherwise the first empty free cell.
+export function quickMoveTo(state, from) {
+    const cards = selectedCards(state, from);
+    if (cards.length !== 1) return null;
+    const card = cards[0];
+    if (rank(card) === state.foundations[suit(card)] + 1)
+        return { zone: 'foundation', index: suit(card) };
+    if (from.zone === 'cell') return null;
+    const index = state.cells.findIndex(c => c === null);
+    return index < 0 ? null : { zone: 'cell', index };
 }
 // Transactional: failed moves never change the input. Auto moves belong to the
 // same transaction, so a single undo restores the entire previous position.

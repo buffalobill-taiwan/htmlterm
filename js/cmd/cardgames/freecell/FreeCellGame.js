@@ -4,7 +4,7 @@ import { parseSeed } from '../../../util/random.js';
 import { InputDialog } from '../../../dialog/InputDialog.js';
 import { ConfirmDialog } from '../../../dialog/ConfirmDialog.js';
 import { clone, auto, solved, applyMove } from './engine.js';
-import { moveCards, selectedCards } from './rules.js';
+import { moveCards, selectedCards, quickMoveTo } from './rules.js';
 import { drawBoard, hitTest, drawGhost, cardPosition } from './view.js';
 import { flyCard } from './animation.js';
 
@@ -108,6 +108,18 @@ export class FreeCellGame {
             this.collect('已移牌（安全的牌會自動收至右上方）'); return true;
         } catch (error) { this.status = error.message; return false; }
     }
+    quickMove(from) {
+        const to = quickMoveTo(this.state, from);
+        if (!to) {
+            const n = selectedCards(this.state, from).length;
+            this.status = n > 1 ? '空格與收牌區每次只能放一張牌'
+                : n === 0 ? '此處沒有可移動的牌'
+                : from.zone === 'cell' ? '無法收牌' : '無法收牌且沒有空格';
+            return false;
+        }
+        this.selected = { ...from };
+        return this.move(to);
+    }
     confirm(action) {
         this.cancelDrag();
         if (!this.history.length) return action();
@@ -186,6 +198,12 @@ export class FreeCellGame {
             const hit = hitTest(this, info.col, info.row);
             if (!hit || hit.emptyArea) return false;
             if (hit.scroll) { this.scrollColumn(hit.index, hit.scroll); return true; }
+            if (info.detail >= 2) {
+                this.cancelDrag();
+                if (hit.zone === 'foundation') return true;
+                this.cursor = hit; this.selected = null;
+                this.quickMove(hit); this.draw(); return true;
+            }
             this.cursor = hit; this.selected = null;
             if (!this.select(hit)) { this.draw(); return true; }
             this.drag = { from: { ...hit }, col: info.col, row: info.row };
@@ -209,8 +227,10 @@ export class FreeCellGame {
         }
         if (type === 'mouseup') {
             const target = hitTest(this, info.col, info.row);
-            if (target && !target.scroll) this.move(target);
-            else this.status = '已取消拖曳';
+            const from = this.drag.from;
+            const same = target && !target.scroll && target.zone === from.zone && target.index === from.index;
+            if (!same && target && !target.scroll) this.move(target);
+            else if (!same) this.status = '已取消拖曳';
             this.cancelDrag(); this.draw(); return true;
         }
         return false;

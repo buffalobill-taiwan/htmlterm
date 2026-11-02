@@ -427,6 +427,7 @@ export class Terminal {
         if (e.ctrlKey) btn += 16;
         return {
             btn,
+            detail: e.detail,
             col: Math.floor((x / rect.width) * this.cols),
             row: Math.floor((y / rect.height) * this.rows),
         };

@@ -105,7 +105,7 @@ assert.throws(()=>applyReverseMove(s,{from:{zone:'cell',index:0},to:{zone:'found
 assert.throws(()=>applyReverseMove(s,{from:{zone:'column',index:8},to:{zone:'cell',index:0}}), /location/);
 
 // Runtime multi-card rules, transactional errors and conservative foundations.
-const { moveCards, selectedCards, capacity } = await import('../js/cmd/cardgames/freecell/rules.js');
+const { moveCards, selectedCards, capacity, quickMoveTo } = await import('../js/cmd/cardgames/freecell/rules.js');
 const { stackCardBuffer } = await import('../js/cmd/cardgames/cards.js');
 const from = { zone:'column', index:0, card:0 }, dest = { zone:'column', index:1 };
 s=empty();s.columns=[[7,19,5],[21],[30],[31],[32],[33],[34],[35]];s.cells=[40,41,null,null];
@@ -126,6 +126,14 @@ s=empty();s.columns[0]=[0];next=moveCards(s,from,{zone:'cell',index:0});
 assert.equal(next.cells[0],null);assert.equal(next.foundations[0],1);assert.deepEqual(s.columns[0],[0]);
 s={columns:[[12],[],[],[],[],[],[],[]],cells:[null,null,null,null],foundations:[12,13,13,13]};
 next=moveCards(s,from,{zone:'foundation',index:0});validate(next);assert.equal(solved(next),true);
+// Double-click destination: foundation preferred, else first free cell.
+s=empty();s.columns[0]=[0];assert.deepEqual(quickMoveTo(s,{zone:'column',index:0,card:0}),{zone:'foundation',index:0});
+s=empty();s.columns[0]=[5];assert.deepEqual(quickMoveTo(s,{zone:'column',index:0,card:0}),{zone:'cell',index:0});
+s.cells=[12,null,null,null];assert.deepEqual(quickMoveTo(s,{zone:'column',index:0,card:0}),{zone:'cell',index:1});
+s.cells=[12,13,14,15];assert.equal(quickMoveTo(s,{zone:'column',index:0,card:0}),null);
+s=empty();s.cells=[5,null,null,null];assert.equal(quickMoveTo(s,{zone:'cell',index:0}),null);
+s.foundations=[5,0,0,0];assert.deepEqual(quickMoveTo(s,{zone:'cell',index:0}),{zone:'foundation',index:0});
+s=empty();s.columns[0]=[7,19,5];assert.equal(quickMoveTo(s,{zone:'column',index:0,card:0}),null);
 for(let id=0;id<52;id++)for(const header of [false,true])for(const style of [0,1,2]){
  const vb=stackCardBuffer(id,header,style);
  assert.equal(vb.width,5);assert.equal(vb.height,header?1:3);

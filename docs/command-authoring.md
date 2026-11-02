@@ -490,8 +490,10 @@ scaled `echo` prints a newline. Existing unrelated argument handling is unchange
 
 FreeCell opts into `handleMouse(type, info)`; other commands need no handler.
 Return true when consuming mousedown to capture subsequent mousemove/mouseup.
-`info` contains terminal-cell `col`, `row`, and encoded `btn` (0 for unmodified
-left button). Overlay dragging has priority and only the top command receives
-input. Handle `cancel` with null info idempotently: remove previews and stop
-edge-scroll timers without committing a move. Dialog pushes, blur and frame
-cleanup cancel capture. Keep keyboard and mouse actions on the same rule path.
+`info` contains terminal-cell `col`, `row`, encoded `btn` (0 for unmodified
+left button), and browser click `detail`. FreeCell uses `detail >= 2` for a
+double-click shortcut (foundation if legal, else the first empty free cell).
+Overlay dragging has priority and only the top command receives input. Handle
+`cancel` with null info idempotently: remove previews and stop edge-scroll
+timers without committing a move. Dialog pushes, blur and frame cleanup cancel
+capture. Keep keyboard and mouse actions on the same rule path.
