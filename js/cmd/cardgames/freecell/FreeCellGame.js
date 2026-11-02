@@ -17,7 +17,7 @@ export class FreeCellGame {
         this.history = [];
         this.status = '';
     }
-    start(seed = Math.floor(Math.random() * 0x80000000)) {
+    start(seed = 1 + Math.floor(Math.random() * 2147483647)) {
         this.cancelCollection();
         this.cancelDrag();
         this.worker?.terminate();
@@ -121,7 +121,7 @@ export class FreeCellGame {
     askSeed() {
         this.cancelDrag();
         this.cmd._dialog = this.cmd.openDialog(InputDialog, 'freecell-seed', {
-            title: 'FreeCell 新局', width: 54, prompt: '種子 0–2147483647（留白隨機）',
+            title: 'FreeCell 新局', width: 54, prompt: '題號 0–2147483647（留白隨機）',
             onConfirm: text => {
                 this.cmd._dialog = null;
                 const seed = text.trim() === '' ? undefined : parseSeed(text.trim());

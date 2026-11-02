@@ -2,23 +2,19 @@
 import { pathToFileURL } from 'node:url';
 import { readFileSync } from 'node:fs';
 import { parseSeed } from '../js/util/random.js';
-import { generate, verify, suit, rank, difficulty } from '../js/cmd/cardgames/freecell/engine.js';
-export { generate, verify, applyMove, applyReverseMove, validate, metrics, difficulty, constructionMetrics } from '../js/cmd/cardgames/freecell/engine.js';
+import { generate, verify, suit, rank } from '../js/cmd/cardgames/freecell/engine.js';
+export { generate, verify, applyMove, applyReverseMove, validate, metrics, constructionMetrics } from '../js/cmd/cardgames/freecell/engine.js';
 
-const usage = `Usage: node tools/freecell-generate.mjs <seed> [--batch N] [--json] [--solution]
+const usage = `Usage: node tools/freecell-generate.mjs <seed> [--batch N] [--json]
        node tools/freecell-generate.mjs --verify file.json
-Seed: 0..2147483647. Each seed ranks 16 reverse constructions with mixed one- and two-card middle chains; the selected board has a replay-verified solution.
-Cards: integers 0..51, suits spades/hearts/diamonds/clubs, ranks A..K.
-Columns are top-to-bottom. --json includes board, solution, selection and construction statistics.
---batch generates consecutive seeds and reports automatic cards, blockers, chain mix and generation time.
---verify replays a saved certificate, including those exported by older versions.
-There is no forward search or per-deal quality rejection; selection ranks only valid candidates.`;
+Microsoft-compatible deals, seed 0..2147483647 (0 is an extension).
+No solution or solvability guarantee. --verify accepts legacy certificates.`;
 function main(args) {
     if (args.includes('--help')) { console.log(usage); return; }
     const flags = new Map(), positional = [];
     for (let i = 0; i < args.length; i++) {
         const a = args[i];
-        if (['--json', '--solution'].includes(a)) flags.set(a, true);
+        if (['--json'].includes(a)) flags.set(a, true);
         else if (['--batch', '--verify'].includes(a)) {
             if (flags.has(a) || !args[i + 1] || args[i + 1].startsWith('--')) throw Error('Missing/duplicate option: ' + a);
             flags.set(a, args[++i]);
@@ -44,28 +40,12 @@ function main(args) {
     if (flags.has('--json')) console.log(JSON.stringify(count === 1 ? results[0] : results, null, 2));
     else if (count > 1) {
         const mean = value => results.reduce((sum, r) => sum + value(r), 0) / count;
-        const moves = results.map(r => r.solution.length).sort((a, b) => a - b);
-        console.log(JSON.stringify({ count, verified: results.length,
-            meanSolutionMoves: mean(r => r.solution.length),
-            medianSolutionMoves: (moves[Math.floor((count - 1) / 2)] + moves[Math.floor(count / 2)]) / 2,
-            meanEffectiveMoves: mean(r => r.selection.effectiveMoves),
-            meanDoubleMiddleColumns: mean(r => r.selection.doubleMiddleColumns),
-            bottomPatterns: new Set(results.map(r =>
-                r.board.columns.slice(4).map(card => rank(card.at(-1))).sort((a, b) => a - b).join(','))).size,
-            meanBlockers: mean(r => r.metrics.blockers),
-            meanAutomaticCards: mean(r => r.metrics.automaticCards),
-            meanBuiltPairs: mean(r => r.metrics.builtPairs),
-            meanSameSuitHard: mean(r => difficulty(r.board).sameSuitHard),
-            meanSelectionScore: mean(r => r.selection.score),
-            meanGenerationMs: mean(r => r.generationMs),
-            maxGenerationMs: Math.max(...results.map(r => r.generationMs)),
-        }, null, 2));
+        console.log(JSON.stringify({ count, meanGenerationMs: mean(r => r.generationMs) }, null, 2));
     } else {
         const r = results[0], label = c => 'SHDC'[suit(c)] + ['A','2','3','4','5','6','7','8','9','10','J','Q','K'][rank(c) - 1];
-        console.log(`FreeCell seed ${seed}, generator v${r.version}, verified solution ${r.solution.length} moves`);
+        console.log(`FreeCell seed ${seed}, generator v${r.version}, Microsoft deal (solvability unchecked)`);
         r.board.columns.forEach((col, i) => console.log(`${i + 1}: ${col.map(label).join(' ')}`));
-        console.log(JSON.stringify({ selection: r.selection, metrics: r.metrics, construction: r.construction, generationMs: r.generationMs }, null, 2));
-        if (flags.has('--solution')) console.log(JSON.stringify(r.solution, null, 2));
+
     }
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
