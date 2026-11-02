@@ -35,19 +35,19 @@ export function drawBoard(game) {
             else paste(vb, stackCardBuffer(card, false, style(game, zone, index)), xAt(i), 2);
             const col = state.columns[i];
             const length = col.length - (hidden?.zone === 'column' && hidden.index === i ? 1 : 0);
-            game.scroll[i] = Math.max(0, Math.min(game.scroll[i], Math.max(0, col.length - 14)));
+            game.scroll[i] = Math.max(0, Math.min(game.scroll[i], Math.max(0, col.length - 13)));
             const start = game.scroll[i];
             vb.writeStr(5, xAt(i) + 2, String(i + 1));
             if (!length) empty(vb, xAt(i), 6, '   ', style(game, 'column', i));
-            for (let j = start; j < length && 6 + j - start < 22; j++)
-                paste(vb, stackCardBuffer(col[j], j < length - 1, style(game, 'column', i, j)), xAt(i), 6 + j - start, 22);
+            for (let j = start; j < length && 6 + j - start < 21; j++)
+                paste(vb, stackCardBuffer(col[j], j < length - 1, style(game, 'column', i, j)), xAt(i), 6 + j - start, 21);
             if (start) vb.writeStr(6, xAt(i) + 6, '↑');
-            if (col.length - start + 2 > 16) vb.writeStr(21, xAt(i) + 6, '↓');
+            if (col.length - start + 2 > 15) vb.writeStr(20, xAt(i) + 6, '↓');
         }
     }
-    vb.centerRow(22, game.status);
-    vb.centerRow(23, '方向鍵 移動  Enter 選牌/放牌  Space 取消  U 悔棋  Home/End 首末牌');
-    vb.centerRow(24, '滑鼠 拖曳／點兩下收牌／空格  PgUp/PgDn 翻頁  R 重玩  N 新局  M 選單  Q/Esc 離開');
+    vb.centerRow(21, game.status);
+    vb.centerRow(22, '方向鍵 移動  Enter 選牌/放牌  Space 取消  U 悔棋  Home/End 首末牌');
+    vb.centerRow(23, '滑鼠 拖曳／點兩下收牌／空格  PgUp/PgDn 翻頁  R 重玩  N 新局  M 選單  Q/Esc 離開');
     // Keep main-screen updates local to changed rows (drag ghost is independent).
     game.rows ??= Array.from({ length: 25 }, () => new VirtualBuffer(80, 1));
     for (let r = 0; r < 25; r++) {
@@ -61,9 +61,9 @@ export function drawBoard(game) {
     }
 }
 export function hitTest(game, x, y) {
-    if (x < 0 || x >= 80 || y < 2 || y >= 22) return null;
+    if (x < 0 || x >= 80 || y < 2 || y >= 21) return null;
     for (let i = 0; i < 8; i++) {
-        if (x === xAt(i) + 6 && (y === 6 || y === 21)) return { zone: 'column', index: i, scroll: y === 6 ? -1 : 1 };
+        if (x === xAt(i) + 6 && (y === 6 || y === 20)) return { zone: 'column', index: i, scroll: y === 6 ? -1 : 1 };
         if (x < xAt(i) || x >= xAt(i) + 5) continue;
         if (y <= 4) return { zone: i < 4 ? 'cell' : 'foundation', index: i % 4, card: 0 };
         if (y < 6) return null;

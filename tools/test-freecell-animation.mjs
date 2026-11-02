@@ -132,8 +132,8 @@ try {
     longGame.restart();
     longGame.selected = { zone: 'column', index: 1, card: 31 };
     assert.equal(longGame.move({ zone: 'cell', index: 0 }), true);
-    assert.equal(longGame.scroll[0], 6);
-    assert.equal([...overlays][0].y, 19, 'Scrolled source exposes the full departing card');
+    assert.equal(longGame.scroll[0], 7);
+    assert.equal([...overlays][0].y, 18, 'Scrolled source exposes the full departing card');
     drain(); validate(longGame.state); longGame.dispose();
     flyCard(cmd, 0, { x: 4, y: 6 }, { x: 40, y: 2 }, () => completed++);
     for (const cleanup of [...cleanups]) cleanup();

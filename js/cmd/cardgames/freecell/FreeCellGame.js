@@ -64,7 +64,7 @@ export class FreeCellGame {
                 this.ensureVisible(); this.draw(); return;
             }
             const move = moves[index++], from = move.from;
-            if (from.zone === 'column') this.scroll[from.index] = Math.max(0, this.state.columns[from.index].length - 14);
+            if (from.zone === 'column') this.scroll[from.index] = Math.max(0, this.state.columns[from.index].length - 13);
             const card = from.zone === 'column' ? this.state.columns[from.index].at(-1) : this.state.cells[from.index];
             const origin = cardPosition(this, from), destination = cardPosition(this, move.to);
             this.flight = move;
@@ -86,9 +86,9 @@ export class FreeCellGame {
         if (!this.state || c.zone !== 'column') return;
         const n = this.state.columns[c.index].length;
         c.card = Math.max(0, Math.min(c.card, n - 1));
-        this.scroll[c.index] = Math.max(0, Math.min(this.scroll[c.index], Math.max(0, n - 14)));
+        this.scroll[c.index] = Math.max(0, Math.min(this.scroll[c.index], Math.max(0, n - 13)));
         if (c.card < this.scroll[c.index]) this.scroll[c.index] = c.card;
-        const room = c.card === n - 1 ? 13 : 15;
+        const room = c.card === n - 1 ? 12 : 14;
         if (c.card > this.scroll[c.index] + room) this.scroll[c.index] = c.card - room;
     }
     select(ref) {
@@ -183,7 +183,7 @@ export class FreeCellGame {
         this.ensureVisible(); this.draw();
     }
     scrollColumn(index, delta) {
-        const max = Math.max(0, this.state.columns[index].length - 14);
+        const max = Math.max(0, this.state.columns[index].length - 13);
         const next = Math.max(0, Math.min(max, this.scroll[index] + delta));
         if (next === this.scroll[index]) return;
         this.scroll[index] = next;
@@ -213,7 +213,7 @@ export class FreeCellGame {
             this.edgeTimer = setInterval(() => {
                 if (!this.drag) return;
                 const target = hitTest(this, this.drag.col, this.drag.row);
-                if (target?.zone === 'column' && (this.drag.row <= 7 || this.drag.row >= 20))
+                if (target?.zone === 'column' && (this.drag.row <= 7 || this.drag.row >= 19))
                     this.scrollColumn(target.index, this.drag.row <= 7 ? -1 : 1);
             }, 150);
             this.draw(); return true;
