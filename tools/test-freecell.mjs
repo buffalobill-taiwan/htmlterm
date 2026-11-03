@@ -162,3 +162,38 @@ applyMove(s,{from:{zone:'foundation',index:0},to:{zone:'column',index:0}});
 applyMove(s,{from:{zone:'column',index:0},to:{zone:'foundation',index:0}});
 assert.deepEqual(s,snap);
 console.log('FreeCell foundation extraction (pull top card back) passed');
+
+// Win celebration: pure helpers (launch order, bounce physics, trail blit).
+const { launchQueue, stepCard, blitCard } = await import('../js/cmd/cardgames/freecell/animation.js');
+const { VirtualBuffer } = await import('../js/util/VirtualBuffer.js');
+const winQ = launchQueue();
+assert.equal(winQ.length, 52);
+assert.equal(new Set(winQ).size, 52);
+assert.deepEqual(winQ.slice(0, 4), [12, 25, 38, 51]);   // Kings first, cycling suits
+assert.deepEqual(winQ.slice(-4), [0, 13, 26, 39]);     // Aces last
+for (let k = 0; k < 52; k++) assert.equal(winQ[k], (k % 4) * 13 + (12 - Math.floor(k / 4)));
+// stepCard: gravity pulls cards down; the floor rebounds them up at random
+// heights (high and low, never settling); walls and the ceiling reflect.
+let bc = { x: 40, y: 10, vx: 0, vy: 0 };
+stepCard(bc); assert.ok(bc.vy > 0); assert.ok(bc.y > 10); assert.equal(bc.x, 40); assert.equal(bc.vx, 0);   // gravity
+bc = { x: 40, y: 18, vx: 0, vy: 5 };
+stepCard(bc); assert.equal(bc.y, 18); assert.ok(bc.vy < 0); assert.ok(Math.abs(bc.vy) < 5);                  // floor rebounds up (random height)
+bc = { x: 40, y: 18, vx: 0, vy: 0.4 };
+stepCard(bc); assert.equal(bc.y, 18); assert.ok(bc.vy < 0); assert.ok(Math.abs(bc.vy) >= 1);                // slow fall still bounces (never settles)
+bc = { x: 40, y: 1, vx: 0, vy: -5 };
+stepCard(bc); assert.equal(bc.y, 0); assert.ok(bc.vy > 0);                                                  // ceiling reflects down
+bc = { x: 1, y: 10, vx: -5, vy: 0 };
+stepCard(bc); assert.equal(bc.x, 0); assert.ok(bc.vx > 0); assert.ok(bc.vy > 0);                            // left wall reflects right
+bc = { x: 74, y: 10, vx: 5, vy: 0 };
+stepCard(bc); assert.equal(bc.x, 75); assert.ok(bc.vx < 0);                                                 // right wall reflects left
+const winVb = new VirtualBuffer(80, 25), winFace = stackCardBuffer(0);
+blitCard(winVb, 0, 5, 5);
+assert.equal(winVb.getCell(5, 5).ch, winFace.getCell(0, 0).ch);
+assert.equal(winVb.getCell(7, 9).ch, winFace.getCell(2, 4).ch);
+assert.equal(winVb.getCell(5, 4), null);               // untouched stays transparent
+const edgeVb = new VirtualBuffer(80, 25);
+blitCard(edgeVb, 0, 78, 23);                            // edge: must not throw, writes only in-bounds
+assert.equal(edgeVb.getCell(23, 78).ch, winFace.getCell(0, 0).ch);
+assert.equal(edgeVb.getCell(24, 79).ch, winFace.getCell(1, 1).ch);
+assert.equal(edgeVb.getCell(23, 77), null);
+console.log('FreeCell win-animation helpers (launch queue, bounce, trail blit) passed');

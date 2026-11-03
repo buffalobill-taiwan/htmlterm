@@ -6,7 +6,7 @@ import { ConfirmDialog } from '../../../dialog/ConfirmDialog.js';
 import { clone, auto, solved, applyMove } from './engine.js';
 import { moveCards, selectedCards, quickMoveTo } from './rules.js';
 import { drawBoard, hitTest, drawGhost, cardPosition } from './view.js';
-import { flyCard } from './animation.js';
+import { flyCard, startWinAnimation, cancelWin } from './animation.js';
 
 export class FreeCellGame {
     constructor(cmd) {
@@ -60,8 +60,8 @@ export class FreeCellGame {
             this.flight = null; this.cancelFlight = null;
             if (index === moves.length) {
                 this.collecting = false;
-                this.status = solved(this.state) ? '恭喜完成！U 悔棋、R 重玩、N 新局' : status;
-                this.ensureVisible(); this.draw(); return;
+                if (solved(this.state)) { this.startWin(); return; }
+                this.status = status; this.ensureVisible(); this.draw(); return;
             }
             const move = moves[index++], from = move.from;
             if (from.zone === 'column') this.scroll[from.index] = Math.max(0, this.state.columns[from.index].length - 13);
@@ -79,6 +79,19 @@ export class FreeCellGame {
     cancelCollection() {
         this.cancelFlight?.(); this.cancelFlight = null;
         this.flight = null; this.collecting = false;
+        cancelWin(this);
+    }
+    startWin() {
+        this.cancelDrag();
+        this.status = '恭喜完成！按任意鍵或點擊開始新局';
+        this.draw();
+        startWinAnimation(this);
+    }
+    stopWin() {
+        cancelWin(this);
+        this.status = '恭喜完成！U 悔棋、R 重玩、N 新局';
+        this.draw();
+        this.askSeed();
     }
     draw() { if (!this.disposed) drawBoard(this); }
     ensureVisible() {
@@ -148,6 +161,7 @@ export class FreeCellGame {
         });
     }
     key(data) {
+        if (this.winning) { this.stopWin(); return; }
         if (this.collecting) return;
         if (data === '\x1B' || data === ' ') {
             if (this.drag || this.selected) { this.cancelDrag(); this.selected = null; this.status = '已取消選牌'; this.draw(); return; }
@@ -194,6 +208,7 @@ export class FreeCellGame {
         this.draw();
     }
     handleMouse(type, info) {
+        if (this.winning) { if (type === 'mousedown') this.stopWin(); return true; }
         if (type === 'cancel') { this.cancelDrag(); this.draw(); return true; }
         if (this.collecting) return true;
         if (!this.state || this.disposed) return false;
