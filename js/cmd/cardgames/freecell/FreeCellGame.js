@@ -247,11 +247,11 @@ export class FreeCellGame {
             this.drag.col = info.col; this.drag.row = info.row;
             this.ghost.x = info.col; this.ghost.y = info.row;
             this.dirtyGhost();
-            this.updateDropTarget(hitTest(this, info.col, info.row));
+            this.updateDropTarget(this.dropTargetAt(info.col, info.row));
             return true;
         }
         if (type === 'mouseup') {
-            const target = hitTest(this, info.col, info.row);
+            const target = this.dropTargetAt(info.col, info.row);
             const from = this.drag.from;
             const same = target && !target.scroll && target.zone === from.zone && target.index === from.index;
             if (!same && target && !target.scroll) this.move(target);
@@ -259,6 +259,9 @@ export class FreeCellGame {
             this.cancelDrag(); this.draw(); return true;
         }
         return false;
+    }
+    dropTargetAt(col, row) {
+        return hitTest(this, col, row) || hitTest(this, col + 2, row);
     }
     dirtyGhost() {
         if (this.ghost) for (let r = Math.max(0, this.ghost.y); r < Math.min(25, this.ghost.y + this.ghost.h); r++) term.markRowDirty(r);

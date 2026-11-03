@@ -494,7 +494,9 @@ Return true when consuming mousedown to capture subsequent mousemove/mouseup.
 left button), and browser click `detail`. FreeCell uses `detail >= 2` for a
 double-click shortcut (foundation if legal, else the first empty free cell).
 While dragging, FreeCell highlights the frame of a hovered destination green
-when the shared move rules accept the move.
+when the shared move rules accept the move. If the pointer is over a gap rather
+than a card area, drag target detection retries two terminal cells to its right;
+release uses the same target resolution.
 Overlay dragging has priority and only the top command receives input. Handle
 `cancel` with null info idempotently: remove previews and stop edge-scroll
 timers without committing a move. Dialog pushes, blur and frame cleanup cancel

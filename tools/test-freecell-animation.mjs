@@ -81,9 +81,10 @@ try {
     };
     hintGame.draw();
     assert.equal(hintGame.handleMouse('mousedown', { col: 4, row: 6, btn: 0, detail: 1 }), true);
-    assert.equal(hintGame.handleMouse('mousemove', { col: 40, row: 2, btn: 0 }), true);
+    assert.equal(hintGame.handleMouse('mousemove', { col: 38, row: 2, btn: 0 }), true);
     const hint = hintGame.dropHint;
     assert.ok(hint && overlays.has(hint), 'Legal hovered destination gets a frame overlay');
+    assert.equal(hint.x, 40, 'A gap hover resolves using the position two cells to the right');
     assert.equal(hint.getCell(0, 0).fg, 2, 'The target frame is green');
     assert.equal(hint.getCell(1, 2), null, 'The target overlay only draws its frame');
     assert.ok([...overlays].indexOf(hint) < [...overlays].indexOf(hintGame.ghost),
@@ -91,6 +92,9 @@ try {
     hintGame.handleMouse('mousemove', { col: 49, row: 2, btn: 0 });
     assert.equal(hintGame.dropHint, null, 'Illegal hovered destination removes the frame hint');
     assert.equal(overlays.has(hint), false);
+    hintGame.handleMouse('mousemove', { col: 38, row: 2, btn: 0 });
+    hintGame.handleMouse('mouseup', { col: 38, row: 2, btn: 0 });
+    assert.equal(hintGame.state.foundations[0], 1, 'Drop uses the same expanded hover target');
     hintGame.dispose();
 
     const game = new FreeCellGame(cmd);
