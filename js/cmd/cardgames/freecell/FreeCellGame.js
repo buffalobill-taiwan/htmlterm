@@ -4,7 +4,7 @@ import { parseSeed } from '../../../util/random.js';
 import { InputDialog } from '../../../dialog/InputDialog.js';
 import { ConfirmDialog } from '../../../dialog/ConfirmDialog.js';
 import { clone, auto, solved, applyMove } from './engine.js';
-import { moveCards, selectedCards, quickMoveTo } from './rules.js';
+import { moveCards, selectedCards, quickMoveTo, canMove } from './rules.js';
 import { drawBoard, hitTest, drawGhost, cardPosition } from './view.js';
 import { flyCard, startWinAnimation, cancelWin } from './animation.js';
 
@@ -93,7 +93,11 @@ export class FreeCellGame {
         this.draw();
         this.askSeed();
     }
-    draw() { if (!this.disposed) drawBoard(this); }
+    draw() {
+        if (this.disposed) return;
+        drawBoard(this);
+        this.refreshDropHint();
+    }
     ensureVisible() {
         const c = this.cursor;
         if (!this.state || c.zone !== 'column') return;
@@ -242,7 +246,9 @@ export class FreeCellGame {
             this.dirtyGhost();
             this.drag.col = info.col; this.drag.row = info.row;
             this.ghost.x = info.col; this.ghost.y = info.row;
-            this.dirtyGhost(); return true;
+            this.dirtyGhost();
+            this.updateDropTarget(hitTest(this, info.col, info.row));
+            return true;
         }
         if (type === 'mouseup') {
             const target = hitTest(this, info.col, info.row);
@@ -262,6 +268,38 @@ export class FreeCellGame {
         if (this.ghost) { this.dirtyGhost(); term.removeOverlay(this.ghost); this.ghost = null; }
         if (this.drag) this.selected = null;
         this.drag = null;
+        if (this.dropTarget || this.dropHint) {
+            this.dropTarget = null;
+            this.refreshDropHint();
+            this.draw();
+        }
+    }
+    updateDropTarget(target) {
+        const next = target && !target.scroll && canMove(this.state, this.drag.from, target) ? target : null;
+        if (next?.zone === this.dropTarget?.zone && next?.index === this.dropTarget?.index) return;
+        this.dropTarget = next;
+        this.draw();
+    }
+    refreshDropHint() {
+        if (this.dropHint) { term.removeOverlay(this.dropHint); this.dropHint = null; }
+        if (!this.dropTarget || !this.state) return;
+        const target = this.dropTarget;
+        const x = 4 + 9 * (target.index + (target.zone === 'foundation' ? 4 : 0));
+        const column = target.zone === 'column' ? this.state.columns[target.index] : null;
+        const y = target.zone !== 'column' ? 2
+            : column.length ? 6 + column.length - 1 - this.scroll[target.index] : 6;
+        const border = new VirtualBuffer(5, 3);
+        for (let r = 0; r < 3; r++) for (let c = 0; c < 5; c++) {
+            if (r !== 0 && r !== 2 && c !== 0 && c !== 4) continue;
+            const cell = this.vb.getCell(y + r, x + c);
+            if (cell) border.setCell(r, c, { ...cell, fg: 2 });
+        }
+        this.dropHint = { x, y, w: 5, h: 3, owner: null, getCell: (r, c) => border.getCell(r, c) };
+        term.addOverlay(this.dropHint);
+        if (this.ghost) {
+            term.removeOverlay(this.ghost);
+            term.addOverlay(this.ghost);
+        }
     }
     dispose() {
         this.cancelCollection();

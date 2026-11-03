@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { setSystem } from '../js/system/sys.js';
-import { flyCard } from '../js/cmd/cardgames/freecell/animation.js';
+import { flyCard, cancelWin } from '../js/cmd/cardgames/freecell/animation.js';
 import { FreeCellGame } from '../js/cmd/cardgames/freecell/FreeCellGame.js';
 import { clone, validate } from '../js/cmd/cardgames/freecell/engine.js';
 
@@ -12,7 +12,7 @@ globalThis.cancelAnimationFrame = id => frames.delete(id);
 setSystem({ term: {
     cols: 80, rows: 25,
     addOverlay: o => overlays.add(o), removeOverlay: o => overlays.delete(o),
-    markRowDirty: r => dirty.push(r), writeVB() {},
+    markRowDirty: r => dirty.push(r), write() {}, writeVB() {},
 } });
 const cmd = {
     executionGuard: () => () => true,
@@ -74,6 +74,25 @@ try {
     tick(); cancel(); drain();
     assert.equal(completed, 1); assert.equal(overlays.size, 0);
 
+    const hintGame = new FreeCellGame(cmd);
+    hintGame.state = {
+        columns: [[0],[14],[],[],[],[],[],[]],
+        cells: [null,null,null,null], foundations: [0,0,0,0],
+    };
+    hintGame.draw();
+    assert.equal(hintGame.handleMouse('mousedown', { col: 4, row: 6, btn: 0, detail: 1 }), true);
+    assert.equal(hintGame.handleMouse('mousemove', { col: 40, row: 2, btn: 0 }), true);
+    const hint = hintGame.dropHint;
+    assert.ok(hint && overlays.has(hint), 'Legal hovered destination gets a frame overlay');
+    assert.equal(hint.getCell(0, 0).fg, 2, 'The target frame is green');
+    assert.equal(hint.getCell(1, 2), null, 'The target overlay only draws its frame');
+    assert.ok([...overlays].indexOf(hint) < [...overlays].indexOf(hintGame.ghost),
+        'The green frame is rendered below the drag ghost');
+    hintGame.handleMouse('mousemove', { col: 49, row: 2, btn: 0 });
+    assert.equal(hintGame.dropHint, null, 'Illegal hovered destination removes the frame hint');
+    assert.equal(overlays.has(hint), false);
+    hintGame.dispose();
+
     const game = new FreeCellGame(cmd);
     game.initial = { columns: [[12],[],[],[],[],[],[],[]], cells: [null,null,null,null], foundations: [12,13,13,13] };
     game.state = clone(game.initial);
@@ -89,7 +108,9 @@ try {
     assert.equal(JSON.stringify({ state: game.state, cursor: game.cursor, scroll: game.scroll }), locked);
     assert.equal(game.drag, null);
     assert.equal(game.history.length, 1);
-    drain(); validate(game.state);
+    while (game.collecting) tick();
+    if (game.winning) cancelWin(game);
+    validate(game.state);
     assert.equal(game.collecting, false); assert.equal(game.state.foundations[0], 13);
     assert.match(game.status, /恭喜完成/);
     game.key('u'); assert.deepEqual(game.state, before);
@@ -115,6 +136,7 @@ try {
         assert.ok(overlays.size <= 1, 'Cards fly one at a time');
     }
     assert.equal(game.collecting, false); assert.equal(overlays.size, 0);
+    if (game.winning) cancelWin(game);
     game.key('u'); assert.deepEqual(game.state, game.initial, 'Undo restores the uncollected opening');
     game.restart();
     game.selected = { zone: 'column', index: 0, card: 0 };

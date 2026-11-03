@@ -14,6 +14,28 @@ export function capacity(state, to) {
     const empty = state.columns.filter((c, i) => !c.length && !(to.zone === 'column' && to.index === i)).length;
     return (state.cells.filter(c => c === null).length + 1) * 2 ** empty;
 }
+function moveError(state, from, to) {
+    if (!from || !to || !['column', 'cell', 'foundation'].includes(to.zone) ||
+        !Number.isInteger(to.index) || to.index < 0 || to.index >= (to.zone === 'column' ? 8 : 4)) return '無效的目的地';
+    if (from.zone === to.zone && from.index === to.index) return '請選擇不同的位置';
+    const cards = selectedCards(state, from);
+    if (!cards.length) return '請選擇紅黑交錯、由大到小的連續牌列';
+    if (cards.length === 1) {
+        const card = cards[0];
+        if (to.zone === 'cell' && state.cells[to.index] !== null) return '此處不能放置這張牌';
+        if (to.zone === 'foundation' &&
+            (suit(card) !== to.index || rank(card) !== state.foundations[to.index] + 1)) return '此處不能放置這張牌';
+        if (to.zone === 'column' && !fits(card, state.columns[to.index].at(-1))) return '此處不能放置這張牌';
+        return null;
+    }
+    if (to.zone !== 'column') return '空格與收牌區每次只能放一張牌';
+    if (!fits(cards[0], state.columns[to.index].at(-1))) return '牌列須紅黑交錯、由大到小排列';
+    if (cards.length > capacity(state, to)) return '空格與空欄不足，無法移動這麼多張牌';
+    return null;
+}
+export function canMove(state, from, to) {
+    return moveError(state, from, to) === null;
+}
 // Double-click shortcut: foundation if legal, otherwise the first empty free cell.
 export function quickMoveTo(state, from) {
     const cards = selectedCards(state, from);
@@ -28,17 +50,13 @@ export function quickMoveTo(state, from) {
 // Transactional: failed moves never change the input. Auto moves belong to the
 // same transaction, so a single undo restores the entire previous position.
 export function moveCards(state, from, to, collect = true) {
-    if (!to || !['column', 'cell', 'foundation'].includes(to.zone) || !Number.isInteger(to.index) || to.index < 0 || to.index >= (to.zone === 'column' ? 8 : 4)) throw Error('無效的目的地');
-    if (from.zone === to.zone && from.index === to.index) throw Error('請選擇不同的位置');
+    const error = moveError(state, from, to);
+    if (error) throw Error(error);
     const cards = selectedCards(state, from);
-    if (!cards.length) throw Error('請選擇紅黑交錯、由大到小的連續牌列');
     const next = clone(state);
     if (cards.length === 1) {
         try { applyMove(next, { from, to }); } catch { throw Error('此處不能放置這張牌'); }
     } else {
-        if (to.zone !== 'column') throw Error('空格與收牌區每次只能放一張牌');
-        if (!fits(cards[0], next.columns[to.index].at(-1))) throw Error('牌列須紅黑交錯、由大到小排列');
-        if (cards.length > capacity(state, to)) throw Error('空格與空欄不足，無法移動這麼多張牌');
         next.columns[from.index].splice(from.card);
         next.columns[to.index].push(...cards);
     }

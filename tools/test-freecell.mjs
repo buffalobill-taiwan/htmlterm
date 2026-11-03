@@ -105,24 +105,28 @@ assert.throws(()=>applyReverseMove(s,{from:{zone:'cell',index:0},to:{zone:'found
 assert.throws(()=>applyReverseMove(s,{from:{zone:'column',index:8},to:{zone:'cell',index:0}}), /location/);
 
 // Runtime multi-card rules, transactional errors and conservative foundations.
-const { moveCards, selectedCards, capacity, quickMoveTo } = await import('../js/cmd/cardgames/freecell/rules.js');
+const { moveCards, selectedCards, capacity, quickMoveTo, canMove } = await import('../js/cmd/cardgames/freecell/rules.js');
 const { stackCardBuffer } = await import('../js/cmd/cardgames/cards.js');
 const from = { zone:'column', index:0, card:0 }, dest = { zone:'column', index:1 };
 s=empty();s.columns=[[7,19,5],[21],[30],[31],[32],[33],[34],[35]];s.cells=[40,41,null,null];
 assert.equal(capacity(s,dest),3);
 assert.equal(selectedCards(s,from).length,3);
+assert.equal(canMove(s,from,dest),true);
 let before=clone(s), next=moveCards(s,from,dest);
 assert.deepEqual(s,before);assert.deepEqual(next.columns[1],[21,7,19,5]);
-s.cells[2]=42;before=clone(s);assert.throws(()=>moveCards(s,from,dest));assert.deepEqual(s,before);
+s.cells[2]=42;before=clone(s);assert.equal(canMove(s,from,dest),false);assert.throws(()=>moveCards(s,from,dest));assert.deepEqual(s,before);
 // Empty destination is not a temporary spare column; emptied source does not count.
-s.columns[1]=[];assert.equal(capacity(s,dest),2);assert.throws(()=>moveCards(s,from,dest));
-s.columns[2]=[];assert.equal(capacity(s,dest),4);assert.deepEqual(moveCards(s,from,dest).columns[1],[7,19,5]);
+s.columns[1]=[];assert.equal(capacity(s,dest),2);assert.equal(canMove(s,from,dest),false);assert.throws(()=>moveCards(s,from,dest));
+s.columns[2]=[];assert.equal(capacity(s,dest),4);assert.equal(canMove(s,from,dest),true);assert.deepEqual(moveCards(s,from,dest).columns[1],[7,19,5]);
 assert.throws(()=>moveCards(s,from,{zone:'cell',index:3}));
 s.columns[0]=[7,6];assert.equal(selectedCards(s,from).length,0);
 assert.throws(()=>moveCards(s,{zone:'foundation',index:0},dest));
 s=empty();s.columns[0]=[2];s.foundations=[2,1,2,0];auto(s);assert.deepEqual(s.columns[0],[2]);
 s.foundations[1]=2;auto(s);assert.equal(s.foundations[0],3);
-s=empty();s.columns[0]=[0];next=moveCards(s,from,{zone:'cell',index:0});
+s=empty();s.columns[0]=[0];assert.equal(canMove(s,from,{zone:'cell',index:0}),true);
+assert.equal(canMove(s,from,{zone:'foundation',index:0}),true);
+assert.equal(canMove(s,from,{zone:'foundation',index:1}),false);
+next=moveCards(s,from,{zone:'cell',index:0});
 assert.equal(next.cells[0],null);assert.equal(next.foundations[0],1);assert.deepEqual(s.columns[0],[0]);
 s={columns:[[12],[],[],[],[],[],[],[]],cells:[null,null,null,null],foundations:[12,13,13,13]};
 next=moveCards(s,from,{zone:'foundation',index:0});validate(next);assert.equal(solved(next),true);

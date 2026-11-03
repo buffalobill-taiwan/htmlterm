@@ -48,6 +48,7 @@ export function drawBoard(game) {
     vb.centerRow(21, game.status);
     vb.centerRow(22, '方向鍵 移動  Enter 選牌/放牌  Space 取消  U 悔棋  Home/End 首末牌');
     vb.centerRow(23, '滑鼠 拖曳／點兩下收牌／空格  PgUp/PgDn 翻頁  R 重玩  N 新局  M 選單  Q/Esc 離開');
+    vb.centerRow(24, '合法拖放目標會顯示綠框');
     // Keep main-screen updates local to changed rows (drag ghost is independent).
     game.rows ??= Array.from({ length: 25 }, () => new VirtualBuffer(80, 1));
     for (let r = 0; r < 25; r++) {
