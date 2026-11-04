@@ -1,6 +1,6 @@
 import { RAFAnimationManager } from '../../system/RAFAnimationHelper.js';
 import { term } from '../../system/sys.js';
-import { cardFlipFrames } from './cards.js';
+import { cardBuffer, cardFlipFrames } from './cards.js';
 
 export function flipCard(cmd, card, x, y, done) {
     const frames = cardFlipFrames(card);
@@ -28,4 +28,53 @@ export function flipCard(cmd, card, x, y, done) {
         if (ts - start >= 240) { complete = true; return true; }
         return false;
     }, finish);
+}
+
+// Deal animation: the card back flies from the deck to its hand slot at
+// 20ms per 2-column step, then flips open on arrival. A faceDown card
+// (the dealer's hole card) lands unflipped and is revealed in place later.
+// The card is pushed into the hand only after this animation lands, so the
+// destination stays empty while flying. Returns a cancel function.
+export function dealCard(cmd, card, from, to, { faceDown = false } = {}, done) {
+    const back = cardBuffer(null);
+    const frames = faceDown ? null : cardFlipFrames(card);
+    const steps = Math.max(1, Math.abs(to.x - from.x), Math.abs(to.y - from.y));
+    const manager = new RAFAnimationManager(cmd, { x: from.x, y: from.y, w: 5, h: 3, hideCursor: false, holdBusy: false });
+    const active = cmd.executionGuard();
+    let mode = 'fly', step = 0, flipStart = null, progress = 0, start = null;
+    let complete = false, cancelled = false;
+    manager.initOverlay((r, c) => (mode === 'fly' ? back : frames[progress]).getCell(r, c));
+    const dirtyAt = () => {
+        for (let r = manager.overlay.y; r < manager.overlay.y + 3; r++) term.markRowDirty(r);
+    };
+    const finish = () => { if (complete && !cancelled && active()) done(); };
+    const cancel = () => { cancelled = true; manager.stop(finish); };
+    manager.start(ts => {
+        if (start === null) start = ts;
+        if (mode === 'fly') {
+            const next = Math.min(steps, Math.floor((ts - start) / 20) * 2);
+            if (next !== step) {
+                dirtyAt();
+                step = next;
+                manager.overlay.x = from.x + Math.round((to.x - from.x) * step / steps);
+                manager.overlay.y = from.y + Math.round((to.y - from.y) * step / steps);
+                dirtyAt();
+            }
+            if (step === steps) {
+                if (faceDown) { complete = true; return true; }
+                mode = 'flip';
+                flipStart = ts;
+                dirtyAt();
+            }
+        } else {
+            const next = Math.min(5, Math.floor((ts - flipStart) / 40));
+            if (next !== progress) {
+                progress = next;
+                dirtyAt();
+            }
+            if (ts - flipStart >= 240) { complete = true; return true; }
+        }
+        return false;
+    }, finish);
+    return cancel;
 }

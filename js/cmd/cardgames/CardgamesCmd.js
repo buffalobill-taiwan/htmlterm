@@ -4,11 +4,12 @@ import { VirtualBuffer } from '../../util/VirtualBuffer.js';
 import { SelectDialog } from '../../dialog/SelectDialog.js';
 import { GAME_META } from '../game-meta.js';
 import { cardBuffer } from './cards.js';
-import { flipCard } from './animation.js';
+import { flipCard, dealCard } from './animation.js';
 import { score, natural, outcome, shuffledDeck } from './blackjack.js';
 import { FreeCellGame } from './freecell/FreeCellGame.js';
 import { parseSeed } from '../../util/random.js';
 const META = GAME_META.cardgames;
+const DECK = { x: 53, y: 10 };
 
 export class CardgamesCmd extends CmdBase {
     static get commandName() { return META.commandName; }
@@ -22,9 +23,10 @@ export class CardgamesCmd extends CmdBase {
         if (p.rest.length && (p.rest[0] !== 'freecell' || p.rest.length > 2 || (p.rest.length === 2 && parseSeed(p.rest[1]) === null))) return this.error('Usage: cardgames [freecell [seed]]');
         this.open();
         this._stats = { win: 0, loss: 0, draw: 0 };
+        this._anims = new Set();
         this._vb = new VirtualBuffer(80, 23);
         term.write('\x1B[2J\x1B[H\x1B[?25l');
-        this.addCleanup(() => { this._freecell?.dispose(); this._freecell = null; });
+        this.addCleanup(() => { this._stopAnims(); this._freecell?.dispose(); this._freecell = null; });
         if (p.rest.length) this._startFreeCell(p.rest.length === 2 ? Number(p.rest[1]) : undefined);
         else this._menu();
     }
@@ -38,7 +40,7 @@ export class CardgamesCmd extends CmdBase {
         this._freecell?.dispose();
         this._freecell = null;
         term.write('\x1B[2J');
-        this._cancelFlip?.();
+        this._stopAnims();
         this._flipping = null;
         this._phase = 'menu';
         this._draw();
@@ -49,16 +51,57 @@ export class CardgamesCmd extends CmdBase {
             onCancel: () => { this._dialog = null; this._quit(); },
         });
     }
-    _deal() {
+    _stopAnims() {
         this._cancelFlip?.();
+        this._cancelFlip = null;
+        for (const cancel of this._anims) cancel();
+        this._anims.clear();
+    }
+    _deal() {
+        this._stopAnims();
         this._flipping = null;
         this._dealerHidden = true;
         this._deck = shuffledDeck();
-        this._player = [this._deck.pop()]; this._dealer = [this._deck.pop()];
-        this._player.push(this._deck.pop()); this._dealer.push(this._deck.pop());
-        this._phase = 'player'; this._choice = 0;
-        if (natural(this._player) || natural(this._dealer)) this._finish();
-        else this._draw();
+        this._player = [];
+        this._dealer = [];
+        this._choice = 0;
+        this._phase = 'dealing';
+        this._draw();
+        // Deal in concurrent pairs (player + dealer), the dealer's second
+        // card landing face down. Natural is judged after all four land.
+        const pair = (holeCard, next) => {
+            let left = 2;
+            const one = () => { if (--left === 0) next(); };
+            this._dealCard(this._player, 13, false, one);
+            this._dealCard(this._dealer, 6, holeCard, one);
+        };
+        pair(false, () => pair(true, () => {
+            if (natural(this._player) || natural(this._dealer)) this._finish();
+            else { this._phase = 'player'; this._draw(); }
+        }));
+    }
+    _dealCard(hand, row, faceDown, done) {
+        const card = this._deck.pop();
+        const to = { x: 2 + hand.length * 6, y: row };
+        this._phase = 'dealing';
+        this._draw();
+        const finish = () => {
+            this._anims.delete(cancel);
+            hand.push(card);
+            this._draw();
+            done();
+        };
+        const cancel = dealCard(this, card, DECK, to, { faceDown }, finish);
+        this._anims.add(cancel);
+    }
+    _drawDeck() {
+        if (!this._deck) return;
+        const back = cardBuffer(null);
+        const layers = Math.min(3, this._deck.length);
+        for (let o = layers - 1; o >= 0; o--)
+            for (let r = 0; r < 3; r++) for (let c = 0; c < 5; c++)
+                this._vb.setCell(DECK.y - o + r, DECK.x - o + c, back.getCell(r, c));
+        this._vb.writeStr(6, DECK.x - 1, '牌堆 ' + this._deck.length);
     }
     _flip(hand, index, row, done) {
         this._phase = 'flipping';
@@ -77,10 +120,8 @@ export class CardgamesCmd extends CmdBase {
             });
             return;
         }
-        if (score(this._dealer) < 17) {
-            this._dealer.push(this._deck.pop());
-            this._flip(this._dealer, this._dealer.length - 1, 6, () => this._stand());
-        } else this._finish();
+        if (score(this._dealer) < 17) this._dealCard(this._dealer, 6, false, () => this._stand());
+        else this._finish();
     }
     _finish() {
         if (this._dealerHidden) {
@@ -106,13 +147,16 @@ export class CardgamesCmd extends CmdBase {
         vb.centerRow(0, '\x1B[1;36mCard Games — Blackjack\x1B[0m');
         vb.centerRow(2, `勝 ${this._stats.win}  負 ${this._stats.loss}  和 ${this._stats.draw}`);
         if (this._phase !== 'menu') {
+            this._drawDeck();
             const hidden = this._dealerHidden;
             vb.writeStr(4, 2, '莊家：' + (hidden || this._flipping?.hand === this._dealer ? '?' : score(this._dealer)));
             this._drawHand(this._dealer, 6, hidden);
-            vb.writeStr(11, 2, '玩家：' + (this._flipping?.hand === this._player ? '?' : score(this._player)));
+            vb.writeStr(11, 2, '玩家：' + (this._player.length ? score(this._player) : '?'));
             this._drawHand(this._player, 13, false);
             if (this._phase === 'flipping') {
                 vb.centerRow(18, '翻牌中…');
+            } else if (this._phase === 'dealing') {
+                vb.centerRow(18, '發牌中…');
             } else if (this._phase === 'player') {
                 vb.centerRow(18, (this._choice === 0 ? '\x1B[7m' : '') + ' 要牌 \x1B[0m    ' +
                     (this._choice === 1 ? '\x1B[7m' : '') + ' 停牌 \x1B[0m');
@@ -139,8 +183,7 @@ export class CardgamesCmd extends CmdBase {
             this._choice = 1 - this._choice; this._draw();
         } else if (data === '\r' || data === '\n') {
             if (this._choice === 1) return this._stand();
-            this._player.push(this._deck.pop());
-            this._flip(this._player, this._player.length - 1, 13, () => {
+            this._dealCard(this._player, 13, false, () => {
                 if (score(this._player) > 21) this._finish();
                 else if (score(this._player) === 21) this._stand();
                 else { this._phase = 'player'; this._draw(); }
@@ -150,7 +193,7 @@ export class CardgamesCmd extends CmdBase {
     _quit() {
         this._freecell?.dispose();
         this._freecell = null;
-        this._cancelFlip?.();
+        this._stopAnims();
         this._flipping = null;
         if (this._dialog) { this._dialog.close(); this._dialog = null; }
         this.placeShellCursor(24);
