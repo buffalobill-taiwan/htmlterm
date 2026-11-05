@@ -1,3 +1,4 @@
+import { createPersonality } from './personality.js';
 import { evaluate } from './evaluate.js';
 export const BUY_IN = 1000, SMALL_BLIND = 5, BIG_BLIND = 10;
 export const STREETS = ['翻牌前', '翻牌', '轉牌', '河牌'];
@@ -10,7 +11,7 @@ export function deck(rng = Math.random) {
     return cards;
 }
 export function createTable(rng = Math.random) {
-    return { players: Array.from({ length: 6 }, (_, id) => ({ id, stack: BUY_IN })),
+    return { players: Array.from({ length: 6 }, (_, id) => ({ id, stack: BUY_IN, ...(id ? { personality: createPersonality(rng) } : {}) })),
         button: Math.floor(rng() * 6), hand: 0, phase: 'idle', actor: -1 };
 }
 const next = (s, seat) => (seat + 1) % s.players.length;
@@ -28,7 +29,9 @@ export function startHand(s, rng = Math.random) {
     s.phase = 'betting'; s.currentBet = BIG_BLIND; s.lastRaise = BIG_BLIND;
     s.pots = []; s.refunds = []; s.showdown = false;
     for (const p of s.players) {
-        if (p.id && p.stack === 0) p.stack = BUY_IN;
+        if (p.id && p.stack === 0) {
+            p.stack = BUY_IN; p.personality = createPersonality(rng);
+        }
         Object.assign(p, { hole: [], bet: 0, total: 0, folded: false, lastAct: null, action: '', won: 0 });
     }
     for (let round = 0; round < 2; round++)
@@ -140,5 +143,6 @@ export function observation(s) {
     const p = s.players[s.actor];
     return { hole: p.hole.map(c => ({ ...c })), board: s.board.map(c => ({ ...c })),
         opponents: live(s).length - 1, pot: potSize(s), bet: p.bet,
+        personality: p.personality ? { ...p.personality } : null,
         stack: p.stack, currentBet: s.currentBet, legal: legalActions(s) };
 }

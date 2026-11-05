@@ -1,3 +1,4 @@
+import { DEFAULT_PERSONALITY } from './personality.js';
 import { evaluate } from './evaluate.js';
 // Unknown folded cards and burns remain in the sampling pool: their identities
 // are not information available to a player.
@@ -33,10 +34,12 @@ export function roundRaise(ideal, min, max) {
 export function decide(view, rng = Math.random, trials = 1000) {
     const strength = equity(view, trials, rng), l = view.legal;
     const price = l.call / Math.max(1, view.pot + l.call);
-    const bluff = rng() < 0.055;
-    if (l.call && strength + 0.025 < price && !bluff) return { type: 'fold' };
-    if (l.raise && (strength > Math.max(0.42, 1 / (view.opponents + 1) + 0.17) || bluff) && rng() < 0.7) {
-        const ideal = view.currentBet + (view.pot + l.call) * (strength > 0.75 ? 0.8 : 0.5);
+    const personality = view.personality || DEFAULT_PERSONALITY;
+    const bluff = rng() < personality.bluff;
+    const threshold = Math.max(0, Math.min(1, Math.max(0.42, 1 / (view.opponents + 1) + 0.17) + personality.thresholdOffset));
+    if (l.call && strength + personality.tolerance < price && !bluff) return { type: 'fold' };
+    if (l.raise && (strength > threshold || bluff) && rng() < personality.aggression) {
+        const ideal = view.currentBet + (view.pot + l.call) * (strength > 0.75 ? personality.strongBetRatio : personality.betRatio);
         const target = roundRaise(ideal, l.min, l.max);
         if (target >= l.min || strength > 0.65) return { type: 'raise', to: target };
     }

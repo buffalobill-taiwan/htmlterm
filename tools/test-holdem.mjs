@@ -112,7 +112,7 @@ assert.equal(startHand(s, rng), false);
 s = betting(); const publicView = observation(s);
 s.deck.reverse(); s.burned = cards('Ac'); s.players[1].hole = cards('Ks Kh');
 assert.deepEqual(observation(s), publicView);
-assert.deepEqual(Object.keys(publicView).sort(), ['bet', 'board', 'currentBet', 'hole', 'legal', 'opponents', 'pot', 'stack'].sort());
+assert.deepEqual(Object.keys(publicView).sort(), ['bet', 'board', 'currentBet', 'hole', 'legal', 'opponents', 'personality', 'pot', 'stack'].sort());
 const tie = { ...publicView, hole: cards('2h 3h'), board: cards('As Ks Qs Js Ts'), opponents: 5 };
 assert.ok(Math.abs(equity(tie, 100, rng) - 1 / 6) < 1e-12);
 assert.equal(equity({ ...tie, hole: cards('As Ks'), board: cards('Qs Js Ts 2h 3h') }, 100, rng), 1);
@@ -132,3 +132,28 @@ for (let i = 0; i < 12; i++) {
     assert.ok(act(s, a));
 }
 console.log('Hold’em: hand ranks, betting/reopening, pots/refunds, 500 hands, rebuys and AI passed');
+
+// Personalities survive hands and only the rebuying computer gets a new one.
+const personalities = createTable(mulberry32(42));
+const original = personalities.players.map(p => p.personality);
+assert.equal(original[0], undefined);
+assert.deepEqual(original, createTable(mulberry32(42)).players.map(p => p.personality));
+startHand(personalities, mulberry32(1));
+original.forEach((p, i) => assert.equal(personalities.players[i].personality, p));
+personalities.phase = 'result';
+personalities.players[2].stack = 0;
+startHand(personalities, mulberry32(2));
+original.forEach((p, i) => {
+    if (i === 2) assert.notEqual(personalities.players[i].personality, p);
+    else assert.equal(personalities.players[i].personality, p);
+});
+personalities.actor = 1;
+const observed = observation(personalities);
+observed.personality.bluff = 99;
+assert.notEqual(personalities.players[1].personality.bluff, 99);
+// A guaranteed winning hand still follows the personality's aggression.
+const winning = { ...tie, hole: cards('As Ks'), board: cards('Qs Js Ts 2h 3h'),
+    currentBet: 10, pot: 100, legal: { call: 10, raise: true, min: 20, max: 1000 } };
+const passive = { bluff: 0, aggression: 0, tolerance: 0, thresholdOffset: 0, betRatio: 0.5, strongBetRatio: 0.8 };
+assert.equal(decide({ ...winning, personality: passive }, mulberry32(1), 10).type, 'call');
+assert.equal(decide({ ...winning, personality: { ...passive, aggression: 1 } }, mulberry32(1), 10).type, 'raise');
