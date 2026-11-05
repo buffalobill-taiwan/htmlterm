@@ -39,7 +39,7 @@ export class HoldemView {
         if (active) for (let r = y; r < y + 3; r++) this.dirty.add(r);
     }
     draw(game) {
-        const s = game.state;
+        const s = game.state, actor = game.effect?.seat ?? s.actor;
         this.centered(0, '\x1B[1;36mTexas Hold’em — 德州撲克' + RESET);
         this.row(1, ` 第 ${s.hand} 手 / ${STREETS[s.street]}                                  小盲 5 / 大盲 10`);
         const lines = this.seatRows;
@@ -48,10 +48,10 @@ export class HoldemView {
         for (let id = 1; id < 6; id++) {
             const p = s.players[id], x = 1 + (id - 1) * 16;
             const badge = id === s.button ? ' D' : id === s.sb ? ' SB' : id === s.bb ? ' BB' : '';
-            const color = s.actor === id ? '\x1B[1;33m' : p.folded ? '\x1B[2m' : '\x1B[36m';
+            const color = actor === id ? '\x1B[1;33m' : p.folded ? '\x1B[2m' : '\x1B[36m';
             lines[0].writeStr(0, x, color + seatName(id) + badge + RESET, x + 15);
             lines[1].writeStr(0, x, '籌碼 ' + p.stack, x + 15);
-            lines[2].writeStr(0, x, s.actor === id && !game.failed ? '思考中…' : p.action, x + 15);
+            lines[2].writeStr(0, x, actor === id && !game.failed && !game.effect ? '思考中…' : p.action, x + 15);
             lines[3].writeStr(0, x, p.won ? '\x1B[32m贏得 ' + p.won + RESET : '投入 ' + p.bet, x + 15);
             for (let n = 0; n < 2; n++) this.card((id - 1) * 2 + n,
                 s.showdown && !p.folded ? p.hole[n] : null, x + n * 6 + 1, 5);
@@ -71,12 +71,12 @@ export class HoldemView {
         this.row(10, '                         公共牌    底池 ' + potSize(s));
         for (let i = 0; i < 5; i++) this.card(10 + i, s.board[i] || null, 25 + i * 6, 11, i < s.board.length);
         const you = s.players[0], badge = s.button === 0 ? ' [D]' : s.sb === 0 ? ' [SB]' : s.bb === 0 ? ' [BB]' : '';
-        this.row(15, '                                  ' + (s.actor === 0 ? '\x1B[1;33m' : '\x1B[36m') + '你' + badge + RESET);
+        this.row(15, '                                  ' + (actor === 0 ? '\x1B[1;33m' : '\x1B[36m') + '你' + badge + RESET);
         this.card(15, you.hole[0], 34, 16); this.card(16, you.hole[1], 40, 16);
         this.row(19, `               籌碼 ${you.stack}    本輪投入 ${you.bet}    ${you.action}`);
         this.centered(20, game.status || (s.phase === 'between' ? '準備發下一輪公共牌…' : ''));
         this.centered(21, game.actions.map((a, i) => (i === game.choice ? '\x1B[7m' : '') + ' ' + a.label + ' ' + RESET).join('   '));
-        this.row(22, s.phase === 'result' ? '                   Enter 下一手    R 查看結算' : s.actor === 0 ? '                     ← → 選擇    Enter 確認' : '');
+        this.row(22, game.effect ? '' : s.phase === 'result' ? '                   Enter 下一手    R 查看結算' : actor === 0 ? '                     ← → 選擇    Enter 確認' : '');
         this.row(24, ' N 遊戲選單                                                  Q / Esc 離開');
         // Recompose only changed rows, including any card slots on those rows.
         for (const y of this.dirty) {

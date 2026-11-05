@@ -224,7 +224,9 @@ Texas Hold’em opens directly with `cardgames holdem`. Play no-limit Hold’em 
 five computer players: each starts with 1,000 chips, with fixed 5/10 blinds and no
 rake. Arrows select Fold, Check/Call, Bet/Raise or All-in; Enter confirms. The
 raise dialog takes the **total for this betting round**, including chips already
-put in, and shows the legal range. Escape cancels the amount entry. N returns to
+put in, and shows the legal range. Escape cancels the amount entry.
+Calls, raises and folds show a Mahjong-style announcement at the acting seat
+for 0.5 seconds before play continues; menu and exit keys remain available. N returns to
 the game menu; Q/Escape or Ctrl+C leaves the table. No progress is saved.
 
 The button rotates each hand. Short all-ins, reopening raises, side pots, split

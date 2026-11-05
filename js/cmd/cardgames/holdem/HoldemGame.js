@@ -1,9 +1,14 @@
+import { term } from '../../../system/sys.js';
+import { makeOverlayGetCell } from '../../../util/sgr.js';
+import { buildCallEffectBuffer } from '../../../util/call-effect.js';
 import { SelectDialog } from '../../../dialog/SelectDialog.js';
 import { InputDialog } from '../../../dialog/InputDialog.js';
 import { ShowDialog } from '../../../dialog/ShowDialog.js';
 import { createTable, startHand, act, advanceStreet, legalActions, observation, BUY_IN } from './rules.js';
 import { handName } from './evaluate.js';
 import { HoldemView, resultText } from './view.js';
+const ACTION_EFFECTS = new Map();
+
 export class HoldemGame {
     constructor(cmd) {
         this.cmd = cmd;
@@ -73,8 +78,7 @@ export class HoldemGame {
                     if (data.error) { this.failAI(); return; }
                     this.later(() => {
                         if (data.id !== this.request) return;
-                        if (!act(this.state, data.action)) { this.failAI(); return; }
-                        this.pump();
+                        if (!this.performAction(data.action)) this.failAI();
                     }, 450);
                 };
             }
@@ -84,6 +88,7 @@ export class HoldemGame {
     }
     failAI() {
         if (this.disposed) return;
+        this.removeEffect();
         clearTimeout(this.timer); this.timer = null; this.worker?.terminate(); this.worker = null;
         this.request++; this.failed = true;
         this.status = '電腦計算失敗：Enter 重試，N 返回選單'; this.view.draw(this);
@@ -97,14 +102,39 @@ export class HoldemGame {
             onConfirm: text => {
                 this.dialog = null;
                 const to = /^\d+$/.test(text.trim()) ? Number(text.trim()) : NaN;
-                if (!act(this.state, { type: 'raise', to })) {
-                    this.raiseInput('請輸入範圍內的整數'); return;
+                if (!this.performAction({ type: 'raise', to })) {
+                    this.raiseInput('請輸入範圍內的整數');
                 }
-                this.pump();
             },
             onCancel: () => { this.dialog = null; this.view.draw(this); },
             onAbort: () => this.cmd._quit(),
         });
+    }
+    performAction(action) {
+        if (this.disposed || this.effect || !action) return false;
+        const seat = this.state.actor, legal = legalActions(this.state);
+        const type = action.type === 'allin' && legal ?
+            (legal.max <= this.state.currentBet ? 'call' : 'raise') : action.type;
+        const label = { call: '跟注', raise: '加注', fold: '棄牌' }[type];
+        if (!act(this.state, action)) return false;
+        if (!label || (type === 'call' && !legal.call)) { this.pump(); return true; }
+        if (!ACTION_EFFECTS.has(label)) ACTION_EFFECTS.set(label, buildCallEffectBuffer(label));
+        const buffer = ACTION_EFFECTS.get(label);
+        this.effect = {
+            seat, x: seat === 0 ? 35 : 3 + (seat - 1) * 16,
+            y: seat === 0 ? 16 : 5, w: buffer[0].length, h: buffer.length,
+            owner: this.cmd, getCell: makeOverlayGetCell(buffer, buffer[0].length, buffer.length),
+        };
+        this.actions = [];
+        this.status = `${seat === 0 ? '你' : '電腦 ' + seat}：${label}`;
+        this.view.draw(this);
+        term.addOverlay(this.effect);
+        this.later(() => { this.removeEffect(); this.pump(); }, 500);
+        return true;
+    }
+    removeEffect() {
+        if (this.effect) term.removeOverlay(this.effect);
+        this.effect = null;
     }
     showResult() {
         this.dialog = this.cmd.openDialog(ShowDialog, 'holdem-result', {
@@ -116,6 +146,7 @@ export class HoldemGame {
     key(data) {
         if (data === '\x1B' || /^[qQ]$/.test(data)) return this.cmd._quit();
         if (/^[nN]$/.test(data)) return this.cmd._menu();
+        if (this.effect) return;
         if (this.failed) {
             if (data === '\r' || data === '\n') { this.failed = false; this.pump(); }
             return;
@@ -132,11 +163,12 @@ export class HoldemGame {
         } else if (data === '\r' || data === '\n') {
             const action = this.actions[this.choice];
             if (action.type === 'raise') this.raiseInput();
-            else if (act(this.state, action)) this.pump();
+            else this.performAction(action);
         }
     }
     dispose() {
         this.disposed = true; this.request++;
+        this.removeEffect();
         clearTimeout(this.timer); this.timer = null; this.worker?.terminate(); this.worker = null;
         this.dialog?.close(); this.dialog = null;
     }
