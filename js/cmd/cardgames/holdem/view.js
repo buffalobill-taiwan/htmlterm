@@ -73,9 +73,13 @@ export class HoldemView {
             lines[0].writeStr(0, x, color + seatName(id) + badge + RESET, x + 15);
             lines[1].writeStr(0, x, '籌碼 ' + p.stack, x + 15);
             lines[2].writeStr(0, x, actor === id && !game.failed && !game.effect && !game.dealing ? '思考中…' : p.action, x + 15);
-            lines[3].writeStr(0, x, p.won ? '\x1B[32m贏得 ' + p.won + RESET : '投入 ' + p.bet, x + 15);
+            // Keep the award hidden until the showdown has revealed every hand.
+            lines[3].writeStr(0, x, p.won && !game.showdownRevealing ? '\x1B[32m贏得 ' + p.won + RESET : '投入 ' + p.bet, x + 15);
+            // Opponents stay face down until the showdown reaches their seat.
+            const shown = s.showdown && !p.folded &&
+                (!game.showdownShown || game.showdownShown.has(id));
             for (let n = 0; n < 2; n++) this.card((id - 1) * 2 + n,
-                s.showdown && !p.folded ? p.hole[n] : null, x + n * 6 + 1, 5, true, p.folded);
+                shown ? p.hole[n] : null, x + n * 6 + 1, 5, true, p.folded);
         }
         [3, 4, 8, 9].forEach((y, i) => {
             // Compare cells and retain old immutable rows on unchanged seat updates.

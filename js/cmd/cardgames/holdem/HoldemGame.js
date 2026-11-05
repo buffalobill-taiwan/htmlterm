@@ -5,10 +5,10 @@ import { SelectDialog } from '../../../dialog/SelectDialog.js';
 import { InputDialog } from '../../../dialog/InputDialog.js';
 import { ShowDialog } from '../../../dialog/ShowDialog.js';
 import { createTable, startHand, act, advanceStreet, legalActions, observation, BUY_IN } from './rules.js';
-import { handName } from './evaluate.js';
-import { HoldemView, resultText, DECK } from './view.js';
+import { evaluate, handName } from './evaluate.js';
+import { HoldemView, resultText, DECK, seatName } from './view.js';
 import { dealCard } from '../animation.js';
-const ACTION_EFFECTS = new Map();
+const EFFECT_BUFFERS = new Map();
 
 export class HoldemGame {
     constructor(cmd) {
@@ -16,11 +16,17 @@ export class HoldemGame {
         this.state = createTable(); this.view = new HoldemView();
         this.actions = []; this.choice = 0; this.request = 0;
         this.anims = new Set(); this.dealing = false; this.revealed = null;
+        this.showdownDone = false; this.showdownShown = null;
+        this.showdownOrder = []; this.showdownIndex = 0;
+        this.showdownRevealing = false;
     }
     start() { this.nextHand(); }
     nextHand() {
         if (this.disposed) return;
         this.dealing = false; this.revealed = null;
+        this.showdownDone = false; this.showdownShown = null;
+        this.showdownOrder = []; this.showdownIndex = 0;
+        this.showdownRevealing = false;
         if (this.state.players[0].stack === 0) {
             this.dialog = this.cmd.openDialog(SelectDialog, 'holdem-rebuy', {
                 title: '籌碼用完了', options: ['補碼 1,000', '離桌'],
@@ -44,6 +50,9 @@ export class HoldemGame {
         this.choice = 0; this.actions = []; this.status = '';
         const s = this.state;
         if (s.phase === 'result') {
+            // Show each live hand in turn, starting after the player, before
+            // the result text appears. The player is announced last.
+            if (s.showdown && !this.showdownDone) { this.startShowdown(); return; }
             this.status = s.pots.length > 1 ? '多個底池已結算；R 查看各池得主' :
                 s.pots[0].awards.map(a => `${a.seat ? '電腦 ' + a.seat : '你'} +${a.amount}`).join('  ') +
                 (s.showdown ? '（' + handName(s.pots[0].value) + '）' : '（其他玩家棄牌）');
@@ -157,19 +166,52 @@ export class HoldemGame {
         const label = { call: '跟注', raise: '加注', fold: '棄牌' }[type];
         if (!act(this.state, action)) return false;
         if (!label || (type === 'call' && !legal.call)) { this.pump(); return true; }
-        if (!ACTION_EFFECTS.has(label)) ACTION_EFFECTS.set(label, buildCallEffectBuffer(label));
-        const buffer = ACTION_EFFECTS.get(label);
-        this.effect = {
-            seat, x: seat === 0 ? 35 : 3 + (seat - 1) * 16,
-            y: seat === 0 ? 16 : 5, w: buffer[0].length, h: buffer.length,
-            owner: this.cmd, getCell: makeOverlayGetCell(buffer, buffer[0].length, buffer.length),
-        };
-        this.actions = [];
-        this.status = `${seat === 0 ? '你' : '電腦 ' + seat}：${label}`;
-        this.view.draw(this);
-        term.addOverlay(this.effect);
+        this.showEffect(seat, label);
         this.later(() => { this.removeEffect(); this.pump(); }, 500);
         return true;
+    }
+    // Reveal each live hand in turn, starting with the seat after the player.
+    // Each frame shows that seat's hand type for 500ms before the next one.
+    startShowdown() {
+        const s = this.state;
+        this.showdownDone = true;
+        this.showdownRevealing = true;
+        this.showdownShown = new Set();
+        this.showdownOrder = [];
+        for (let id = 1; id < s.players.length; id++)
+            if (!s.players[id].folded) this.showdownOrder.push(id);
+        if (!s.players[0].folded) this.showdownOrder.push(0);
+        this.showdownIndex = 0;
+        this.revealNext();
+    }
+    revealNext() {
+        if (this.disposed) return;
+        if (this.showdownIndex >= this.showdownOrder.length) {
+            this.showdownOrder = []; this.showdownIndex = 0;
+            this.showdownRevealing = false;
+            this.pump();
+            return;
+        }
+        const s = this.state, seat = this.showdownOrder[this.showdownIndex++];
+        const hole = s.players[seat].hole;
+        this.showdownShown.add(seat);
+        this.showEffect(seat, handName(evaluate([...hole, ...s.board])));
+        this.later(() => { this.removeEffect(); this.revealNext(); }, 500);
+    }
+    // Draw the frame above the player's cards and below a computer's cards so
+    // it never covers a card face. Clamp the rightmost seats inside the screen.
+    showEffect(seat, text) {
+        if (!EFFECT_BUFFERS.has(text)) EFFECT_BUFFERS.set(text, buildCallEffectBuffer(text));
+        const buffer = EFFECT_BUFFERS.get(text), w = buffer[0].length;
+        const x = Math.max(0, Math.min(seat === 0 ? 35 : 3 + (seat - 1) * 16, 80 - w));
+        this.effect = {
+            seat, x, y: seat === 0 ? 13 : 8, w, h: buffer.length,
+            owner: this.cmd, getCell: makeOverlayGetCell(buffer, w, buffer.length),
+        };
+        this.actions = [];
+        this.status = `${seatName(seat)}：${text}`;
+        this.view.draw(this);
+        term.addOverlay(this.effect);
     }
     removeEffect() {
         if (this.effect) term.removeOverlay(this.effect);
@@ -211,6 +253,9 @@ export class HoldemGame {
         for (const cancel of this.anims) cancel();
         this.anims.clear();
         this.dealing = false; this.revealed = null;
+        this.showdownDone = false; this.showdownShown = null;
+        this.showdownOrder = []; this.showdownIndex = 0;
+        this.showdownRevealing = false;
         clearTimeout(this.timer); this.timer = null; this.worker?.terminate(); this.worker = null;
         this.dialog?.close(); this.dialog = null;
     }
