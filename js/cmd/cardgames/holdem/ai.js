@@ -22,13 +22,22 @@ export function equity(view, trials = 1000, rng = Math.random) {
     }
     return total / trials;
 }
+// Round non-all-in raises to multiples of 5 or 10 within [min, max].
+// An all-in bet uses the exact remaining stack.
+export function roundRaise(ideal, min, max) {
+    if (ideal >= max || min > max) return max;
+    let target = Math.round(ideal / 5) * 5;
+    if (target < min) target = Math.ceil(min / 5) * 5;
+    return target > max ? max : target;
+}
 export function decide(view, rng = Math.random, trials = 1000) {
     const strength = equity(view, trials, rng), l = view.legal;
     const price = l.call / Math.max(1, view.pot + l.call);
     const bluff = rng() < 0.055;
     if (l.call && strength + 0.025 < price && !bluff) return { type: 'fold' };
     if (l.raise && (strength > Math.max(0.42, 1 / (view.opponents + 1) + 0.17) || bluff) && rng() < 0.7) {
-        const target = Math.min(l.max, Math.max(l.min, view.currentBet + Math.round((view.pot + l.call) * (strength > 0.75 ? 0.8 : 0.5))));
+        const ideal = view.currentBet + (view.pot + l.call) * (strength > 0.75 ? 0.8 : 0.5);
+        const target = roundRaise(ideal, l.min, l.max);
         if (target >= l.min || strength > 0.65) return { type: 'raise', to: target };
     }
     return { type: l.call ? 'call' : 'check' };

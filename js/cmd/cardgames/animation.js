@@ -36,7 +36,7 @@ export function flipCard(cmd, card, x, y, done) {
 // The card is pushed into the hand only after this animation lands, so the
 // destination stays empty while flying. onStep(step) lets a caller launch
 // the next card while this one is still in the air. Returns a cancel function.
-export function dealCard(cmd, card, from, to, { faceDown = false, onStep } = {}, done) {
+export function dealCard(cmd, card, from, to, { faceDown = false, onStep, duration, flipDuration } = {}, done) {
     const back = cardBuffer(null);
     const frames = faceDown ? null : cardFlipFrames(card);
     const steps = Math.max(1, Math.abs(to.x - from.x), Math.abs(to.y - from.y));
@@ -53,14 +53,17 @@ export function dealCard(cmd, card, from, to, { faceDown = false, onStep } = {},
     manager.start(ts => {
         if (start === null) start = ts;
         if (mode === 'fly') {
-            const next = Math.min(steps, Math.floor((ts - start) / 20) * 2);
+            const next = duration ?
+                Math.min(steps, Math.round(Math.min(1, (ts - start) / duration) * steps)) :
+                Math.min(steps, Math.floor((ts - start) / 20) * 2);
             if (next !== step) {
                 dirtyAt();
                 step = next;
                 manager.overlay.x = from.x + Math.round((to.x - from.x) * step / steps);
                 manager.overlay.y = from.y + Math.round((to.y - from.y) * step / steps);
                 dirtyAt();
-                onStep?.(step);
+                const ratio = duration ? Math.min(1, (ts - start) / duration) : step / steps;
+                onStep?.(step, ratio);
             }
             if (step === steps) {
                 if (faceDown) { complete = true; return true; }
@@ -69,12 +72,13 @@ export function dealCard(cmd, card, from, to, { faceDown = false, onStep } = {},
                 dirtyAt();
             }
         } else {
-            const next = Math.min(5, Math.floor((ts - flipStart) / 40));
+            const flipMs = flipDuration ?? 240;
+            const next = Math.min(5, Math.floor((ts - flipStart) / (flipMs / 6)));
             if (next !== progress) {
                 progress = next;
                 dirtyAt();
             }
-            if (ts - flipStart >= 240) { complete = true; return true; }
+            if (ts - flipStart >= flipMs) { complete = true; return true; }
         }
         return false;
     }, finish);

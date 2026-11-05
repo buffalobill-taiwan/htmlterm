@@ -78,8 +78,10 @@ export class HoldemView {
             // Opponents stay face down until the showdown reaches their seat.
             const shown = s.showdown && !p.folded &&
                 (!game.showdownShown || game.showdownShown.has(id));
-            for (let n = 0; n < 2; n++) this.card((id - 1) * 2 + n,
-                shown ? p.hole[n] : null, x + n * 6 + 1, 5, true, p.folded);
+            for (let n = 0; n < 2; n++) {
+                const active = Boolean(p.hole[n] && (!game.dealtHole || game.dealtHole.has(id * 2 + n)));
+                this.card((id - 1) * 2 + n, shown ? p.hole[n] : null, x + n * 6 + 1, 5, active, p.folded);
+            }
         }
         [3, 4, 8, 9].forEach((y, i) => {
             // Compare cells and retain old immutable rows on unchanged seat updates.
@@ -94,14 +96,17 @@ export class HoldemView {
             }
         });
         this.row(10, '                         公共牌    底池 ' + potSize(s));
-        this.row(12, ' '.repeat(DECK.x - 1) + '牌堆 ' + (s.deck?.length ?? 0));
+        const deckCount = s.deck ? s.deck.length + (game.dealingHole && game.dealtHole ? (12 - game.dealtHole.size) : 0) : 0;
+        this.row(12, ' '.repeat(DECK.x - 1) + '牌堆 ' + deckCount);
         const revealed = game.revealed;
         for (let i = 0; i < 5; i++) this.card(10 + i, s.board[i] || null, 25 + i * 6, 11,
             i < s.board.length && (!revealed || revealed[i]));
         const you = s.players[0], badge = s.button === 0 ? ' [D]' : s.sb === 0 ? ' [SB]' : s.bb === 0 ? ' [BB]' : '';
         this.row(15, '                                  ' + (actor === 0 ? '\x1B[1;33m' : '\x1B[36m') + '你' + badge + RESET);
-        this.card(15, you.hole[0], 34, 16, true, you.folded);
-        this.card(16, you.hole[1], 40, 16, true, you.folded);
+        const active0 = Boolean(you.hole[0] && (!game.dealtHole || game.dealtHole.has(0)));
+        const active1 = Boolean(you.hole[1] && (!game.dealtHole || game.dealtHole.has(1)));
+        this.card(15, you.hole[0], 34, 16, active0, you.folded);
+        this.card(16, you.hole[1], 40, 16, active1, you.folded);
         this.row(19, `               籌碼 ${you.stack}    本輪投入 ${you.bet}    ${you.action}`);
         this.centered(20, game.status || (s.phase === 'between' ? '準備發下一輪公共牌…' : ''));
         this.centered(21, game.actions.map((a, i) => (i === game.choice ? '\x1B[7m' : '') + ' ' + a.label + ' ' + RESET).join('   '));

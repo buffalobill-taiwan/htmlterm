@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { evaluate, handName } from '../js/cmd/cardgames/holdem/evaluate.js';
 import { createTable, startHand, act, advanceStreet, legalActions, observation, settle, potSize } from '../js/cmd/cardgames/holdem/rules.js';
-import { equity, decide } from '../js/cmd/cardgames/holdem/ai.js';
+import { equity, decide, roundRaise } from '../js/cmd/cardgames/holdem/ai.js';
 import { mulberry32 } from '../js/util/random.js';
 const cards = text => text.split(' ').map(c => ({ rank: '23456789TJQKA'.indexOf(c[0]) === 12 ? 1 : '23456789TJQKA'.indexOf(c[0]) + 2, suit: 'shdc'.indexOf(c[1]) }));
 const ranked = [
@@ -116,11 +116,19 @@ assert.deepEqual(Object.keys(publicView).sort(), ['bet', 'board', 'currentBet', 
 const tie = { ...publicView, hole: cards('2h 3h'), board: cards('As Ks Qs Js Ts'), opponents: 5 };
 assert.ok(Math.abs(equity(tie, 100, rng) - 1 / 6) < 1e-12);
 assert.equal(equity({ ...tie, hole: cards('As Ks'), board: cards('Qs Js Ts 2h 3h') }, 100, rng), 1);
+assert.equal(roundRaise(28, 20, 1000), 30);
+assert.equal(roundRaise(23, 20, 1000), 25);
+assert.equal(roundRaise(18, 20, 1000), 20);
+assert.equal(roundRaise(18, 23, 1000), 25);
+assert.equal(roundRaise(80, 20, 43), 43);
+assert.equal(roundRaise(36, 36, 38), 38);
+assert.equal(roundRaise(50, 60, 40), 40);
 for (let i = 0; i < 12; i++) {
     s = createTable(rng); startHand(s, rng);
     const view = observation(s);
     const a = decide(view, mulberry32(i));
     assert.deepEqual(a, decide(view, mulberry32(i)));
+    if (a.type === 'raise' && a.to !== view.legal.max) assert.equal(a.to % 5, 0);
     assert.ok(act(s, a));
 }
 console.log('Hold’em: hand ranks, betting/reopening, pots/refunds, 500 hands, rebuys and AI passed');

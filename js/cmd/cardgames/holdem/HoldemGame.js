@@ -19,6 +19,7 @@ export class HoldemGame {
         this.showdownDone = false; this.showdownShown = null;
         this.showdownOrder = []; this.showdownIndex = 0;
         this.showdownRevealing = false;
+        this.dealingHole = false; this.dealtHole = null;
     }
     start() { this.nextHand(); }
     nextHand() {
@@ -27,6 +28,7 @@ export class HoldemGame {
         this.showdownDone = false; this.showdownShown = null;
         this.showdownOrder = []; this.showdownIndex = 0;
         this.showdownRevealing = false;
+        this.dealingHole = false; this.dealtHole = null;
         if (this.state.players[0].stack === 0) {
             this.dialog = this.cmd.openDialog(SelectDialog, 'holdem-rebuy', {
                 title: '籌碼用完了', options: ['補碼 1,000', '離桌'],
@@ -39,7 +41,7 @@ export class HoldemGame {
             });
             return;
         }
-        if (startHand(this.state)) { this.status = ''; this.pump(); }
+        if (startHand(this.state)) { this.status = ''; this.dealHole(); }
     }
     later(fn, ms) {
         clearTimeout(this.timer);
@@ -112,6 +114,74 @@ export class HoldemGame {
             this.anims.add(cancel);
         };
         launch();
+    }
+    // Deal 2 hole cards to each player sequentially in standard poker order:
+    // 2 rounds starting from the small blind (button + 1) to the button.
+    // Opponent cards land face down; player cards land and flip open.
+    dealHole() {
+        if (this.disposed) return;
+        const s = this.state;
+        this.dealing = true;
+        this.dealingHole = true;
+        this.dealtHole = new Set();
+        this.status = '發牌中…';
+        this.view.draw(this);
+
+        const deals = [];
+        for (let round = 0; round < 2; round++) {
+            for (let i = 1; i <= s.players.length; i++) {
+                deals.push({ seat: (s.button + i) % s.players.length, round });
+            }
+        }
+
+        let nextDeal = 0, landed = 0;
+        const launch = () => {
+            if (this.disposed || !this.dealingHole || nextDeal >= deals.length) return;
+            const { seat, round } = deals[nextDeal++];
+            const isPlayer = seat === 0;
+            const card = s.players[seat].hole[round];
+            const to = isPlayer ?
+                { x: round === 0 ? 34 : 40, y: 16 } :
+                { x: 1 + (seat - 1) * 16 + 1 + round * 6, y: 5 };
+            let launchedNext = false;
+            const maybeNext = ratio => {
+                if (!launchedNext && (ratio >= 0.45 || nextDeal === deals.length)) {
+                    launchedNext = true;
+                    launch();
+                }
+            };
+            const cancel = dealCard(this.cmd, card, DECK, to, {
+                faceDown: !isPlayer,
+                duration: 180,
+                flipDuration: 180,
+                onStep: (_step, ratio) => maybeNext(ratio),
+            }, () => {
+                this.anims.delete(cancel);
+                if (this.disposed || !this.dealingHole) return;
+                maybeNext(1);
+                this.dealtHole.add(seat * 2 + round);
+                this.view.draw(this);
+                if (++landed === deals.length) {
+                    this.dealing = false;
+                    this.dealingHole = false;
+                    this.dealtHole = null;
+                    this.view.draw(this);
+                    this.pump();
+                }
+            });
+            this.anims.add(cancel);
+        };
+        launch();
+    }
+    finishHoleDeal() {
+        if (!this.dealingHole) return;
+        for (const cancel of this.anims) cancel();
+        this.anims.clear();
+        this.dealing = false;
+        this.dealingHole = false;
+        this.dealtHole = null;
+        this.view.draw(this);
+        this.pump();
     }
     think() {
         const id = ++this.request;
@@ -227,6 +297,10 @@ export class HoldemGame {
     key(data) {
         if (data === '\x1B' || /^[qQ]$/.test(data)) return this.cmd._quit();
         if (/^[nN]$/.test(data)) return this.cmd._menu();
+        if (this.dealingHole && (data === '\r' || data === '\n' || data === ' ')) {
+            this.finishHoleDeal();
+            return;
+        }
         if (this.effect || this.dealing) return;
         if (this.failed) {
             if (data === '\r' || data === '\n') { this.failed = false; this.pump(); }
@@ -253,6 +327,7 @@ export class HoldemGame {
         for (const cancel of this.anims) cancel();
         this.anims.clear();
         this.dealing = false; this.revealed = null;
+        this.dealingHole = false; this.dealtHole = null;
         this.showdownDone = false; this.showdownShown = null;
         this.showdownOrder = []; this.showdownIndex = 0;
         this.showdownRevealing = false;
