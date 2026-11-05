@@ -183,6 +183,11 @@ receives this observation, never the deck, burns or other players' cards.
 Request IDs reject stale replies; disposal terminates the worker and clears
 pending timers and dialogs. Worker failure leaves retry/menu controls usable.
 
+`decide()` estimates equity with 1,000 sampled boards, then compares it with
+pot odds adjusted by the seat's sampled personality. An unraised preflop call
+also receives a small implied-odds allowance; without it, raw pot odds would
+fold almost every non-premium hand before the flop.
+
 The view keeps fixed row buffers and cached card child slots, writes only
 changed rows, and clears old card locations when starting a new hand. Shared
 InputDialog, SelectDialog and ShowDialog own editing, rebuys and settlement

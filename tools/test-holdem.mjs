@@ -157,3 +157,16 @@ const winning = { ...tie, hole: cards('As Ks'), board: cards('Qs Js Ts 2h 3h'),
 const passive = { bluff: 0, aggression: 0, tolerance: 0, thresholdOffset: 0, betRatio: 0.5, strongBetRatio: 0.8 };
 assert.equal(decide({ ...winning, personality: passive }, mulberry32(1), 10).type, 'call');
 assert.equal(decide({ ...winning, personality: { ...passive, aggression: 1 } }, mulberry32(1), 10).type, 'raise');
+// An unraised preflop call gets an implied-odds allowance, so playable hands
+// no longer fold to the big blind. It does not apply against a raise or after
+// the flop, and trash still folds.
+const limped = { ...winning, hole: cards('As Ks'), board: [], bet: 0, pot: 15, currentBet: 10,
+    legal: { call: 10, min: 20, max: 1000, raise: true, allIn: true }, personality: passive };
+assert.equal(decide(limped, mulberry32(1)).type, 'call');
+assert.equal(decide({ ...limped, hole: cards('7s 2d') }, mulberry32(1)).type, 'fold');
+const raisedPreflop = { ...limped, pot: 55, currentBet: 40,
+    legal: { call: 30, min: 50, max: 1000, raise: true, allIn: true } };
+assert.equal(decide(raisedPreflop, mulberry32(1)).type, 'fold');
+const flopBet = { ...limped, board: cards('2s 3h 7d'), pot: 100, currentBet: 80,
+    legal: { call: 80, min: 160, max: 1000, raise: true, allIn: true } };
+assert.equal(decide(flopBet, mulberry32(1)).type, 'fold');

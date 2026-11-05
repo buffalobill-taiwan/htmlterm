@@ -1,5 +1,10 @@
 import { DEFAULT_PERSONALITY } from './personality.js';
 import { evaluate } from './evaluate.js';
+import { BIG_BLIND } from './rules.js';
+// An unraised preflop pot costs one big blind and later streets pay off made
+// hands. Raw pot odds alone would fold almost every non-premium hand, so the
+// call decision gets this much extra equity as implied odds.
+const LIMP_EQUITY = 0.15;
 // Unknown folded cards and burns remain in the sampling pool: their identities
 // are not information available to a player.
 export function equity(view, trials = 1000, rng = Math.random) {
@@ -36,8 +41,9 @@ export function decide(view, rng = Math.random, trials = 1000) {
     const price = l.call / Math.max(1, view.pot + l.call);
     const personality = view.personality || DEFAULT_PERSONALITY;
     const bluff = rng() < personality.bluff;
+    const implied = view.board.length === 0 && view.currentBet <= BIG_BLIND ? LIMP_EQUITY : 0;
     const threshold = Math.max(0, Math.min(1, Math.max(0.42, 1 / (view.opponents + 1) + 0.17) + personality.thresholdOffset));
-    if (l.call && strength + personality.tolerance < price && !bluff) return { type: 'fold' };
+    if (l.call && strength + personality.tolerance + implied < price && !bluff) return { type: 'fold' };
     if (l.raise && (strength > threshold || bluff) && rng() < personality.aggression) {
         const ideal = view.currentBet + (view.pot + l.call) * (strength > 0.75 ? personality.strongBetRatio : personality.betRatio);
         const target = roundRaise(ideal, l.min, l.max);
