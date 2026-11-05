@@ -9,7 +9,7 @@ import { score, natural, outcome, shuffledDeck } from './blackjack.js';
 import { FreeCellGame } from './freecell/FreeCellGame.js';
 import { parseSeed } from '../../util/random.js';
 const META = GAME_META.cardgames;
-const DECK = { x: 53, y: 10 };
+const DECK = { x: 53, y: 8 };
 
 export class CardgamesCmd extends CmdBase {
     static get commandName() { return META.commandName; }
@@ -46,7 +46,10 @@ export class CardgamesCmd extends CmdBase {
         this._draw();
         this._dialog = this.openDialog(SelectDialog, 'cardgames-menu', {
             title: 'Card Games', layout: 'list', width: 36,
-            options: ['Blackjack 二十一點', 'FreeCell 新接龍'],
+            options: [
+                { label: 'Blackjack', description: '二十一點' },
+                { label: 'FreeCell', description: '新接龍' },
+            ],
             onSelect: index => { this._dialog = null; if (index === 1) this._startFreeCell(); else this._deal(); },
             onCancel: () => { this._dialog = null; this._quit(); },
         });
@@ -97,10 +100,11 @@ export class CardgamesCmd extends CmdBase {
     _drawDeck() {
         if (!this._deck) return;
         const back = cardBuffer(null);
-        const layers = Math.min(3, this._deck.length);
-        for (let o = layers - 1; o >= 0; o--)
-            for (let r = 0; r < 3; r++) for (let c = 0; c < 5; c++)
-                this._vb.setCell(DECK.y - o + r, DECK.x - o + c, back.getCell(r, c));
+        for (let r = 0; r < 3; r++) for (let c = 0; c < 5; c++)
+            this._vb.setCell(DECK.y + r, DECK.x + c, back.getCell(r, c));
+        // Cards below the top one show only their bottom border.
+        for (let i = 1; i <= 3; i++) for (let c = 0; c < 5; c++)
+            this._vb.setCell(DECK.y + 2 + i, DECK.x + c, back.getCell(2, c));
         this._vb.writeStr(6, DECK.x - 1, '牌堆 ' + this._deck.length);
     }
     _flip(hand, index, row, done) {
