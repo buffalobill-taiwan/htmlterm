@@ -6,7 +6,8 @@ import { InputDialog } from '../../../dialog/InputDialog.js';
 import { ShowDialog } from '../../../dialog/ShowDialog.js';
 import { createTable, startHand, act, advanceStreet, legalActions, observation, BUY_IN } from './rules.js';
 import { handName } from './evaluate.js';
-import { HoldemView, resultText } from './view.js';
+import { HoldemView, resultText, DECK } from './view.js';
+import { dealCard } from '../animation.js';
 const ACTION_EFFECTS = new Map();
 
 export class HoldemGame {
@@ -14,10 +15,12 @@ export class HoldemGame {
         this.cmd = cmd;
         this.state = createTable(); this.view = new HoldemView();
         this.actions = []; this.choice = 0; this.request = 0;
+        this.anims = new Set(); this.dealing = false; this.revealed = null;
     }
     start() { this.nextHand(); }
     nextHand() {
         if (this.disposed) return;
+        this.dealing = false; this.revealed = null;
         if (this.state.players[0].stack === 0) {
             this.dialog = this.cmd.openDialog(SelectDialog, 'holdem-rebuy', {
                 title: '籌碼用完了', options: ['補碼 1,000', '離桌'],
@@ -50,7 +53,7 @@ export class HoldemGame {
         }
         if (s.phase === 'between') {
             this.view.draw(this);
-            this.later(() => { advanceStreet(s); this.pump(); }, 650);
+            this.later(() => this.dealStreet(), 650);
             return;
         }
         if (s.actor === 0) {
@@ -64,6 +67,42 @@ export class HoldemGame {
         }
         this.view.draw(this);
         this.think();
+    }
+    // Advance the street, then send each new board card flying from the deck.
+    // The next card launches as soon as this one is two columns clear, so the
+    // flop leaves the deck as a continuous stream rather than card by card.
+    dealStreet() {
+        if (this.disposed) return;
+        const s = this.state, from = s.board.length;
+        advanceStreet(s);
+        if (s.phase === 'result' || s.board.length === from) { this.pump(); return; }
+        const added = s.board.length - from;
+        let next = from, landed = 0;
+        this.dealing = true;
+        this.revealed = s.board.map((_, i) => i < from);
+        this.status = '發牌中…';
+        this.view.draw(this);
+        const launch = () => {
+            if (this.disposed || next >= s.board.length) return;
+            const index = next++;
+            let launchedNext = false;
+            const cancel = dealCard(this.cmd, s.board[index], DECK, { x: 25 + index * 6, y: 11 }, {
+                onStep: step => {
+                    if (!launchedNext && step >= 2) { launchedNext = true; launch(); }
+                },
+            }, () => {
+                this.anims.delete(cancel);
+                this.revealed[index] = true;
+                this.view.draw(this);
+                if (++landed === added) {
+                    this.dealing = false; this.revealed = null;
+                    this.view.draw(this);
+                    this.pump();
+                }
+            });
+            this.anims.add(cancel);
+        };
+        launch();
     }
     think() {
         const id = ++this.request;
@@ -111,7 +150,7 @@ export class HoldemGame {
         });
     }
     performAction(action) {
-        if (this.disposed || this.effect || !action) return false;
+        if (this.disposed || this.effect || this.dealing || !action) return false;
         const seat = this.state.actor, legal = legalActions(this.state);
         const type = action.type === 'allin' && legal ?
             (legal.max <= this.state.currentBet ? 'call' : 'raise') : action.type;
@@ -146,7 +185,7 @@ export class HoldemGame {
     key(data) {
         if (data === '\x1B' || /^[qQ]$/.test(data)) return this.cmd._quit();
         if (/^[nN]$/.test(data)) return this.cmd._menu();
-        if (this.effect) return;
+        if (this.effect || this.dealing) return;
         if (this.failed) {
             if (data === '\r' || data === '\n') { this.failed = false; this.pump(); }
             return;
@@ -169,6 +208,9 @@ export class HoldemGame {
     dispose() {
         this.disposed = true; this.request++;
         this.removeEffect();
+        for (const cancel of this.anims) cancel();
+        this.anims.clear();
+        this.dealing = false; this.revealed = null;
         clearTimeout(this.timer); this.timer = null; this.worker?.terminate(); this.worker = null;
         this.dialog?.close(); this.dialog = null;
     }

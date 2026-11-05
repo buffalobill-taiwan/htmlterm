@@ -5,7 +5,15 @@ import { cardBuffer } from '../cards.js';
 import { STREETS, potSize } from './rules.js';
 import { handName } from './evaluate.js';
 export const seatName = id => id === 0 ? '你' : '電腦 ' + id;
+export const DECK = { x: 73, y: 14 };
 const RESET = '\x1B[0m';
+function deckStackBuffer() {
+    const back = cardBuffer(null), vb = new VirtualBuffer(5, 6);
+    for (let r = 0; r < 3; r++) for (let c = 0; c < 5; c++) vb.setCell(r, c, back.getCell(r, c));
+    // Cards below the top one show only their bottom border.
+    for (let i = 1; i <= 3; i++) for (let c = 0; c < 5; c++) vb.setCell(2 + i, c, back.getCell(2, c));
+    return vb;
+}
 const foldedCards = new WeakMap();
 function foldedCardBuffer(base) {
     if (!foldedCards.has(base)) {
@@ -25,9 +33,11 @@ export class HoldemView {
         this.seatRows = Array.from({ length: 4 }, () => new VirtualBuffer(80, 1));
         this.dirty = new Set();
         this.rows.forEach((vb, y) => { const slot = this.root.addChildSlot(); Object.assign(slot, { vb, x: 0, y, active: true }); });
-        this.cards = Array.from({ length: 17 }, () => {
+        this.cards = Array.from({ length: 18 }, () => {
             const slot = this.root.addChildSlot(); slot.active = false; return slot;
         });
+        // Slot 17 is the deck, which stays put while cards fly out of it.
+        Object.assign(this.cards[17], { vb: deckStackBuffer(), x: DECK.x, y: DECK.y, active: true });
         for (let y = 0; y < 25; y++) this.row(y, '');
         term.writeVB(this.root);
     }
@@ -62,7 +72,7 @@ export class HoldemView {
             const color = actor === id ? '\x1B[1;33m' : p.folded ? '\x1B[2m' : '\x1B[36m';
             lines[0].writeStr(0, x, color + seatName(id) + badge + RESET, x + 15);
             lines[1].writeStr(0, x, '籌碼 ' + p.stack, x + 15);
-            lines[2].writeStr(0, x, actor === id && !game.failed && !game.effect ? '思考中…' : p.action, x + 15);
+            lines[2].writeStr(0, x, actor === id && !game.failed && !game.effect && !game.dealing ? '思考中…' : p.action, x + 15);
             lines[3].writeStr(0, x, p.won ? '\x1B[32m贏得 ' + p.won + RESET : '投入 ' + p.bet, x + 15);
             for (let n = 0; n < 2; n++) this.card((id - 1) * 2 + n,
                 s.showdown && !p.folded ? p.hole[n] : null, x + n * 6 + 1, 5, true, p.folded);
@@ -80,7 +90,10 @@ export class HoldemView {
             }
         });
         this.row(10, '                         公共牌    底池 ' + potSize(s));
-        for (let i = 0; i < 5; i++) this.card(10 + i, s.board[i] || null, 25 + i * 6, 11, i < s.board.length);
+        this.row(12, ' '.repeat(DECK.x - 1) + '牌堆 ' + (s.deck?.length ?? 0));
+        const revealed = game.revealed;
+        for (let i = 0; i < 5; i++) this.card(10 + i, s.board[i] || null, 25 + i * 6, 11,
+            i < s.board.length && (!revealed || revealed[i]));
         const you = s.players[0], badge = s.button === 0 ? ' [D]' : s.sb === 0 ? ' [SB]' : s.bb === 0 ? ' [BB]' : '';
         this.row(15, '                                  ' + (actor === 0 ? '\x1B[1;33m' : '\x1B[36m') + '你' + badge + RESET);
         this.card(15, you.hole[0], 34, 16, true, you.folded);
@@ -88,14 +101,15 @@ export class HoldemView {
         this.row(19, `               籌碼 ${you.stack}    本輪投入 ${you.bet}    ${you.action}`);
         this.centered(20, game.status || (s.phase === 'between' ? '準備發下一輪公共牌…' : ''));
         this.centered(21, game.actions.map((a, i) => (i === game.choice ? '\x1B[7m' : '') + ' ' + a.label + ' ' + RESET).join('   '));
-        this.row(22, game.effect ? '' : s.phase === 'result' ? '                   Enter 下一手    R 查看結算' : actor === 0 ? '                     ← → 選擇    Enter 確認' : '');
-        this.row(24, ' N 遊戲選單                                                  Q / Esc 離開');
+        this.row(22, game.effect || game.dealing ? '' : s.phase === 'result' ? '                   Enter 下一手    R 查看結算' : actor === 0 ? '                     ← → 選擇    Enter 確認' : '');
+        this.row(23, ' N 遊戲選單                                                  Q / Esc 離開');
         // Recompose only changed rows, including any card slots on those rows.
         for (const y of this.dirty) {
             const row = this.output;
             for (let x = 0; x < 80; x++) row.setCell(0, x, this.rows[y].getCell(0, x));
-            for (const slot of this.cards) if (slot.active && y >= slot.y && y < slot.y + 3)
-                for (let x = 0; x < 5; x++) row.setCell(0, slot.x + x, slot.vb.getCell(y - slot.y, x));
+            for (const slot of this.cards) if (slot.active && y >= slot.y && y < slot.y + slot.vb.height)
+                for (let x = 0; x < slot.vb.width; x++)
+                    row.setCell(0, slot.x + x, slot.vb.getCell(y - slot.y, x));
             term.writeVB(row, 0, y);
         }
         this.dirty.clear();

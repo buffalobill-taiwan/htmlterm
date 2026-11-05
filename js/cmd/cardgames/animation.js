@@ -34,8 +34,9 @@ export function flipCard(cmd, card, x, y, done) {
 // 20ms per 2-column step, then flips open on arrival. A faceDown card
 // (the dealer's hole card) lands unflipped and is revealed in place later.
 // The card is pushed into the hand only after this animation lands, so the
-// destination stays empty while flying. Returns a cancel function.
-export function dealCard(cmd, card, from, to, { faceDown = false } = {}, done) {
+// destination stays empty while flying. onStep(step) lets a caller launch
+// the next card while this one is still in the air. Returns a cancel function.
+export function dealCard(cmd, card, from, to, { faceDown = false, onStep } = {}, done) {
     const back = cardBuffer(null);
     const frames = faceDown ? null : cardFlipFrames(card);
     const steps = Math.max(1, Math.abs(to.x - from.x), Math.abs(to.y - from.y));
@@ -59,6 +60,7 @@ export function dealCard(cmd, card, from, to, { faceDown = false } = {}, done) {
                 manager.overlay.x = from.x + Math.round((to.x - from.x) * step / steps);
                 manager.overlay.y = from.y + Math.round((to.y - from.y) * step / steps);
                 dirtyAt();
+                onStep?.(step);
             }
             if (step === steps) {
                 if (faceDown) { complete = true; return true; }
