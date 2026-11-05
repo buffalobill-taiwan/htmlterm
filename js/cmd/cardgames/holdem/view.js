@@ -6,6 +6,16 @@ import { STREETS, potSize } from './rules.js';
 import { handName } from './evaluate.js';
 export const seatName = id => id === 0 ? '你' : '電腦 ' + id;
 const RESET = '\x1B[0m';
+const foldedCards = new WeakMap();
+function foldedCardBuffer(base) {
+    if (!foldedCards.has(base)) {
+        const vb = new VirtualBuffer(base.width, base.height);
+        for (let y = 0; y < base.height; y++) for (let x = 0; x < base.width; x++)
+            vb.setCell(y, x, { ...base.getCell(y, x), bg: 8 });
+        foldedCards.set(base, vb);
+    }
+    return foldedCards.get(base);
+}
 export class HoldemView {
     constructor() {
         this.root = new VirtualBuffer(80, 25);
@@ -31,8 +41,9 @@ export class HoldemView {
     centered(y, text) {
         this.row(y, ' '.repeat(Math.max(0, Math.floor((80 - bufWidth(text)) / 2))) + text);
     }
-    card(index, card, x, y, active = true) {
-        const slot = this.cards[index], vb = cardBuffer(card);
+    card(index, card, x, y, active = true, folded = false) {
+        const base = cardBuffer(card);
+        const slot = this.cards[index], vb = folded ? foldedCardBuffer(base) : base;
         if (slot.vb === vb && slot.active === active && slot.x === x && slot.y === y) return;
         if (slot.active) for (let r = slot.y; r < slot.y + 3; r++) this.dirty.add(r);
         Object.assign(slot, { vb, x, y, active });
@@ -54,7 +65,7 @@ export class HoldemView {
             lines[2].writeStr(0, x, actor === id && !game.failed && !game.effect ? '思考中…' : p.action, x + 15);
             lines[3].writeStr(0, x, p.won ? '\x1B[32m贏得 ' + p.won + RESET : '投入 ' + p.bet, x + 15);
             for (let n = 0; n < 2; n++) this.card((id - 1) * 2 + n,
-                s.showdown && !p.folded ? p.hole[n] : null, x + n * 6 + 1, 5);
+                s.showdown && !p.folded ? p.hole[n] : null, x + n * 6 + 1, 5, true, p.folded);
         }
         [3, 4, 8, 9].forEach((y, i) => {
             // Compare cells and retain old immutable rows on unchanged seat updates.
@@ -72,7 +83,8 @@ export class HoldemView {
         for (let i = 0; i < 5; i++) this.card(10 + i, s.board[i] || null, 25 + i * 6, 11, i < s.board.length);
         const you = s.players[0], badge = s.button === 0 ? ' [D]' : s.sb === 0 ? ' [SB]' : s.bb === 0 ? ' [BB]' : '';
         this.row(15, '                                  ' + (actor === 0 ? '\x1B[1;33m' : '\x1B[36m') + '你' + badge + RESET);
-        this.card(15, you.hole[0], 34, 16); this.card(16, you.hole[1], 40, 16);
+        this.card(15, you.hole[0], 34, 16, true, you.folded);
+        this.card(16, you.hole[1], 40, 16, true, you.folded);
         this.row(19, `               籌碼 ${you.stack}    本輪投入 ${you.bet}    ${you.action}`);
         this.centered(20, game.status || (s.phase === 'between' ? '準備發下一輪公共牌…' : ''));
         this.centered(21, game.actions.map((a, i) => (i === game.choice ? '\x1B[7m' : '') + ' ' + a.label + ' ' + RESET).join('   '));
