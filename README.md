@@ -136,7 +136,7 @@ more than once.
 | `help` | Show command list; `help <cmd>` for details and usage |
 | `klotski` | Play Klotski 華容道 sliding-block puzzle (11 fayaa layouts) |
 | `jpmj` | Play Japanese Mahjong (14-tile riichi style, 6 AI personalities, riichi/dora/honba) |
-| `cardgames` | Play Blackjack with animated reveals or solvable FreeCell with keyboard/mouse controls |
+| `cardgames` | Play Blackjack, FreeCell, or six-player Texas Hold’em |
 | `memory` | Play a card-matching Memory game (flip to find matching pairs, three difficulty levels) |
 | `menu` | Open command menu dialog |
 | `mbti` | MBTI personality test (interactive) |
@@ -208,7 +208,7 @@ one-based `(x,y)` coordinates. See [Maze reproduction](docs/development.md#maze-
 
 ### Card games
 
-Run `cardgames` to choose Blackjack or FreeCell. In Blackjack, arrows select Hit/Stand; Enter confirms or
+Run `cardgames` to choose Blackjack, FreeCell, or Texas Hold’em. In Blackjack, arrows select Hit/Stand; Enter confirms or
 starts the next round. N returns to the game menu; Q/Escape or Ctrl+C quits. Each round
 uses a freshly shuffled 52-card deck. Aces count as 1 or 11; the dealer stands
 on all 17s, including soft 17. Two-card Blackjack beats other 21s. There is no
@@ -219,6 +219,23 @@ except `10`; the shared renderer also supports jokers (` 〠`), unused here.
 Blackjack hits and the dealer's hole-card reveal use a left-to-right flip, like
 Memory (40ms per column). Dealer draws are shown one at a time. During a flip,
 Hit/Stand is locked; N, Q/Escape and Ctrl+C still cancel immediately.
+
+Texas Hold’em opens directly with `cardgames holdem`. Play no-limit Hold’em against
+five computer players: each starts with 1,000 chips, with fixed 5/10 blinds and no
+rake. Arrows select Fold, Check/Call, Bet/Raise or All-in; Enter confirms. The
+raise dialog takes the **total for this betting round**, including chips already
+put in, and shows the legal range. Escape cancels the amount entry. N returns to
+the game menu; Q/Escape or Ctrl+C leaves the table. No progress is saved.
+
+The button rotates each hand. Short all-ins, reopening raises, side pots, split
+pots and uncalled-bet refunds are handled automatically. Opponent cards are
+hidden until showdown; folded hands stay hidden. R opens the settlement details,
+and Enter starts the next hand. Busted computers automatically rebuy to 1,000
+before the next deal; a busted player can rebuy or leave. The AI samples 1,000
+possible deals per decision in a background worker, using only its own cards and
+public information. It estimates opponents' unknown hands uniformly; it does not
+model opponents or use a poker solver. If the worker fails, Enter retries and N
+returns to the menu.
 
 FreeCell can also be opened with `cardgames freecell [seed]`. Seeds are integers
 0–2147483647. Deals now use the Microsoft-compatible shuffle; positive deal

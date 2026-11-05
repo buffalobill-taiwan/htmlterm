@@ -50,6 +50,7 @@ node tools/import-check.mjs # dynamic import: paths, syntax, module side effects
 node tools/test-headless.mjs # Parser/Screen, VirtualBuffer, seeds, seed args, lazy commands
 node tools/test-system.mjs  # frame stack: prompts, input replay, busy, dialogs, lazy, errors
 node tools/test-cardgames.mjs # Blackjack rules, deck, card widths and cached flip frames
+node tools/test-holdem.mjs    # Hold’em ranks, betting, side pots, chip conservation and AI
 node tools/test-maze.mjs     # Maze scoring fixtures, tree topology, branch distribution
 node tools/test-cchess-mahjong.mjs # Chinese chess / Japanese mahjong tile and rule checks
 git diff --check
@@ -323,3 +324,19 @@ card movement rules. Run `node tools/test-freecell-animation.mjs` for collection
 timing, undo and cancellation. In a browser, compare deal #1 with the CLI, check
 moves, undo, restart, new seed and Ctrl+C/reopen. Opening and restarting preserve
 all 52 cards; automatic collection begins after the first move.
+
+## Hold’em validation
+
+Run `node tools/test-holdem.mjs`. It covers hand ranks and kickers, wheel straights,
+board ties, minimum raises and cumulative short all-ins, multiple side pots,
+odd chips, uncalled refunds, random legal hands, rebuys and the AI information
+boundary. Its seeded simulation also checks determinism and legal AI actions.
+
+In the browser, open `cardgames holdem` and the equivalent menu entry. Play a
+full hand, enter/cancel/reject/confirm a raise amount, fold early and watch the
+remaining players, and use R to review settlement. Exercise multiway all-ins,
+side-pot results, rebuy/leave, and next-hand clearing of public/opponent cards.
+Try Delete/Insert/Home/End/PageUp/PageDown: none may exit the game. Leave with
+N, Q/Escape and Ctrl+C during AI computation, between streets, and inside a
+dialog. Check that no worker response or overlay survives, then reopen the game
+and verify Blackjack and FreeCell still work. If the worker fails, Enter retries.

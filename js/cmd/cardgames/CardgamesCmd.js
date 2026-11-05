@@ -7,6 +7,7 @@ import { cardBuffer } from './cards.js';
 import { flipCard, dealCard } from './animation.js';
 import { score, natural, outcome, shuffledDeck } from './blackjack.js';
 import { FreeCellGame } from './freecell/FreeCellGame.js';
+import { HoldemGame } from './holdem/HoldemGame.js';
 import { parseSeed } from '../../util/random.js';
 const META = GAME_META.cardgames;
 const DECK = { x: 53, y: 8 };
@@ -19,16 +20,28 @@ export class CardgamesCmd extends CmdBase {
     execute(args) {
         const p = this.parseArgs(args);
         if (p.hasHelp) return this.showHelp();
-        if (args.some(a => a.startsWith('-'))) return this.error('Usage: cardgames [freecell [seed]]');
-        if (p.rest.length && (p.rest[0] !== 'freecell' || p.rest.length > 2 || (p.rest.length === 2 && parseSeed(p.rest[1]) === null))) return this.error('Usage: cardgames [freecell [seed]]');
+        const valid = !p.rest.length || (p.rest[0] === 'holdem' && p.rest.length === 1) ||
+            (p.rest[0] === 'freecell' && p.rest.length <= 2 && (p.rest.length === 1 || parseSeed(p.rest[1]) !== null));
+        if (args.some(a => a.startsWith('-')) || !valid) return this.error('Usage: cardgames [holdem | freecell [seed]]');
         this.open();
         this._stats = { win: 0, loss: 0, draw: 0 };
         this._anims = new Set();
         this._vb = new VirtualBuffer(80, 23);
         term.write('\x1B[2J\x1B[H\x1B[?25l');
-        this.addCleanup(() => { this._stopAnims(); this._freecell?.dispose(); this._freecell = null; });
-        if (p.rest.length) this._startFreeCell(p.rest.length === 2 ? Number(p.rest[1]) : undefined);
+        this.addCleanup(() => {
+            this._stopAnims();
+            this._holdem?.dispose(); this._holdem = null;
+            this._freecell?.dispose(); this._freecell = null;
+        });
+        if (p.rest[0] === 'holdem') this._startHoldem();
+        else if (p.rest.length) this._startFreeCell(p.rest.length === 2 ? Number(p.rest[1]) : undefined);
         else this._menu();
+    }
+    _startHoldem() {
+        this._stopAnims();
+        this._holdem?.dispose();
+        this._holdem = new HoldemGame(this);
+        this._holdem.start();
     }
     _startFreeCell(seed) {
         this._freecell?.dispose();
@@ -37,6 +50,8 @@ export class CardgamesCmd extends CmdBase {
     }
     handleMouse(type, info) { return this._freecell?.handleMouse(type, info) || false; }
     _menu() {
+        this._holdem?.dispose();
+        this._holdem = null;
         this._freecell?.dispose();
         this._freecell = null;
         term.write('\x1B[2J');
@@ -49,8 +64,14 @@ export class CardgamesCmd extends CmdBase {
             options: [
                 { label: 'Blackjack', description: '二十一點' },
                 { label: 'FreeCell', description: '新接龍' },
+                { label: 'Texas Hold’em', description: '德州撲克' },
             ],
-            onSelect: index => { this._dialog = null; if (index === 1) this._startFreeCell(); else this._deal(); },
+            onSelect: index => {
+                this._dialog = null;
+                if (index === 2) this._startHoldem();
+                else if (index === 1) this._startFreeCell();
+                else this._deal();
+            },
             onCancel: () => { this._dialog = null; this._quit(); },
         });
     }
@@ -175,6 +196,7 @@ export class CardgamesCmd extends CmdBase {
         term.writeVB(vb);
     }
     _onKey(data) {
+        if (this._holdem) return this._holdem.key(data);
         if (this._freecell) return this._freecell.key(data);
         if (data === '\x1B' || /^[qQ]$/.test(data)) return this._quit();
         if (/^[nN]$/.test(data)) return this._menu();
@@ -195,6 +217,8 @@ export class CardgamesCmd extends CmdBase {
         }
     }
     _quit() {
+        this._holdem?.dispose();
+        this._holdem = null;
         this._freecell?.dispose();
         this._freecell = null;
         this._stopAnims();

@@ -47,7 +47,7 @@ contains shared dimensions, difficulty settings, and other fixed configuration.
 
 | Directory | Command class | Additional modules |
 |---|---|---|
-| [cardgames](../js/cmd/cardgames/index.js) | `CardgamesCmd` | `blackjack.js`: deck and scoring; `cards.js`: cached 5×3 faces, backs and flip frames; `animation.js`: cancellable RAF reveal overlays; `freecell/`: controller, view/hit testing, transactional rules, shared reverse generator/verifier and worker |
+| [cardgames](../js/cmd/cardgames/index.js) | `CardgamesCmd` | `holdem/`: controller, betting/side-pot rules, hand evaluator, row-based view and Monte Carlo AI worker; `blackjack.js`: deck and scoring; `cards.js`: cached 5×3 faces, backs and flip frames; `animation.js`: cancellable RAF reveal overlays; `freecell/`: controller, view/hit testing, transactional rules, shared reverse generator/verifier and worker |
 | [game2048](../js/cmd/game2048/index.js) | `Game2048Cmd` | `board.js`: sliding, merging, spawning, and move availability |
 | [gweled](../js/cmd/gweled/index.js) | `GweledCmd` | `board.js`: matches, gravity, legal swaps, and chain scores |
 | [klotski](../js/cmd/klotski/index.js) | `KlotskiCmd` | Level chooser configures shared `SelectDialog`; level data and solutions stay in `js/data/` |
@@ -163,3 +163,28 @@ for solvability. The worker and offline CLI share this implementation.
 `view.js` shares coordinates between rendering and hit tests. The controller is
 disposed on menu/exit and command-frame cleanup. Rows are updated only when
 visible cells change; the drag preview owns a separate overlay.
+
+## Texas Hold’em
+
+`cardgames/holdem/rules.js` owns the six-seat table, chip transfers, betting
+rights and settlement. `lastAct` records each player's last faced bet; the
+increase since then must reach the last full raise to reopen betting after
+short all-ins. This follows the no-limit reopening rule in the
+[Poker TDA rules](https://www.pokertda.com/view-poker-tda-rules/).
+The controller advances completed streets separately so all-in runouts remain
+visible. Uncalled excess is refunded before building contribution tiers; each
+pool includes folded chips but pays only eligible live hands. Odd chips go to
+winning seats clockwise from the button. Rebuys happen only between hands.
+
+The numeric evaluator ranks the best five of up to seven cards; suits never
+break ties. `observation()` explicitly copies only the acting player's hole
+cards, public board, opponent count and public betting information. The worker
+receives this observation, never the deck, burns or other players' cards.
+Request IDs reject stale replies; disposal terminates the worker and clears
+pending timers and dialogs. Worker failure leaves retry/menu controls usable.
+
+The view keeps fixed row buffers and cached card child slots, writes only
+changed rows, and clears old card locations when starting a new hand. Shared
+InputDialog, SelectDialog and ShowDialog own editing, rebuys and settlement
+presentation. No additional command is registered: `cardgames holdem` and the
+Card Games menu enter the same controller.
