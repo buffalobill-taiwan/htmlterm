@@ -11,7 +11,8 @@ export function deck(rng = Math.random) {
     return cards;
 }
 export function createTable(rng = Math.random) {
-    return { players: Array.from({ length: 6 }, (_, id) => ({ id, stack: BUY_IN, ...(id ? { personality: createPersonality(rng) } : {}) })),
+    return { players: Array.from({ length: 6 }, (_, id) => ({ id, number: id, stack: BUY_IN, ...(id ? { personality: createPersonality(rng) } : {}) })),
+        nextComputer: 6,
         button: Math.floor(rng() * 6), hand: 0, phase: 'idle', actor: -1 };
 }
 const next = (s, seat) => (seat + 1) % s.players.length;
@@ -31,6 +32,7 @@ export function startHand(s, rng = Math.random) {
     for (const p of s.players) {
         if (p.id && p.stack === 0) {
             p.stack = BUY_IN; p.personality = createPersonality(rng);
+            p.number = s.nextComputer++;
         }
         Object.assign(p, { hole: [], bet: 0, total: 0, folded: false, lastAct: null, action: '', won: 0 });
     }

@@ -108,6 +108,18 @@ assert.ok(startHand(s, rng)); assert.equal(s.button, (button + 1) % 6);
 assert.equal(s.players[1].stack + s.players[1].bet, 1000);
 assert.equal(startHand(s, rng), false);
 
+// A computer that busts and rebuys gets the next display number; its seat and
+// betting identity stay unchanged.
+const rebuy = createTable(mulberry32(7));
+assert.ok(startHand(rebuy, mulberry32(8)));
+assert.equal(rebuy.players[2].number, 2);
+rebuy.phase = 'result'; rebuy.players[2].stack = 0;
+assert.ok(startHand(rebuy, mulberry32(9)));
+assert.equal(rebuy.players[2].id, 2);
+assert.equal(rebuy.players[2].stack + rebuy.players[2].bet, 1000);
+assert.equal(rebuy.players[2].number, 6);
+assert.equal(rebuy.nextComputer, 7);
+
 // AI gets no hidden cards, deck, burns or opponent hand identities.
 s = betting(); const publicView = observation(s);
 s.deck.reverse(); s.burned = cards('Ac'); s.players[1].hole = cards('Ks Kh');

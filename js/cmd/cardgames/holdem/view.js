@@ -4,7 +4,7 @@ import { term } from '../../../system/sys.js';
 import { cardBuffer } from '../cards.js';
 import { STREETS, potSize } from './rules.js';
 import { handName } from './evaluate.js';
-export const seatName = id => id === 0 ? '你' : '電腦 ' + id;
+export const seatName = (s, id) => id === 0 ? '你' : '電腦 ' + s.players[id].number;
 export const DECK = { x: 73, y: 14 };
 const RESET = '\x1B[0m';
 function deckStackBuffer() {
@@ -70,7 +70,7 @@ export class HoldemView {
             const p = s.players[id], x = 1 + (id - 1) * 16;
             const badge = id === s.button ? ' D' : id === s.sb ? ' SB' : id === s.bb ? ' BB' : '';
             const color = actor === id ? '\x1B[1;33m' : p.folded ? '\x1B[2m' : '\x1B[36m';
-            lines[0].writeStr(0, x, color + seatName(id) + badge + RESET, x + 15);
+            lines[0].writeStr(0, x, color + seatName(s, id) + badge + RESET, x + 15);
             lines[1].writeStr(0, x, '籌碼 ' + p.stack, x + 15);
             lines[2].writeStr(0, x, actor === id && !game.failed && !game.effect && !game.dealing ? '思考中…' : p.action, x + 15);
             // Keep the award hidden until the showdown has revealed every hand.
@@ -126,8 +126,8 @@ export class HoldemView {
 }
 export function resultText(s) {
     const lines = s.pots.map((pot, i) => `${i ? '邊池 ' + i : '主池'} ${pot.amount}：` +
-        pot.awards.map(a => `${seatName(a.seat)} +${a.amount}`).join('、') +
+        pot.awards.map(a => `${seatName(s, a.seat)} +${a.amount}`).join('、') +
         (s.showdown ? '（' + handName(pot.value) + '）' : '（其他玩家棄牌）'));
-    for (const refund of s.refunds) lines.push(`${seatName(refund.seat)} 退回未被跟注的 ${refund.amount}`);
+    for (const refund of s.refunds) lines.push(`${seatName(s, refund.seat)} 退回未被跟注的 ${refund.amount}`);
     return lines.join('\n');
 }

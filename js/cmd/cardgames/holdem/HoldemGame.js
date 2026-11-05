@@ -56,7 +56,7 @@ export class HoldemGame {
             // the result text appears. The player is announced last.
             if (s.showdown && !this.showdownDone) { this.startShowdown(); return; }
             this.status = s.pots.length > 1 ? '多個底池已結算；R 查看各池得主' :
-                s.pots[0].awards.map(a => `${a.seat ? '電腦 ' + a.seat : '你'} +${a.amount}`).join('  ') +
+                s.pots[0].awards.map(a => `${seatName(s, a.seat)} +${a.amount}`).join('  ') +
                 (s.showdown ? '（' + handName(s.pots[0].value) + '）' : '（其他玩家棄牌）');
             this.view.draw(this);
             if (s.pots.length > 1) this.showResult();
@@ -279,7 +279,7 @@ export class HoldemGame {
             owner: this.cmd, getCell: makeOverlayGetCell(buffer, w, buffer.length),
         };
         this.actions = [];
-        this.status = `${seatName(seat)}：${text}`;
+        this.status = `${seatName(this.state, seat)}：${text}`;
         this.view.draw(this);
         term.addOverlay(this.effect);
     }

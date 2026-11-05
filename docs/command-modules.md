@@ -174,7 +174,9 @@ short all-ins. This follows the no-limit reopening rule in the
 The controller advances completed streets separately so all-in runouts remain
 visible. Uncalled excess is refunded before building contribution tiers; each
 pool includes folded chips but pays only eligible live hands. Odd chips go to
-winning seats clockwise from the button. Rebuys happen only between hands.
+winning seats clockwise from the button. Rebuys happen only between hands; a
+re-bought computer draws a new personality and display number while keeping
+its seat.
 
 The numeric evaluator ranks the best five of up to seven cards; suits never
 break ties. `observation()` explicitly copies only the acting player's hole
