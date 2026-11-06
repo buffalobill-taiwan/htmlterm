@@ -340,3 +340,12 @@ Try Delete/Insert/Home/End/PageUp/PageDown: none may exit the game. Leave with
 N, Q/Escape and Ctrl+C during AI computation, between streets, and inside a
 dialog. Check that no worker response or overlay survives, then reopen the game
 and verify Blackjack and FreeCell still work. If the worker fails, Enter retries.
+
+## Regicide validation
+
+Run `node tools/test-regicide.mjs` for setup, combos, exact kills, recovered
+royals, defence and solo Jester resets. Open `cardgames regicide` or its menu
+entry; check selection previews, attack/defence, help, Jester confirmation,
+game over and reopening. Exercise Escape sequences and Ctrl+C inside dialogs;
+verify no overlay survives and other card games still work.
+Rules reference: https://www.regicidegame.com/site_files/33132/upload_files/RegicideRulesA4.pdf?v=2
