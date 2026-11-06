@@ -19,7 +19,7 @@ import { mahjongRenderMethods } from './mahjong/render.js';
 import { GAME_META } from '../game-meta.js';
 const META = GAME_META.cchess;
 
-const ENDGAME_DATA_VERSION = '2026-10-05T06:19:37Z';
+const ENDGAME_DATA_VERSION = '2026-11-06-endgame-027';
 
 export class CChessCmd extends CmdBase {
     execute(args) {

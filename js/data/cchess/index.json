@@ -132,6 +132,12 @@
     "file": "endgame-025.json"
   },
   {
+    "id": "endgame-027",
+    "name": "捉將在必得",
+    "step": 9,
+    "file": "endgame-027.json"
+  },
+  {
     "id": "endgame-022",
     "name": "續傌再殺將",
     "step": 10,
