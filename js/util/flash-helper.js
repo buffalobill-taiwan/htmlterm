@@ -59,6 +59,11 @@ export function screenFlash(cmd, term, count) {
     runSequence(cmd, term, count, () => overlay, 60, 100);
 }
 
+// Flash caller-owned artwork with the same timing and cleanup as borderFlash.
+export function overlayFlash(cmd, term, overlay, count, options) {
+    return runSequence(cmd, term, count, () => overlay, 60, 100, options);
+}
+
 export function borderFlash(cmd, term, count, options) {
     const cols = term.cols;
     const rows = term.rows;

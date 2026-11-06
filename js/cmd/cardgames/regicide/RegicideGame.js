@@ -1,12 +1,11 @@
 import { buildCallEffectBuffer } from '../../../util/call-effect.js';
 import { makeOverlayGetCell } from '../../../util/sgr.js';
-import { borderFlash } from '../../../util/flash-helper.js';
 import { term } from '../../../system/sys.js';
 import { SelectDialog } from '../../../dialog/SelectDialog.js';
 import { ShowDialog } from '../../../dialog/ShowDialog.js';
 import { dealCard } from '../animation.js';
 import { createGame, play, jester, needsRescue } from './rules.js';
-import { initView, draw as drawView, DECK, USED, DISCARD, handPosition, enemyName } from './render.js';
+import { initView, draw as drawView, DECK, USED, DISCARD, handPosition, enemyName, flashEnemy, dissolveEnemy } from './render.js';
 
 const EVENT_BUFFERS = new Map();
 
@@ -14,11 +13,13 @@ export class RegicideGame {
     constructor(cmd) { this.cmd = cmd; initView(this); this.anims = new Set(); this.batch = 0; }
     start() {
         this.stopDeals(); this.attackEffect = null; this.displayHp = null; this.defeatEffect = null; this.usedDisplay = null; this.displayEnemy = null;
+        this.enemyDefeated = false;
         this.state = createGame(); this.arrivalPending = true; this.counterEffect = null; this.selected = new Set(); this.cursor = 0;
         this.dealNewCards([]);
     }
     stopDeals() {
         this.clearEvent();
+        this.cancelDissolve?.(); this.cancelDissolve = null; this.dissolving = false;
         this.cancelFlash?.(); this.cancelFlash = null; this.flashing = false;
         this.batch++; this.collecting = false; this.recovering = false; this.presentation = null;
         for (const cancel of this.anims) cancel();
@@ -113,20 +114,24 @@ export class RegicideGame {
             const batch = this.batch;
             this.dealing = true; this.flashing = true; this.displayHp = effect.afterHp;
             this.draw();
-            this.cancelFlash = borderFlash(this.cmd, term,
-                effect.damage <= 5 ? 1 : effect.damage <= 10 ? 2 : 3, {
-                    holdBusy: false,
-                    onComplete: () => {
-                        if (this.disposed || batch !== this.batch) return;
-                        this.cancelFlash = null; this.flashing = false; this.dealing = false;
-                        this.displayHp = null; if (!this.defeatEffect) this.presentation = null; this.finishEffects(); this.draw();
-                    },
+            this.cancelFlash = flashEnemy(this,
+                effect.damage <= 5 ? 1 : effect.damage <= 10 ? 2 : 3, () => {
+                    if (this.disposed || batch !== this.batch) return;
+                    this.cancelFlash = null; this.flashing = false; this.dealing = false;
+                    this.displayHp = null; if (!this.defeatEffect) this.presentation = null; this.finishEffects(); this.draw();
                 });
             return;
         }
         if (this.defeatEffect) {
             const effect = this.defeatEffect; this.defeatEffect = null;
-            this.showEvent(enemyName(effect.enemy) + '被擊倒', () => this.collectUsed(effect));
+            const batch = this.batch;
+            this.dealing = true; this.dissolving = true;
+            this.draw();
+            this.cancelDissolve = dissolveEnemy(this, () => {
+                if (this.disposed || batch !== this.batch) return;
+                this.cancelDissolve = null; this.dissolving = false; this.enemyDefeated = true;
+                this.showEvent(enemyName(effect.enemy) + '被擊倒', () => this.collectUsed(effect));
+            });
             return;
         }
         if (this.counterEffect) {
@@ -167,6 +172,7 @@ export class RegicideGame {
                     this.collecting = false; this.dealing = false; this.presentation = null;
                     this.usedDisplay = null; this.displayEnemy = null;
                     if (this.state.phase !== 'win') {
+                        this.enemyDefeated = false;
                         this.arrivalPending = true; this.finishEffects();
                     }
                 }

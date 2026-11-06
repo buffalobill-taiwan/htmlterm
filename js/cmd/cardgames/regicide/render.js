@@ -1,6 +1,9 @@
 import { VirtualBuffer } from '../../../util/VirtualBuffer.js';
 import { displayWidth } from '../../../util/display-width.js';
 import { term } from '../../../system/sys.js';
+import { overlayFlash } from '../../../util/flash-helper.js';
+import { startBufferAnimation } from '../../../system/RAFAnimationHelper.js';
+import { makeCell } from '../../../util/sgr.js';
 import { cardBuffer } from '../cards.js';
 import { needsRescue, preview, value } from './rules.js';
 
@@ -10,8 +13,8 @@ const BLANK_ROW = ' '.repeat(80);
 // coordinates and composited at (x, y) by initView(). Tweak a region by
 // changing this table only; keep regions non-overlapping.
 export const LAYOUT = {
-    title:    { x: 2,  y: 0,  w: 76, h: 1 },
-    enemy:    { x: 2,  y: 2,  w: 34, h: 5 },
+    title:    { x: 29, y: 0,  w: 49, h: 1 },
+    enemy:    { x: 9,  y: 0,  w: 20, h: 13 },
     jesters:  { x: 37, y: 3,  w: 12, h: 5 },
     roster:   { x: 37, y: 9,  w: 12, h: 4 },
     used:     { x: 51, y: 3,  w: 9,  h: 8 },
@@ -86,14 +89,88 @@ function drawTitle(game) {
     vb.writeStr(0, vb.width - displayWidth(text), text);
 }
 
+const enemyFaces = new WeakMap();
+function enemyFace(base) {
+    if (!enemyFaces.has(base)) {
+        const scale = 4;
+        const vb = new VirtualBuffer(base.width * scale, base.height * scale);
+        for (let y = 0; y < base.height; y++) for (let x = 0; x < base.width; x++) {
+            const cell = base.getCell(y, x);
+            // Expand wide glyphs from their lead cell, skipping the continuation.
+            if (!cell || cell.width === 0) continue;
+            for (let r = 0; r < scale; r++) for (let c = 0; c < cell.width * scale; c++) {
+                vb.setCell(y * scale + r, x * scale + c, {
+                    ...cell, width: 1, clip: true, clipScale: scale,
+                    clipOffX: -c, clipOffY: -r,
+                });
+            }
+        }
+        enemyFaces.set(base, vb);
+    }
+    return enemyFaces.get(base);
+}
+
+const hitFaces = new WeakMap();
+const BLACK_CELL = makeCell(' ', 0, 0, false);
+
+export function dissolveEnemy(game, onComplete) {
+    const face = enemyFace(cardBuffer(game.displayEnemy || game.state.enemy));
+    const count = face.width * face.height;
+    const order = Array.from({ length: count }, (_, i) => i);
+    for (let i = count - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [order[i], order[j]] = [order[j], order[i]];
+    }
+    const cells = Array(count).fill(null);
+    const screen = term.screen;
+    const started = performance.now();
+    let filled = 0, complete = false;
+    const animation = startBufferAnimation(game.cmd,
+        (y, x) => cells[y * face.width + x], ts => {
+            const target = Math.min(count, Math.floor((ts - started) * count / 1500));
+            while (filled < target) {
+                const index = order[filled++];
+                cells[index] = BLACK_CELL;
+                screen.markRowDirty(LAYOUT.enemy.y + Math.floor(index / face.width));
+            }
+            if (filled === count) {
+                complete = true;
+                return true;
+            }
+            return false;
+        }, {
+            x: LAYOUT.enemy.x, y: LAYOUT.enemy.y, w: face.width, h: face.height,
+            hideCursor: false, holdBusy: false,
+            onCleanup: () => { if (complete) onComplete(); },
+        });
+    return () => animation.stop();
+}
+
+export function flashEnemy(game, count, onComplete) {
+    const face = enemyFace(cardBuffer(game.displayEnemy || game.state.enemy));
+    if (!hitFaces.has(face)) {
+        const vb = new VirtualBuffer(face.width, face.height);
+        for (let y = 0; y < face.height; y++) for (let x = 0; x < face.width; x++)
+            vb.setCell(y, x, { ...face.getCell(y, x), bg: 52 });
+        hitFaces.set(face, vb);
+    }
+    const hit = hitFaces.get(face);
+    const overlay = {
+        x: LAYOUT.enemy.x, y: LAYOUT.enemy.y, w: hit.width, h: hit.height,
+        owner: game.cmd, getCell: (y, x) => hit.getCell(y, x),
+    };
+    return overlayFlash(game.cmd, term, overlay, count, { holdBusy: false, onComplete });
+}
+
 function drawEnemy(game) {
     const { vb } = game.areas.enemy;
     vb.clearCells();
     const s = game.state, enemy = game.displayEnemy || s.enemy;
-    vb.writeStr(0, 0, '敵人 ' + enemyName(enemy) +
-        '   生命 ' + (game.displayHp ?? (game.displayEnemy ? 0 : Math.max(0, s.hp))) +
+    const face = enemyFace(cardBuffer(enemy));
+    for (let y = 0; y < face.height; y++) for (let x = 0; x < face.width; x++)
+        vb.setCell(y, x, game.enemyDefeated ? BLACK_CELL : face.getCell(y, x));
+    vb.writeStr(12, 0, '生命 ' + (game.displayHp ?? (game.displayEnemy ? 0 : Math.max(0, s.hp))) +
         '   攻擊 ' + Math.max(0, value(s.enemy) - s.shield));
-    vb.writeStr(2, 0, '免疫：' + SUITS[enemy.suit] + '   已擊敗：' + s.defeated + '/12');
 }
 
 function drawJesters(game) {
@@ -167,8 +244,8 @@ function drawStatus(game) {
     const { vb } = game.areas.status;
     vb.clearCells();
     const s = game.state;
-    const status = game.eventOverlay ? '' : game.flashing ? '攻擊中…' : game.collecting ? '收牌中…' : game.recovering ? '回收中…' : game.dealing ? '發牌中…' : s.phase === 'win' ? ['銅', '銀', '金'][s.jesters] + '牌勝利！Enter 新局' :
-        s.phase === 'loss' ? (s.lossReason || '挑戰失敗') + '。Enter 新局' : s.phase === 'attack' ? '選牌攻擊' : '選牌抵傷（不觸發花色能力）';
+    const status = game.eventOverlay ? '' : game.dissolving ? '敵人被擊倒…' : game.flashing ? '攻擊中…' : game.collecting ? '收牌中…' : game.recovering ? '回收中…' : game.dealing ? '發牌中…' : s.phase === 'win' ? ['銅', '銀', '金'][s.jesters] + '牌勝利！Enter 新局' :
+        s.phase === 'loss' ? (s.lossReason || '挑戰失敗') + '。Enter 新局' : s.phase === 'attack' ? '選牌攻擊' : '選牌抵傷';
     const hint = !game.dealing && needsRescue(s) ? '手牌不足，需使用小丑換手：按 Enter 或 J' : '';
     const text = status && hint ? status + '   ' + hint : hint || status;
     if (text) vb.writeStr(0, 0, text);
