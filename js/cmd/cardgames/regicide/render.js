@@ -90,9 +90,10 @@ function drawTitle(game) {
 }
 
 const enemyFaces = new WeakMap();
-function enemyFace(base) {
+function enemyView(card) {
+    const base = cardBuffer(card);
     if (!enemyFaces.has(base)) {
-        const scale = 4;
+        const scale = card.rank - 9;
         const vb = new VirtualBuffer(base.width * scale, base.height * scale);
         for (let y = 0; y < base.height; y++) for (let x = 0; x < base.width; x++) {
             const cell = base.getCell(y, x);
@@ -105,7 +106,12 @@ function enemyFace(base) {
                 });
             }
         }
-        enemyFaces.set(base, vb);
+        enemyFaces.set(base, {
+            face: vb,
+            x: Math.floor((LAYOUT.enemy.w - vb.width) / 2),
+            // Reserve the last row of the enemy region for health and attack.
+            y: Math.floor((LAYOUT.enemy.h - 1 - vb.height) / 2),
+        });
     }
     return enemyFaces.get(base);
 }
@@ -114,7 +120,7 @@ const hitFaces = new WeakMap();
 const BLACK_CELL = makeCell(' ', 0, 0, false);
 
 export function dissolveEnemy(game, onComplete) {
-    const face = enemyFace(cardBuffer(game.displayEnemy || game.state.enemy));
+    const { face, x: offsetX, y: offsetY } = enemyView(game.displayEnemy || game.state.enemy);
     const count = face.width * face.height;
     const order = Array.from({ length: count }, (_, i) => i);
     for (let i = count - 1; i > 0; i--) {
@@ -131,7 +137,7 @@ export function dissolveEnemy(game, onComplete) {
             while (filled < target) {
                 const index = order[filled++];
                 cells[index] = BLACK_CELL;
-                screen.markRowDirty(LAYOUT.enemy.y + Math.floor(index / face.width));
+                screen.markRowDirty(LAYOUT.enemy.y + offsetY + Math.floor(index / face.width));
             }
             if (filled === count) {
                 complete = true;
@@ -139,7 +145,7 @@ export function dissolveEnemy(game, onComplete) {
             }
             return false;
         }, {
-            x: LAYOUT.enemy.x, y: LAYOUT.enemy.y, w: face.width, h: face.height,
+            x: LAYOUT.enemy.x + offsetX, y: LAYOUT.enemy.y + offsetY, w: face.width, h: face.height,
             hideCursor: false, holdBusy: false,
             onCleanup: () => { if (complete) onComplete(); },
         });
@@ -147,7 +153,7 @@ export function dissolveEnemy(game, onComplete) {
 }
 
 export function flashEnemy(game, count, onComplete) {
-    const face = enemyFace(cardBuffer(game.displayEnemy || game.state.enemy));
+    const { face, x: offsetX, y: offsetY } = enemyView(game.displayEnemy || game.state.enemy);
     if (!hitFaces.has(face)) {
         const vb = new VirtualBuffer(face.width, face.height);
         for (let y = 0; y < face.height; y++) for (let x = 0; x < face.width; x++)
@@ -156,7 +162,7 @@ export function flashEnemy(game, count, onComplete) {
     }
     const hit = hitFaces.get(face);
     const overlay = {
-        x: LAYOUT.enemy.x, y: LAYOUT.enemy.y, w: hit.width, h: hit.height,
+        x: LAYOUT.enemy.x + offsetX, y: LAYOUT.enemy.y + offsetY, w: hit.width, h: hit.height,
         owner: game.cmd, getCell: (y, x) => hit.getCell(y, x),
     };
     return overlayFlash(game.cmd, term, overlay, count, { holdBusy: false, onComplete });
@@ -166,11 +172,11 @@ function drawEnemy(game) {
     const { vb } = game.areas.enemy;
     vb.clearCells();
     const s = game.state, enemy = game.displayEnemy || s.enemy;
-    const face = enemyFace(cardBuffer(enemy));
+    const { face, x: offsetX, y: offsetY } = enemyView(enemy);
     for (let y = 0; y < face.height; y++) for (let x = 0; x < face.width; x++)
-        vb.setCell(y, x, game.enemyDefeated ? BLACK_CELL : face.getCell(y, x));
-    vb.writeStr(12, 0, '生命 ' + (game.displayHp ?? (game.displayEnemy ? 0 : Math.max(0, s.hp))) +
-        '   攻擊 ' + Math.max(0, value(s.enemy) - s.shield));
+        vb.setCell(y + offsetY, x + offsetX, game.enemyDefeated ? BLACK_CELL : face.getCell(y, x));
+    vb.centerRow(offsetY + face.height, '生命' + (game.displayHp ?? (game.displayEnemy ? 0 : Math.max(0, s.hp))) +
+        '  攻擊' + Math.max(0, value(s.enemy) - s.shield));
 }
 
 function drawJesters(game) {
