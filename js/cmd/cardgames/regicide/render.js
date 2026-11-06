@@ -50,15 +50,16 @@ function defenceFace(base) {
     return defenceFaces.get(base);
 }
 
+// Same-suit hand cards: the suit glyph becomes dim white instead of black/red.
+const DIM_WHITE = 250;
 const immuneFaces = new WeakMap();
 function immuneFace(base) {
     if (!immuneFaces.has(base)) {
         const vb = new VirtualBuffer(base.width, base.height);
-        for (let y = 0; y < base.height; y++) for (let x = 0; x < base.width; x++) {
-            const cell = base.getCell(y, x);
-            const border = y === 0 || y === base.height - 1 || x === 0 || x === base.width - 1;
-            vb.setCell(y, x, border ? { ...cell, fg: cell.bg === 8 ? 7 : 8 } : cell);
-        }
+        for (let y = 0; y < base.height; y++) for (let x = 0; x < base.width; x++)
+            vb.setCell(y, x, base.getCell(y, x));
+        // The suit glyph sits in the middle row right after the left border.
+        vb.setCell(1, 1, { ...base.getCell(1, 1), fg: DIM_WHITE });
         immuneFaces.set(base, vb);
     }
     return immuneFaces.get(base);
@@ -150,9 +151,9 @@ function drawHand(game) {
     s.hand.forEach((c, i) => {
         if (game.hidden.has(i)) return;
         const base = cardBuffer(c);
-        // Rule settlement is synchronous; show defence only after all visual effects finish.
-        const styled = !game.dealing && s.phase === 'defend' ? defenceFace(base) : base;
-        const face = c.suit === enemy.suit ? immuneFace(styled) : styled;
+        // Same-suit cards mute the suit glyph; the defence tint waits for effects to finish.
+        let face = !game.dealing && enemy && c.suit === enemy.suit ? immuneFace(base) : base;
+        if (!game.dealing && s.phase === 'defend') face = defenceFace(face);
         const x = i * HAND_STEP;
         for (let y = 0; y < 3; y++) for (let k = 0; k < 5; k++)
             vb.setCell(y, x + k, face.getCell(y, k));
