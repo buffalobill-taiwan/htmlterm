@@ -55,7 +55,7 @@ Object.assign(healing, {enemy: c(11, 0), hp: 20, hand: [c(2, 1), c(2, 2)],
     discard: [c(10, 3), c(10, 2)], deck: []});
 const effects = [];
 assert.equal(play(healing, [0, 1], effects), true);
-assert.deepEqual(effects.map(e => e.type), ['recover', 'draw']);
+assert.deepEqual(effects.map(e => e.type), ['recover', 'draw', 'attack']);
 assert.equal(effects[0].count, 2);
 assert.equal(effects[0].deckCount, 2);
 assert.equal(healing.hand.length, 2);

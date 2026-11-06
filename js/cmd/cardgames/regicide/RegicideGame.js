@@ -1,3 +1,6 @@
+import { buildCallEffectBuffer } from '../../../util/call-effect.js';
+import { makeOverlayGetCell } from '../../../util/sgr.js';
+import { borderFlash } from '../../../util/flash-helper.js';
 import { VirtualBuffer } from '../../../util/VirtualBuffer.js';
 import { term } from '../../../system/sys.js';
 import { SelectDialog } from '../../../dialog/SelectDialog.js';
@@ -6,11 +9,14 @@ import { dealCard } from '../animation.js';
 import { cardBuffer } from '../cards.js';
 import { createGame, preview, play, jester, value, needsRescue } from './rules.js';
 
+const EVENT_BUFFERS = new Map();
+const enemyName = card => '♠♥♦♣'[card.suit] + ({11: 'J', 12: 'Q', 13: 'K'}[card.rank]);
+const USED = { x: 53, y: 5 };
 const DISCARD = { x: 63, y: 5 };
 const DECK = { x: 73, y: 5 };
 const JESTERS = [
-    { x: 47, y: 5, card: { suit: 0, rank: 0 } },
-    { x: 54, y: 5, card: { suit: 1, rank: 0 } },
+    { x: 37, y: 5, card: { suit: 0, rank: 0 } },
+    { x: 44, y: 5, card: { suit: 1, rank: 0 } },
 ];
 const handPosition = index => ({ x: 3 + index * 9, y: 12 });
 
@@ -25,15 +31,31 @@ function defenceFace(base) {
     return defenceFaces.get(base);
 }
 
+const immuneFaces = new WeakMap();
+function immuneFace(base) {
+    if (!immuneFaces.has(base)) {
+        const vb = new VirtualBuffer(base.width, base.height);
+        for (let y = 0; y < base.height; y++) for (let x = 0; x < base.width; x++) {
+            const cell = base.getCell(y, x);
+            const border = y === 0 || y === base.height - 1 || x === 0 || x === base.width - 1;
+            vb.setCell(y, x, border ? { ...cell, fg: cell.bg === 8 ? 7 : 8 } : cell);
+        }
+        immuneFaces.set(base, vb);
+    }
+    return immuneFaces.get(base);
+}
+
 export class RegicideGame {
     constructor(cmd) { this.cmd = cmd; this.vb = new VirtualBuffer(80, 23); this.anims = new Set(); this.batch = 0; }
     start() {
-        this.stopDeals();
-        this.state = createGame(); this.selected = new Set(); this.cursor = 0;
+        this.stopDeals(); this.attackEffect = null; this.displayHp = null; this.defeatEffect = null; this.usedDisplay = null; this.displayEnemy = null;
+        this.state = createGame(); this.arrivalPending = true; this.counterEffect = null; this.selected = new Set(); this.cursor = 0;
         this.dealNewCards([]);
     }
     stopDeals() {
-        this.batch++; this.recovering = false; this.presentation = null;
+        this.clearEvent();
+        this.cancelFlash?.(); this.cancelFlash = null; this.flashing = false;
+        this.batch++; this.collecting = false; this.recovering = false; this.presentation = null;
         for (const cancel of this.anims) cancel();
         this.anims.clear(); this.dealing = false; this.hidden = new Set(); this.pending = 0;
     }
@@ -60,12 +82,12 @@ export class RegicideGame {
                 if (this.disposed || batch !== this.batch) return;
                 this.anims.delete(cancel); advance();
                 this.hidden.delete(index);
-                if (++landed === indices.length) { this.dealing = false; this.presentation = null; }
+                if (++landed === indices.length) { this.dealing = false; this.finishEffects(); }
                 this.draw();
             });
             this.anims.add(cancel);
         };
-        if (!indices.length) { this.presentation = null; this.draw(); }
+        if (!indices.length) { this.finishEffects(); this.draw(); }
         launch();
     }
     recoverCards(retained, effect) {
@@ -96,6 +118,99 @@ export class RegicideGame {
         };
         this.draw(); launch();
     }
+    clearEvent() {
+        clearTimeout(this.eventTimer); this.eventTimer = null;
+        if (this.eventOverlay) term.removeOverlay(this.eventOverlay);
+        this.eventOverlay = null;
+        this.eventCleanup?.(); this.eventCleanup = null;
+    }
+    showEvent(text, done) {
+        this.clearEvent();
+        const batch = this.batch, active = this.cmd.executionGuard();
+        if (!EVENT_BUFFERS.has(text)) EVENT_BUFFERS.set(text, buildCallEffectBuffer(text));
+        const buffer = EVENT_BUFFERS.get(text), w = buffer[0].length, h = buffer.length;
+        this.dealing = true;
+        this.eventOverlay = {x: Math.floor((80 - w) / 2), y: Math.floor((25 - h) / 2),
+            w, h, owner: this.cmd, getCell: makeOverlayGetCell(buffer, w, h)};
+        term.addOverlay(this.eventOverlay);
+        this.eventCleanup = this.cmd.addCleanup(() => this.clearEvent());
+        this.eventTimer = setTimeout(() => {
+            this.clearEvent();
+            if (this.disposed || batch !== this.batch || !active()) return;
+            this.dealing = false; done(); this.draw();
+        }, 800);
+        this.draw();
+    }
+    finishEffects() {
+        if (this.attackEffect) {
+            const effect = this.attackEffect; this.attackEffect = null;
+            this.counterEffect = !this.defeatEffect && effect.incoming > 0 ? effect : null;
+            const batch = this.batch;
+            this.dealing = true; this.flashing = true; this.displayHp = effect.afterHp;
+            this.draw();
+            this.cancelFlash = borderFlash(this.cmd, term,
+                effect.damage <= 5 ? 1 : effect.damage <= 10 ? 2 : 3, {
+                    holdBusy: false,
+                    onComplete: () => {
+                        if (this.disposed || batch !== this.batch) return;
+                        this.cancelFlash = null; this.flashing = false; this.dealing = false;
+                        this.displayHp = null; if (!this.defeatEffect) this.presentation = null; this.finishEffects(); this.draw();
+                    },
+                });
+            return;
+        }
+        if (this.defeatEffect) {
+            const effect = this.defeatEffect; this.defeatEffect = null;
+            this.showEvent(enemyName(effect.enemy) + '被擊倒', () => this.collectUsed(effect));
+            return;
+        }
+        if (this.counterEffect) {
+            const effect = this.counterEffect; this.counterEffect = null;
+            this.showEvent(enemyName(effect.enemy) + '的攻擊', () => {});
+            return;
+        }
+        if (this.arrivalPending) {
+            this.arrivalPending = false;
+            this.showEvent(enemyName(this.state.enemy) + '來襲！', () => {});
+        }
+    }
+    collectUsed(effect) {
+        this.stopDeals();
+        const batch = this.batch;
+        this.collecting = true; this.dealing = true;
+        this.displayEnemy = effect.enemy;
+        this.usedDisplay = [...effect.used];
+        const oldDiscard = effect.discard.slice(0, effect.discard.length - effect.used.length);
+        this.presentation = { deckCount: effect.deckCount, discardCount: oldDiscard.length,
+            discardTop: oldDiscard.at(-1) };
+        let next = 0, landed = 0;
+        const launch = () => {
+            if (this.disposed || batch !== this.batch || next >= effect.used.length) return;
+            const card = effect.used[next++];
+            this.usedDisplay.shift(); this.draw();
+            let launched = false;
+            const advance = () => { if (!launched) { launched = true; launch(); } };
+            const cancel = dealCard(this.cmd, card, USED, DISCARD, {
+                faceUp: true, duration: 180,
+                onStep: (_step, ratio) => { if (ratio >= 0.45) advance(); },
+            }, () => {
+                if (this.disposed || batch !== this.batch) return;
+                this.anims.delete(cancel);
+                this.presentation.discardCount++; this.presentation.discardTop = card;
+                advance();
+                if (++landed === effect.used.length) {
+                    this.collecting = false; this.dealing = false; this.presentation = null;
+                    this.usedDisplay = null; this.displayEnemy = null;
+                    if (this.state.phase !== 'win') {
+                        this.arrivalPending = true; this.finishEffects();
+                    }
+                }
+                this.draw();
+            });
+            this.anims.add(cancel);
+        };
+        this.draw(); launch();
+    }
     ask(message, action) {
         this.dialog = this.cmd.openDialog(SelectDialog, null, {
             title: message, options: ['取消', '確定'],
@@ -104,25 +219,34 @@ export class RegicideGame {
         });
     }
     draw() {
-        const s = this.state, vb = this.vb;
+        const s = this.state, vb = this.vb, enemy = this.displayEnemy || s.enemy;
         for (let r = 0; r < 23; r++) vb.writeStr(r, 0, ' '.repeat(80));
         const text = (r, t) => vb.writeStr(r, 2, t);
         text(0, 'Regicide 弒君者 — 單人');
-        text(2, '敵人 ' + '♠♥♦♣'[s.enemy.suit] + ['', '', '', '', '', '', '', '', '', '', '', 'J', 'Q', 'K'][s.enemy.rank] +
-            '   生命 ' + Math.max(0, s.hp) + '   攻擊 ' + Math.max(0, value(s.enemy) - s.shield));
-        text(4, '免疫：' + '♠♥♦♣'[s.enemy.suit] + '   已擊敗：' + s.defeated + '/12');
-        vb.writeStr(3, 47, '小丑');
+        text(2, '敵人 ' + '♠♥♦♣'[enemy.suit] + ['', '', '', '', '', '', '', '', '', '', '', 'J', 'Q', 'K'][enemy.rank] +
+            '   生命 ' + (this.displayHp ?? (this.displayEnemy ? 0 : Math.max(0, s.hp))) + '   攻擊 ' + Math.max(0, value(s.enemy) - s.shield));
+        text(4, '免疫：' + '♠♥♦♣'[enemy.suit] + '   已擊敗：' + s.defeated + '/12');
+        vb.writeStr(3, 37, '小丑');
         for (let i = 0; i < s.jesters; i++) {
             const slot = JESTERS[i], face = cardBuffer(slot.card);
             for (let y = 0; y < 3; y++) for (let x = 0; x < 5; x++)
                 vb.setCell(slot.y + y, slot.x + x, face.getCell(y, x));
         }
-        text(8, this.recovering ? '回收中…' : this.dealing ? '發牌中…' : s.phase === 'win' ? ['銅', '銀', '金'][s.jesters] + '牌勝利！Enter 新局' :
+        text(8, this.eventOverlay ? '' : this.flashing ? '攻擊中…' : this.collecting ? '收牌中…' : this.recovering ? '回收中…' : this.dealing ? '發牌中…' : s.phase === 'win' ? ['銅', '銀', '金'][s.jesters] + '牌勝利！Enter 新局' :
             s.phase === 'loss' ? (s.lossReason || '挑戰失敗') + '。Enter 新局' : s.phase === 'attack' ? '選牌攻擊' : '選牌抵傷（不觸發花色能力）');
         if (!this.dealing && needsRescue(s)) text(10, '手牌不足，需使用小丑換手：按 Enter 或 J');
         const deckCount = this.presentation ?
-            this.presentation.deckCount - (this.recovering ? 0 : this.dealTotal - this.pending) :
+            this.presentation.deckCount - ((this.recovering || this.collecting) ? 0 : this.dealTotal - this.pending) :
             s.deck.length + this.pending;
+        const used = this.usedDisplay || s.played;
+        vb.writeStr(3, 51, '已用 ' + used.length);
+        if (used.length) {
+            const face = cardBuffer(this.collecting ? used[0] : used.at(-1));
+            for (let y = 0; y < 3; y++) for (let x = 0; x < 5; x++)
+                vb.setCell(USED.y + y, USED.x + x, face.getCell(y, x));
+            for (let y = 1; y <= Math.min(3, used.length - 1); y++)
+                for (let x = 0; x < 5; x++) vb.setCell(USED.y + 2 + y, USED.x + x, face.getCell(2, x));
+        } else vb.writeStr(USED.y + 1, USED.x, '[空]');
         const discardCount = this.presentation?.discardCount ?? s.discard.length;
         vb.writeStr(3, 61, '棄牌 ' + discardCount);
         if (discardCount) {
@@ -144,7 +268,8 @@ export class RegicideGame {
             if (this.hidden.has(i)) return;
             const base = cardBuffer(c);
             // Rule settlement is synchronous; show defence only after all visual effects finish.
-            const face = !this.dealing && s.phase === 'defend' ? defenceFace(base) : base;
+            const styled = !this.dealing && s.phase === 'defend' ? defenceFace(base) : base;
+            const face = c.suit === enemy.suit ? immuneFace(styled) : styled;
             const x = handPosition(i).x;
             for (let y = 0; y < 3; y++) for (let k = 0; k < 5; k++) vb.setCell(12 + y, x + k, face.getCell(y, k));
             vb.writeStr(16, x, (i === this.cursor ? '>' : ' ') + (this.selected.has(i) ? '[X]' : '[ ]'));
@@ -182,13 +307,27 @@ export class RegicideGame {
             const effects = [];
             if (play(this.state, [...this.selected], effects)) {
                 this.selected.clear(); this.cursor = 0;
+                this.attackEffect = effects.find(e => e.type === 'attack');
+                this.displayHp = this.attackEffect?.beforeHp ?? null;
+                this.defeatEffect = effects.find(e => e.type === 'defeat');
+                this.usedDisplay = this.defeatEffect?.used || null;
+                this.displayEnemy = this.defeatEffect?.enemy || null;
                 const recovery = effects.find(e => e.type === 'recover');
                 if (recovery) this.recoverCards(retained, recovery);
-                else this.dealNewCards(retained);
+                else {
+                    const defeat = this.defeatEffect;
+                    const beforeDiscard = defeat ? defeat.discard.slice(0,
+                        defeat.discard.length - defeat.used.length - (defeat.exact ? 0 : 1)) : null;
+                    this.dealNewCards(retained, defeat ? {
+                        deckCount: defeat.deckCount - (defeat.exact ? 1 : 0) +
+                            (effects.find(e => e.type === 'draw')?.count || 0),
+                        discardCount: beforeDiscard.length, discardTop: beforeDiscard.at(-1),
+                    } : null);
+                }
                 return;
             }
         } else return;
         this.draw();
     }
-    dispose() { this.disposed = true; this.stopDeals(); this.dialog?.close(); this.dialog = null; }
+    dispose() { this.counterEffect = null; this.arrivalPending = false; this.attackEffect = null; this.displayHp = null; this.defeatEffect = null; this.usedDisplay = null; this.displayEnemy = null; this.disposed = true; this.stopDeals(); this.dialog?.close(); this.dialog = null; }
 }

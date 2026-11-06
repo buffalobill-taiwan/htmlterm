@@ -67,11 +67,13 @@ export function play(s, indices, effects) {
         if (s.hand.length > before) effects?.push({ type: 'draw', count: s.hand.length - before });
     }
     if (p.suits.has(0)) s.shield += p.total;
+    effects?.push({type: 'attack', enemy: s.enemy, incoming: Math.max(0, value(s.enemy) - s.shield), damage: p.damage, beforeHp: s.hp, afterHp: Math.max(0, s.hp - p.damage)});
     s.hp -= p.damage;
     if (s.hp <= 0) {
+        const used = [...s.played], enemy = s.enemy, exact = s.hp === 0;
         if (s.hp === 0) s.deck.unshift(s.enemy); else s.discard.push(s.enemy);
         s.discard.push(...s.played); s.played = []; s.shield = 0; s.defeated++;
-        effects?.push({type: 'defeat', deckCount: s.deck.length, discard: [...s.discard]});
+        effects?.push({type: 'defeat', used, enemy, exact, deckCount: s.deck.length, discard: [...s.discard]});
         if (!s.castle.length) { s.phase = 'win'; return true; }
         s.enemy = s.castle.shift(); s.hp = value(s.enemy) * 2;
     } else if (value(s.enemy) > s.shield) s.phase = 'defend';

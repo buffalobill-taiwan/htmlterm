@@ -36,9 +36,9 @@ export function flipCard(cmd, card, x, y, done) {
 // The card is pushed into the hand only after this animation lands, so the
 // destination stays empty while flying. onStep(step) lets a caller launch
 // the next card while this one is still in the air. Returns a cancel function.
-export function dealCard(cmd, card, from, to, { faceDown = false, onStep, duration, flipDuration } = {}, done) {
-    const back = cardBuffer(null);
-    const frames = faceDown ? null : cardFlipFrames(card);
+export function dealCard(cmd, card, from, to, { faceDown = false, faceUp = false, onStep, duration, flipDuration } = {}, done) {
+    const back = cardBuffer(faceUp ? card : null);
+    const frames = faceDown || faceUp ? null : cardFlipFrames(card);
     const steps = Math.max(1, Math.abs(to.x - from.x), Math.abs(to.y - from.y));
     const manager = new RAFAnimationManager(cmd, { x: from.x, y: from.y, w: 5, h: 3, hideCursor: false, holdBusy: false });
     const active = cmd.executionGuard();
@@ -66,7 +66,7 @@ export function dealCard(cmd, card, from, to, { faceDown = false, onStep, durati
                 onStep?.(step, ratio);
             }
             if (step === steps) {
-                if (faceDown) { complete = true; return true; }
+                if (faceDown || faceUp) { complete = true; return true; }
                 mode = 'flip';
                 flipStart = ts;
                 dirtyAt();

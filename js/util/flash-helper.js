@@ -4,7 +4,7 @@ import { markDirtyRows } from './drag.js';
 const FLASH_WHITE = makeCell(' ', 15, 15, false);
 
 // One timer and overlay belong to the calling frame, including the gaps.
-function runSequence(cmd, term, count, createOverlay, visibleMs, gapMs) {
+function runSequence(cmd, term, count, createOverlay, visibleMs, gapMs, { holdBusy = true, onComplete } = {}) {
     if (count < 1) return;
     let timer = null;
     let overlay = null;
@@ -22,6 +22,11 @@ function runSequence(cmd, term, count, createOverlay, visibleMs, gapMs) {
         clearTimeout(timer);
         hide();
     });
+    const cancel = () => {
+        if (!active) return;
+        active = false; clearTimeout(timer); hide(); removeCleanup();
+        if (holdBusy) cmd.releaseBusy();
+    };
     const next = () => {
         if (!active) return;
         overlay = createOverlay(index++);
@@ -36,12 +41,14 @@ function runSequence(cmd, term, count, createOverlay, visibleMs, gapMs) {
                 active = false;
                 timer = null;
                 removeCleanup();
-                cmd.releaseBusy();
+                if (holdBusy) cmd.releaseBusy();
+                onComplete?.();
             }
         }, visibleMs);
     };
-    cmd.holdBusy();
+    if (holdBusy) cmd.holdBusy();
     next();
+    return cancel;
 }
 
 export function screenFlash(cmd, term, count) {
@@ -52,7 +59,7 @@ export function screenFlash(cmd, term, count) {
     runSequence(cmd, term, count, () => overlay, 60, 100);
 }
 
-export function borderFlash(cmd, term, count) {
+export function borderFlash(cmd, term, count, options) {
     const cols = term.cols;
     const rows = term.rows;
     const overlay = {
@@ -60,7 +67,7 @@ export function borderFlash(cmd, term, count) {
         getCell: (y, x) =>
             (y === 0 || y === rows - 1 || x === 0 || x === cols - 1) ? FLASH_WHITE : null,
     };
-    runSequence(cmd, term, count, () => overlay, 60, 100);
+    return runSequence(cmd, term, count, () => overlay, 60, 100, options);
 }
 
 export function artSequence(cmd, term, artworks) {
