@@ -14,14 +14,14 @@ const BLANK_ROW = ' '.repeat(80);
 // changing this table only; keep regions non-overlapping.
 export const LAYOUT = {
     title:    { x: 29, y: 0,  w: 49, h: 1 },
-    enemy:    { x: 9,  y: 0,  w: 20, h: 13 },
+    enemy:    { x: 9,  y: 1,  w: 20, h: 13 },
     jesters:  { x: 37, y: 3,  w: 12, h: 5 },
     roster:   { x: 37, y: 9,  w: 12, h: 4 },
     used:     { x: 51, y: 3,  w: 9,  h: 8 },
     discard:  { x: 61, y: 3,  w: 9,  h: 8 },
     deck:     { x: 71, y: 3,  w: 9,  h: 8 },
-    status:   { x: 2,  y: 14, w: 76, h: 1 },
-    hand:     { x: 3,  y: 16, w: 69, h: 5 },
+    status:   { x: 2,  y: 15, w: 76, h: 1 },
+    hand:     { x: 3,  y: 17, w: 69, h: 4 },
     preview:  { x: 2,  y: 21, w: 76, h: 1 },
     controls: { x: 2,  y: 22, w: 76, h: 1 },
 };
@@ -236,7 +236,7 @@ function drawHand(game) {
         const x = i * HAND_STEP;
         for (let y = 0; y < 3; y++) for (let k = 0; k < 5; k++)
             vb.setCell(y, x + k, face.getCell(y, k));
-        vb.writeStr(4, x, (i === game.cursor ? '>' : ' ') + (game.selected.has(i) ? '[X]' : '[ ]'));
+        vb.writeStr(3, x, (i === game.cursor ? '>' : ' ') + (game.selected.has(i) ? '[X]' : '[ ]'));
     });
 }
 
