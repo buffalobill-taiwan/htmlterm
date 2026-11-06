@@ -1,52 +1,17 @@
 import { buildCallEffectBuffer } from '../../../util/call-effect.js';
 import { makeOverlayGetCell } from '../../../util/sgr.js';
 import { borderFlash } from '../../../util/flash-helper.js';
-import { VirtualBuffer } from '../../../util/VirtualBuffer.js';
 import { term } from '../../../system/sys.js';
 import { SelectDialog } from '../../../dialog/SelectDialog.js';
 import { ShowDialog } from '../../../dialog/ShowDialog.js';
 import { dealCard } from '../animation.js';
-import { cardBuffer } from '../cards.js';
-import { createGame, preview, play, jester, value, needsRescue } from './rules.js';
+import { createGame, play, jester, needsRescue } from './rules.js';
+import { initView, draw as drawView, DECK, USED, DISCARD, handPosition, enemyName } from './render.js';
 
 const EVENT_BUFFERS = new Map();
-const enemyName = card => '♠♥♦♣'[card.suit] + ({11: 'J', 12: 'Q', 13: 'K'}[card.rank]);
-const USED = { x: 53, y: 5 };
-const DISCARD = { x: 63, y: 5 };
-const DECK = { x: 73, y: 5 };
-const JESTERS = [
-    { x: 37, y: 5, card: { suit: 0, rank: 0 } },
-    { x: 44, y: 5, card: { suit: 1, rank: 0 } },
-];
-const handPosition = index => ({ x: 3 + index * 9, y: 12 });
-
-const defenceFaces = new WeakMap();
-function defenceFace(base) {
-    if (!defenceFaces.has(base)) {
-        const vb = new VirtualBuffer(base.width, base.height);
-        for (let y = 0; y < base.height; y++) for (let x = 0; x < base.width; x++)
-            vb.setCell(y, x, { ...base.getCell(y, x), bg: 8 });
-        defenceFaces.set(base, vb);
-    }
-    return defenceFaces.get(base);
-}
-
-const immuneFaces = new WeakMap();
-function immuneFace(base) {
-    if (!immuneFaces.has(base)) {
-        const vb = new VirtualBuffer(base.width, base.height);
-        for (let y = 0; y < base.height; y++) for (let x = 0; x < base.width; x++) {
-            const cell = base.getCell(y, x);
-            const border = y === 0 || y === base.height - 1 || x === 0 || x === base.width - 1;
-            vb.setCell(y, x, border ? { ...cell, fg: cell.bg === 8 ? 7 : 8 } : cell);
-        }
-        immuneFaces.set(base, vb);
-    }
-    return immuneFaces.get(base);
-}
 
 export class RegicideGame {
-    constructor(cmd) { this.cmd = cmd; this.vb = new VirtualBuffer(80, 23); this.anims = new Set(); this.batch = 0; }
+    constructor(cmd) { this.cmd = cmd; initView(this); this.anims = new Set(); this.batch = 0; }
     start() {
         this.stopDeals(); this.attackEffect = null; this.displayHp = null; this.defeatEffect = null; this.usedDisplay = null; this.displayEnemy = null;
         this.state = createGame(); this.arrivalPending = true; this.counterEffect = null; this.selected = new Set(); this.cursor = 0;
@@ -218,71 +183,7 @@ export class RegicideGame {
             onCancel: () => { this.dialog = null; }, onAbort: () => this.cmd._quit(),
         });
     }
-    draw() {
-        const s = this.state, vb = this.vb, enemy = this.displayEnemy || s.enemy;
-        for (let r = 0; r < 23; r++) vb.writeStr(r, 0, ' '.repeat(80));
-        const text = (r, t) => vb.writeStr(r, 2, t);
-        text(0, 'Regicide 弒君者 — 單人');
-        text(2, '敵人 ' + '♠♥♦♣'[enemy.suit] + ['', '', '', '', '', '', '', '', '', '', '', 'J', 'Q', 'K'][enemy.rank] +
-            '   生命 ' + (this.displayHp ?? (this.displayEnemy ? 0 : Math.max(0, s.hp))) + '   攻擊 ' + Math.max(0, value(s.enemy) - s.shield));
-        text(4, '免疫：' + '♠♥♦♣'[enemy.suit] + '   已擊敗：' + s.defeated + '/12');
-        vb.writeStr(3, 37, '小丑');
-        for (let i = 0; i < s.jesters; i++) {
-            const slot = JESTERS[i], face = cardBuffer(slot.card);
-            for (let y = 0; y < 3; y++) for (let x = 0; x < 5; x++)
-                vb.setCell(slot.y + y, slot.x + x, face.getCell(y, x));
-        }
-        text(8, this.eventOverlay ? '' : this.flashing ? '攻擊中…' : this.collecting ? '收牌中…' : this.recovering ? '回收中…' : this.dealing ? '發牌中…' : s.phase === 'win' ? ['銅', '銀', '金'][s.jesters] + '牌勝利！Enter 新局' :
-            s.phase === 'loss' ? (s.lossReason || '挑戰失敗') + '。Enter 新局' : s.phase === 'attack' ? '選牌攻擊' : '選牌抵傷（不觸發花色能力）');
-        if (!this.dealing && needsRescue(s)) text(10, '手牌不足，需使用小丑換手：按 Enter 或 J');
-        const deckCount = this.presentation ?
-            this.presentation.deckCount - ((this.recovering || this.collecting) ? 0 : this.dealTotal - this.pending) :
-            s.deck.length + this.pending;
-        const used = this.usedDisplay || s.played;
-        vb.writeStr(3, 51, '已用 ' + used.length);
-        if (used.length) {
-            const face = cardBuffer(this.collecting ? used[0] : used.at(-1));
-            for (let y = 0; y < 3; y++) for (let x = 0; x < 5; x++)
-                vb.setCell(USED.y + y, USED.x + x, face.getCell(y, x));
-            for (let y = 1; y <= Math.min(3, used.length - 1); y++)
-                for (let x = 0; x < 5; x++) vb.setCell(USED.y + 2 + y, USED.x + x, face.getCell(2, x));
-        } else vb.writeStr(USED.y + 1, USED.x, '[空]');
-        const discardCount = this.presentation?.discardCount ?? s.discard.length;
-        vb.writeStr(3, 61, '棄牌 ' + discardCount);
-        if (discardCount) {
-            const face = cardBuffer(this.recovering ? null : (this.presentation ? this.presentation.discardTop : s.discard.at(-1)));
-            for (let y = 0; y < 3; y++) for (let x = 0; x < 5; x++)
-                vb.setCell(DISCARD.y + y, DISCARD.x + x, face.getCell(y, x));
-            for (let y = 1; y <= Math.min(3, discardCount - 1); y++)
-                for (let x = 0; x < 5; x++) vb.setCell(DISCARD.y + 2 + y, DISCARD.x + x, face.getCell(2, x));
-        } else vb.writeStr(DISCARD.y + 1, DISCARD.x, '[空]');
-        vb.writeStr(3, 71, '牌堆 ' + deckCount);
-        if (deckCount) {
-            const back = cardBuffer(null);
-            for (let y = 0; y < 3; y++) for (let x = 0; x < 5; x++)
-                vb.setCell(DECK.y + y, DECK.x + x, back.getCell(y, x));
-            for (let y = 1; y <= Math.min(3, deckCount - 1); y++)
-                for (let x = 0; x < 5; x++) vb.setCell(DECK.y + 2 + y, DECK.x + x, back.getCell(2, x));
-        } else vb.writeStr(DECK.y + 1, DECK.x, '[空]');
-        s.hand.forEach((c, i) => {
-            if (this.hidden.has(i)) return;
-            const base = cardBuffer(c);
-            // Rule settlement is synchronous; show defence only after all visual effects finish.
-            const styled = !this.dealing && s.phase === 'defend' ? defenceFace(base) : base;
-            const face = c.suit === enemy.suit ? immuneFace(styled) : styled;
-            const x = handPosition(i).x;
-            for (let y = 0; y < 3; y++) for (let k = 0; k < 5; k++) vb.setCell(12 + y, x + k, face.getCell(y, k));
-            vb.writeStr(16, x, (i === this.cursor ? '>' : ' ') + (this.selected.has(i) ? '[X]' : '[ ]'));
-        });
-        const p = preview(s, [...this.selected]);
-        if (p) text(18, (p.legal ? '可確認' : '選牌無效') + '   總值 ' + p.total +
-            (s.phase === 'attack' ? '   傷害 ' + p.damage + '   反擊 ' + (p.damage >= s.hp ? 0 : p.incoming) +
-                '   效果 ' + [...p.suits].map(i => '♠♥♦♣'[i]).join('') :
-                '   尚欠 ' + Math.max(0, value(s.enemy) - s.shield - p.total)));
-        text(20, '←→ 移動  Space 選牌  Enter 確認  J 小丑  H 規則');
-        text(22, 'N 選單  Q/Esc 離開');
-        term.writeVB(vb);
-    }
+    draw() { drawView(this); }
     key(data) {
         if (data === '\x1b' || /^[qQ]$/.test(data)) return this.ask('離開遊戲？', () => this.cmd._quit());
         if (/^[nN]$/.test(data)) return this.ask('返回選單？', () => this.cmd._menu());
