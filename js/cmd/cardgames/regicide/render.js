@@ -1,4 +1,5 @@
 import { VirtualBuffer } from '../../../util/VirtualBuffer.js';
+import { displayWidth } from '../../../util/display-width.js';
 import { term } from '../../../system/sys.js';
 import { cardBuffer } from '../cards.js';
 import { needsRescue, preview, value } from './rules.js';
@@ -12,13 +13,14 @@ export const LAYOUT = {
     title:    { x: 2,  y: 0,  w: 76, h: 1 },
     enemy:    { x: 2,  y: 2,  w: 34, h: 5 },
     jesters:  { x: 37, y: 3,  w: 12, h: 5 },
+    roster:   { x: 37, y: 9,  w: 12, h: 4 },
     used:     { x: 51, y: 3,  w: 9,  h: 8 },
     discard:  { x: 61, y: 3,  w: 9,  h: 8 },
     deck:     { x: 71, y: 3,  w: 9,  h: 8 },
-    status:   { x: 2,  y: 8,  w: 49, h: 3 },
-    hand:     { x: 3,  y: 12, w: 69, h: 5 },
-    preview:  { x: 2,  y: 18, w: 76, h: 1 },
-    controls: { x: 2,  y: 20, w: 76, h: 3 },
+    status:   { x: 2,  y: 14, w: 76, h: 1 },
+    hand:     { x: 3,  y: 16, w: 69, h: 5 },
+    preview:  { x: 2,  y: 21, w: 76, h: 1 },
+    controls: { x: 2,  y: 22, w: 76, h: 1 },
 };
 
 export const PILE_CARD = { x: 2, y: 2 };
@@ -30,10 +32,12 @@ export const USED = { x: LAYOUT.used.x + PILE_CARD.x, y: LAYOUT.used.y + PILE_CA
 export const DISCARD = { x: LAYOUT.discard.x + PILE_CARD.x, y: LAYOUT.discard.y + PILE_CARD.y };
 export const handPosition = index => ({ x: LAYOUT.hand.x + index * HAND_STEP, y: LAYOUT.hand.y });
 
+const SUITS = '♠♥♦♣';
 const RANK_LABELS = ['', '', '', '', '', '', '', '', '', '', '', 'J', 'Q', 'K'];
-export const enemyName = card => '♠♥♦♣'[card.suit] + RANK_LABELS[card.rank];
+export const enemyName = card => SUITS[card.suit] + RANK_LABELS[card.rank];
 
 const JESTER_CARDS = [{ suit: 0, rank: 0 }, { suit: 1, rank: 0 }];
+const ROSTER_RANKS = [11, 12, 13];
 
 const defenceFaces = new WeakMap();
 function defenceFace(base) {
@@ -77,7 +81,8 @@ export function initView(game) {
 function drawTitle(game) {
     const { vb } = game.areas.title;
     vb.clearCells();
-    vb.writeStr(0, 0, 'Regicide 弒君者 — 單人');
+    const text = 'Regicide 弒君者';
+    vb.writeStr(0, vb.width - displayWidth(text), text);
 }
 
 function drawEnemy(game) {
@@ -87,7 +92,7 @@ function drawEnemy(game) {
     vb.writeStr(0, 0, '敵人 ' + enemyName(enemy) +
         '   生命 ' + (game.displayHp ?? (game.displayEnemy ? 0 : Math.max(0, s.hp))) +
         '   攻擊 ' + Math.max(0, value(s.enemy) - s.shield));
-    vb.writeStr(2, 0, '免疫：' + '♠♥♦♣'[enemy.suit] + '   已擊敗：' + s.defeated + '/12');
+    vb.writeStr(2, 0, '免疫：' + SUITS[enemy.suit] + '   已擊敗：' + s.defeated + '/12');
 }
 
 function drawJesters(game) {
@@ -99,6 +104,30 @@ function drawJesters(game) {
         const x = i * JESTER_STEP;
         for (let y = 0; y < 3; y++) for (let k = 0; k < 5; k++)
             vb.setCell(2 + y, x + k, face.getCell(y, k));
+    }
+}
+
+function drawRoster(game) {
+    const { vb } = game.areas.roster;
+    vb.clearCells();
+    vb.writeStr(0, 0, '剩餘敵人');
+    const s = game.state;
+    const active = game.displayEnemy || (s.phase === 'win' ? null : s.enemy);
+    // Enemies still in the castle or currently faced are not defeated.
+    const remaining = new Set();
+    if (s.phase !== 'win') {
+        if (s.enemy) remaining.add(s.enemy.suit * 13 + s.enemy.rank);
+        for (const card of s.castle) remaining.add(card.suit * 13 + card.rank);
+    }
+    for (let r = 0; r < ROSTER_RANKS.length; r++) {
+        const rank = ROSTER_RANKS[r];
+        for (let suit = 0; suit < 4; suit++) {
+            const text = SUITS[suit] + RANK_LABELS[rank];
+            const isActive = active && active.suit === suit && active.rank === rank;
+            const defeated = !remaining.has(suit * 13 + rank);
+            const style = isActive ? '\x1B[30;42m' : defeated ? '\x1B[90m' : '';
+            vb.writeStr(1 + r, suit * 3, style ? style + text + '\x1B[0m' : text);
+        }
     }
 }
 
@@ -135,9 +164,11 @@ function drawStatus(game) {
     const { vb } = game.areas.status;
     vb.clearCells();
     const s = game.state;
-    vb.writeStr(0, 0, game.eventOverlay ? '' : game.flashing ? '攻擊中…' : game.collecting ? '收牌中…' : game.recovering ? '回收中…' : game.dealing ? '發牌中…' : s.phase === 'win' ? ['銅', '銀', '金'][s.jesters] + '牌勝利！Enter 新局' :
-        s.phase === 'loss' ? (s.lossReason || '挑戰失敗') + '。Enter 新局' : s.phase === 'attack' ? '選牌攻擊' : '選牌抵傷（不觸發花色能力）');
-    if (!game.dealing && needsRescue(s)) vb.writeStr(2, 0, '手牌不足，需使用小丑換手：按 Enter 或 J');
+    const status = game.eventOverlay ? '' : game.flashing ? '攻擊中…' : game.collecting ? '收牌中…' : game.recovering ? '回收中…' : game.dealing ? '發牌中…' : s.phase === 'win' ? ['銅', '銀', '金'][s.jesters] + '牌勝利！Enter 新局' :
+        s.phase === 'loss' ? (s.lossReason || '挑戰失敗') + '。Enter 新局' : s.phase === 'attack' ? '選牌攻擊' : '選牌抵傷（不觸發花色能力）';
+    const hint = !game.dealing && needsRescue(s) ? '手牌不足，需使用小丑換手：按 Enter 或 J' : '';
+    const text = status && hint ? status + '   ' + hint : hint || status;
+    if (text) vb.writeStr(0, 0, text);
 }
 
 function drawPreview(game) {
@@ -155,8 +186,7 @@ function drawPreview(game) {
 function drawControls(game) {
     const { vb } = game.areas.controls;
     vb.clearCells();
-    vb.writeStr(0, 0, '←→ 移動  Space 選牌  Enter 確認  J 小丑  H 規則');
-    vb.writeStr(2, 0, 'N 選單  Q/Esc 離開');
+    vb.writeStr(0, 0, '←→ 移動  Space 選牌  Enter 確認  J 小丑  H 規則  N 選單  Q/Esc 離開');
 }
 
 export function draw(game) {
@@ -166,6 +196,7 @@ export function draw(game) {
     drawTitle(game);
     drawEnemy(game);
     drawJesters(game);
+    drawRoster(game);
 
     const s = game.state;
     const used = game.usedDisplay || s.played;
