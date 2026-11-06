@@ -39,15 +39,15 @@ export const enemyName = card => SUITS[card.suit] + RANK_LABELS[card.rank];
 const JESTER_CARDS = [{ suit: 0, rank: 0 }, { suit: 1, rank: 0 }];
 const ROSTER_RANKS = [11, 12, 13];
 
-const defenceFaces = new WeakMap();
-function defenceFace(base) {
-    if (!defenceFaces.has(base)) {
+const greyFaces = new WeakMap();
+function greyFace(base) {
+    if (!greyFaces.has(base)) {
         const vb = new VirtualBuffer(base.width, base.height);
         for (let y = 0; y < base.height; y++) for (let x = 0; x < base.width; x++)
             vb.setCell(y, x, { ...base.getCell(y, x), bg: 8 });
-        defenceFaces.set(base, vb);
+        greyFaces.set(base, vb);
     }
-    return defenceFaces.get(base);
+    return greyFaces.get(base);
 }
 
 // Same-suit hand cards: the suit glyph becomes dim white instead of black/red.
@@ -100,12 +100,14 @@ function drawJesters(game) {
     const { vb } = game.areas.jesters;
     vb.clearCells();
     vb.writeStr(0, 0, '小丑');
-    for (let i = 0; i < game.state.jesters; i++) {
-        const face = cardBuffer(JESTER_CARDS[i]);
+    // Used jesters stay visible on a grey background instead of disappearing.
+    JESTER_CARDS.forEach((card, i) => {
+        const base = cardBuffer(card);
+        const face = i < game.state.jesters ? base : greyFace(base);
         const x = i * JESTER_STEP;
         for (let y = 0; y < 3; y++) for (let k = 0; k < 5; k++)
             vb.setCell(2 + y, x + k, face.getCell(y, k));
-    }
+    });
 }
 
 function drawRoster(game) {
@@ -153,7 +155,7 @@ function drawHand(game) {
         const base = cardBuffer(c);
         // Same-suit cards mute the suit glyph; the defence tint waits for effects to finish.
         let face = !game.dealing && enemy && c.suit === enemy.suit ? immuneFace(base) : base;
-        if (!game.dealing && s.phase === 'defend') face = defenceFace(face);
+        if (!game.dealing && s.phase === 'defend') face = greyFace(face);
         const x = i * HAND_STEP;
         for (let y = 0; y < 3; y++) for (let k = 0; k < 5; k++)
             vb.setCell(y, x + k, face.getCell(y, k));
