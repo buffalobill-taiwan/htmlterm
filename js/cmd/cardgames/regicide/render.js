@@ -168,6 +168,38 @@ export function dissolveEnemy(game, onComplete) {
     return () => animation.stop();
 }
 
+// Enemy arrival: slide the scaled face down from above the enemy region, one
+// row per step, until it reaches its centred position.
+export function walkInEnemy(game, onComplete) {
+    const { face, x: offsetX, y: targetY } = enemyView(game.displayEnemy || game.state.enemy);
+    const startY = -face.height;
+    const stepMs = 50;
+    let currentY = startY, start = null, complete = false;
+    const mark = (from, to) => {
+        const top = Math.max(0, from), bottom = Math.min(LAYOUT.enemy.h - 1, to);
+        for (let r = top; r <= bottom; r++) term.markRowDirty(LAYOUT.enemy.y + r);
+    };
+    const animation = startBufferAnimation(game.cmd,
+        (r, c) => {
+            const y = r - currentY, x = c - offsetX;
+            return y >= 0 && y < face.height && x >= 0 && x < face.width ? face.getCell(y, x) : null;
+        }, ts => {
+            if (start === null) start = ts;
+            const next = Math.min(targetY, startY + Math.floor((ts - start) / stepMs));
+            if (next !== currentY) {
+                mark(Math.min(currentY, next), Math.max(currentY, next) + face.height - 1);
+                currentY = next;
+            }
+            if (currentY === targetY) { complete = true; return true; }
+            return false;
+        }, {
+            x: LAYOUT.enemy.x, y: LAYOUT.enemy.y, w: LAYOUT.enemy.w, h: LAYOUT.enemy.h,
+            hideCursor: false, holdBusy: false,
+            onCleanup: () => { if (complete) onComplete(); },
+        });
+    return () => animation.stop();
+}
+
 export function flashEnemy(game, count, onComplete) {
     const { face, x: offsetX, y: offsetY } = enemyView(game.displayEnemy || game.state.enemy);
     if (!hitFaces.has(face)) {
@@ -269,7 +301,7 @@ function drawStatus(game) {
     const { vb } = game.areas.status;
     vb.clearCells();
     const s = game.state;
-    const status = game.eventOverlay || game.bannerOverlay ? '' : game.dissolving ? '敵人被擊倒…' : game.flashing ? '攻擊中…' : game.collecting ? '收牌中…' : game.recovering ? '回收中…' : game.dealing ? '發牌中…' : s.phase === 'win' ? ['銅', '銀', '金'][s.jesters] + '牌勝利！Enter 新局' :
+    const status = game.eventOverlay || game.bannerOverlay || game.arriving ? '' : game.dissolving ? '敵人被擊倒…' : game.flashing ? '攻擊中…' : game.collecting ? '收牌中…' : game.recovering ? '回收中…' : game.dealing ? '發牌中…' : s.phase === 'win' ? ['銅', '銀', '金'][s.jesters] + '牌勝利！Enter 新局' :
         s.phase === 'loss' ? (s.lossReason || '挑戰失敗') + '。Enter 新局' : s.phase === 'attack' ? '選牌攻擊' : '選牌抵傷';
     const hint = !game.dealing && needsRescue(s) ? '手牌不足，需使用小丑換手：按 Enter 或 J' : '';
     const text = status && hint ? status + '   ' + hint : hint || status;

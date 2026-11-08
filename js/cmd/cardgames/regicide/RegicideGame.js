@@ -5,7 +5,7 @@ import { SelectDialog } from '../../../dialog/SelectDialog.js';
 import { ShowDialog } from '../../../dialog/ShowDialog.js';
 import { dealCard } from '../animation.js';
 import { createGame, play, jester, needsRescue } from './rules.js';
-import { initView, draw as drawView, DECK, USED, DISCARD, deckBottom, handPosition, enemyName, enemyCardOrigin, flashEnemy, dissolveEnemy } from './render.js';
+import { initView, draw as drawView, DECK, USED, DISCARD, deckBottom, handPosition, enemyName, enemyCardOrigin, flashEnemy, dissolveEnemy, walkInEnemy } from './render.js';
 
 const EVENT_BUFFERS = new Map();
 
@@ -21,6 +21,8 @@ export class RegicideGame {
         this.clearEvent();
         this.hideBanner();
         clearTimeout(this.finishTimer); this.finishTimer = null;
+        clearTimeout(this.arrivalTimer); this.arrivalTimer = null; this.arrivalDelay = 0;
+        this.cancelArrival?.(); this.cancelArrival = null; this.arriving = false;
         this.cancelDissolve?.(); this.cancelDissolve = null; this.dissolving = false;
         this.cancelFlash?.(); this.cancelFlash = null; this.flashing = false;
         this.batch++; this.collecting = false; this.recovering = false; this.presentation = null;
@@ -30,6 +32,8 @@ export class RegicideGame {
     }
     dealNewCards(retained, presentation = null) {
         this.stopDeals();
+        // An arrival is pending: keep the enemy hidden and unhyped while dealing.
+        if (this.arrivalPending) { this.rosterHold = true; this.enemyCleared = true; }
         this.presentation = presentation;
         const batch = this.batch;
         const indices = [];
@@ -167,10 +171,45 @@ export class RegicideGame {
         }
         if (this.arrivalPending) {
             this.arrivalPending = false;
-            // The next enemy only appears and gets its green roster entry now.
-            this.rosterHold = false; this.enemyCleared = false;
-            this.showEvent(enemyName(this.state.enemy) + '來襲！', () => {});
+            this.startArrival();
         }
+    }
+    // Step 0: wait a beat after a defeat, then run the arrival presentation.
+    startArrival() {
+        const batch = this.batch;
+        this.dealing = true; this.arriving = true;
+        const delay = this.arrivalDelay || 0; this.arrivalDelay = 0;
+        if (!delay) { this.runArrival(); return; }
+        this.arrivalTimer = setTimeout(() => {
+            this.arrivalTimer = null;
+            if (this.disposed || batch !== this.batch) return;
+            this.runArrival();
+        }, delay);
+    }
+    runArrival() {
+        const batch = this.batch;
+        // Steps 1-2: banner stays while the enemy walks down into place.
+        this.rosterHold = true; this.enemyCleared = true;
+        this.showBanner('敵人來襲');
+        this.cancelArrival = walkInEnemy(this, () => {
+            if (this.disposed || batch !== this.batch) return;
+            this.cancelArrival = null;
+            // The enemy stays put with its stats while the banner lingers a
+            // beat; only the green roster entry and input wait for it to clear.
+            this.enemyCleared = false;
+            this.draw();
+            this.arrivalTimer = setTimeout(() => {
+                this.arrivalTimer = null;
+                if (this.disposed || batch !== this.batch) return;
+                // Step 3: the banner clears; the green roster entry appears and
+                // input is unblocked.
+                this.hideBanner();
+                this.rosterHold = false;
+                this.arriving = false;
+                this.dealing = false;
+                this.draw();
+            }, 800);
+        });
     }
     flyDefeatedCard(effect) {
         const batch = this.batch;
@@ -203,16 +242,18 @@ export class RegicideGame {
         this.collecting = true; this.dealing = true;
         this.usedDisplay = [...effect.used];
         const finish = () => {
-            this.collecting = false; this.dealing = false; this.presentation = null;
+            this.collecting = false; this.presentation = null;
             this.usedDisplay = null; this.displayEnemy = null;
             // Step 7: everything has landed; hold the banner briefly, then close.
+            // Keep dealing true so input stays blocked through the hold.
             this.finishTimer = setTimeout(() => {
                 this.finishTimer = null;
                 if (this.disposed || batch !== this.batch) return;
                 this.hideBanner();
                 if (this.state.phase !== 'win') {
-                    this.arrivalPending = true; this.finishEffects();
-                }
+                    this.arrivalPending = true; this.arrivalDelay = 400;
+                    this.finishEffects();
+                } else this.dealing = false;
                 this.draw();
             }, 200);
         };
