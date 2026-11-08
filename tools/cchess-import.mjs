@@ -2,7 +2,7 @@
 // Validate game-analyze JSON and maintain one file per endgame plus an index.
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { validateEndgame } from '../js/cmd/cchess/endgames.js';
+import { validateEndgame, pruneEndgame } from '../js/cmd/cchess/endgames.js';
 
 async function main() {
     const args = process.argv.slice(2), option = args.indexOf('--output');
@@ -11,7 +11,10 @@ async function main() {
     args.splice(option, 2);
     if (!args.length || args.some(arg => arg.startsWith('--'))) throw new Error('請指定殘局 JSON 檔案');
     const incoming = [];
-    for (const file of args) incoming.push(validateEndgame(JSON.parse(await fs.readFile(file, 'utf8'))));
+    for (const file of args) {
+        const puzzle = validateEndgame(JSON.parse(await fs.readFile(file, 'utf8')));
+        incoming.push(await pruneEndgame(puzzle));
+    }
     let index = [];
     try { index = JSON.parse(await fs.readFile(path.join(directory, 'index.json'), 'utf8')); }
     catch (error) { if (error.code !== 'ENOENT') throw error; }

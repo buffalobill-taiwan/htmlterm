@@ -126,9 +126,10 @@ all three difficulties. Use arrows and Enter to select/move; Space deselects,
 `r` restarts, `n` opens difficulty/level selection, and `q` exits. Verify two
 blinks before computer moves only, 50ms rook/cannon steps, instant cannon captures,
 horse-leg/elephant-eye pauses, and immediate restart/exit during animation or
-AI search. Verify bundled endgames, red wins, black wins and cycles;
-inspect Network to confirm only the selected puzzle JSON loads. Details and
-the offline importer are in [Chinese chess integration](cchess-upstream.md).
+AI search. Verify bundled endgames, red wins, black wins and cycles, and that
+pruned positions fall back to the black AI; inspect Network to confirm only the
+selected puzzle JSON loads. Details and the offline importer are in [Chinese
+chess integration](cchess-upstream.md).
 
 These tools run outside the browser and are not demo-shell commands. Read the
 linked source before changing generated assets. Examples below use placeholder

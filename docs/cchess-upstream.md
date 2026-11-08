@@ -117,8 +117,20 @@ allow all legal moves. Human moves have no repetition restriction.
 Each endgame keeps the upstream `{ meta: { name, step, init }, table }` format.
 `init` and table keys/values are FEN board fields. A table key is the board
 after a legal red move; its value is the board after the black response, or
-null for a red win. Cyclic branches are playable. No live search substitutes
-for missing or invalid entries. Both mate and stalemate count as a loss.
+null for a red win. Cyclic branches are playable. Both mate and stalemate count
+as a loss.
+
+Black's reply comes from the table when the position is present; otherwise
+`chooseBlackReply()` in `js/cmd/cchess/black-ai.js` supplies it with a fixed
+depth-2 alpha-beta search (`searchRootAsync`, `color: 'black'`, no effective
+deadline, so the move is deterministic in Node and in the browser). The
+shipped tables are pruned: the importer validates the full upstream table
+first, then `pruneEndgame()` (`js/cmd/cchess/endgames.js`) drops every entry
+whose target board the AI reproduces, plus `null` entries (the runtime detects
+the red win with `hasLost()` before consulting the table). Pruning cuts the
+bundled data from ~8.0 MB to ~1.8 MB; `endgame-023` and `endgame-020` keep more
+of their entries because their best defenses are less obvious to the depth-2
+AI.
 
 `js/data/cchess/index.json` contains only `{ id, name, step, file }` records.
 The importer and selection list sort puzzles by ascending step count;
@@ -161,9 +173,17 @@ node tools/cchess-import.mjs --output js/data/cchess /path/to/puzzle.json
 ```
 
 The importer validates all reachable red alternatives and legal black responses,
-including terminal markers and cycles, before writing. Existing initial
-positions retain their IDs/files; new positions receive `endgame-NNN` IDs.
-It preserves other indexed puzzles. No generator runs in the terminal demo.
+including terminal markers and cycles, before writing. It then prunes the table
+with the black AI, so the shipped file keeps only the defenses the AI does not
+reproduce. Existing initial positions retain their IDs/files; new positions
+receive `endgame-NNN` IDs. It preserves other indexed puzzles. To prune
+already-shipped files, run:
+
+```sh
+node tools/cchess-prune.mjs --output js/data/cchess
+```
+
+No generator runs in the terminal demo.
 
 Only computer moves blink off/on twice (100ms per phase) before moving;
 player moves skip blinking, regardless of the player's color. Rooks and

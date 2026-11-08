@@ -1,6 +1,7 @@
 import { parseFen, boardToFen } from './engine/notation.js';
 import { generateLegalMoves } from './engine/rules.js';
 import { applyBoardCopy, findKings } from './engine/board.js';
+import { chooseBlackReply } from './black-ai.js';
 
 export const boardKey = board => boardToFen(board).split(' ')[0];
 export const positionKey = (board, color) => `${color}:${boardKey(board)}`;
@@ -47,4 +48,18 @@ export function validateEndgame(puzzle) {
     }
     if (!wins) throw new Error('殘局沒有可達紅勝局面');
     return puzzle;
+}
+
+// Drop entries the black AI reproduces. Null targets are dropped too: the
+// runtime detects the red win with hasLost() before consulting the table.
+export async function pruneEndgame(puzzle) {
+    const table = {};
+    for (const [key, target] of Object.entries(puzzle.table)) {
+        if (target === null) continue;
+        const board = parseFen(key, { allowMissingKings: false }).board;
+        const reply = await chooseBlackReply(board);
+        if (reply && boardKey(applyBoardCopy(board, reply)) === target) continue;
+        table[key] = target;
+    }
+    return { ...puzzle, table };
 }

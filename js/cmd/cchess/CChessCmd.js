@@ -7,6 +7,7 @@ import { applyBoardCopy } from './engine/board.js';
 import { opp, movesEqual } from './engine/helpers.js';
 import { INITIAL_FEN } from './constants.js';
 import { boardKey, positionKey, hasLost, responseMove } from './endgames.js';
+import { chooseBlackReply } from './black-ai.js';
 import { animateMove } from './animation.js';
 import { ConfirmDialog } from '../../dialog/ConfirmDialog.js';
 import { SelectDialog } from '../../dialog/SelectDialog.js';
@@ -19,7 +20,7 @@ import { mahjongRenderMethods } from './mahjong/render.js';
 import { GAME_META } from '../game-meta.js';
 const META = GAME_META.cchess;
 
-const ENDGAME_DATA_VERSION = '2026-11-08-endgame-028';
+const ENDGAME_DATA_VERSION = '2026-11-08-black-ai-pruned';
 
 export class CChessCmd extends CmdBase {
     execute(args) {
@@ -208,9 +209,11 @@ export class CChessCmd extends CmdBase {
             if (this._turn !== this._human) {
                 if (this._mode === 'endgame') {
                     const key = boardKey(this._board);
-                    if (!Object.hasOwn(this._puzzle.table, key)) throw new Error('題目缺少此走法的應手');
-                    const target = this._puzzle.table[key];
-                    const reply = typeof target === 'string' ? responseMove(this._board, target) : null;
+                    const target = Object.hasOwn(this._puzzle.table, key) ? this._puzzle.table[key] : undefined;
+                    if (target === undefined) this._busy = true;
+                    const reply = target === undefined ? await chooseBlackReply(this._board)
+                        : (typeof target === 'string' ? responseMove(this._board, target) : null);
+                    if (epoch !== this._epoch) return;
                     if (!reply) throw new Error('題目黑方應手不合法');
                     await this._play(reply);
                 } else await this._aiTurn();
