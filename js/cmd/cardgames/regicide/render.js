@@ -41,6 +41,40 @@ export function deckBottom(count) {
 }
 export const handPosition = index => ({ x: LAYOUT.hand.x + index * HAND_STEP, y: LAYOUT.hand.y });
 
+// Centre the first attack card between the second and third hand slots.
+export const attackPosition = index => ({
+    x: Math.round((handPosition(1).x + handPosition(2).x) / 2) + index * HAND_STEP,
+    y: LAYOUT.hand.y - 4,
+});
+
+export function createAttackStage(cmd, cards) {
+    const origin = attackPosition(0);
+    const vb = new VirtualBuffer((cards.length - 1) * HAND_STEP + 5, 3);
+    const faces = cards.map(cardBuffer);
+    const overlay = { ...origin, w: vb.width, h: vb.height, owner: cmd,
+        getCell: (r, c) => vb.getCell(r, c) };
+    let closed = false, removeCleanup;
+    const close = () => {
+        if (closed) return;
+        closed = true;
+        term.removeOverlay(overlay);
+        removeCleanup?.();
+    };
+    term.addOverlay(overlay);
+    removeCleanup = cmd.addCleanup(close);
+    return {
+        close,
+        setVisible(index, visible) {
+            if (closed) return;
+            for (let r = 0; r < 3; r++) {
+                for (let c = 0; c < 5; c++)
+                    vb.setCell(r, index * HAND_STEP + c, visible ? faces[index].getCell(r, c) : null);
+                term.markRowDirty(origin.y + r);
+            }
+        },
+    };
+}
+
 // Retained hand cards keep their order but close the gaps left by the cards
 // that were played. Return each card's old and new horizontal offsets.
 export function handCompaction(oldHand, selected) {
@@ -404,7 +438,7 @@ function drawHand(game) {
         const x = i * HAND_STEP;
         for (let y = 0; y < 3; y++) for (let k = 0; k < 5; k++)
             vb.setCell(y, x + k, face.getCell(y, k));
-        if (!game.discarding)
+        if (!game.discarding && !game.stagedAttack)
             vb.writeStr(3, x, (i === game.cursor ? '>' : ' ') + (game.selected.has(i) ? '[X]' : '[ ]'));
     });
 }
@@ -412,7 +446,7 @@ function drawHand(game) {
 function drawStatus(game) {
     const { vb } = game.areas.status;
     vb.clearCells();
-    if (game.sorting) return;
+    if (game.sorting || game.stagedAttack) return;
     const s = game.state;
     const status = game.eventOverlay || game.bannerOverlay || game.arriving ? '' : game.dissolving ? '敵人被擊倒…' : game.flashing ? '攻擊中…' : game.collecting ? '收牌中…' : game.recovering ? '回收中…' : game.discardText ? game.discardText : game.dealing ? '發牌中…' : s.phase === 'win' ? ['銅', '銀', '金'][s.jesters] + '牌勝利！Enter 新局' :
         s.phase === 'loss' ? (s.lossReason || '挑戰失敗') + '。Enter 新局' : s.phase === 'attack' ? '選牌攻擊' : '選牌抵傷';

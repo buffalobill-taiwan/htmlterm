@@ -5,7 +5,7 @@ import { SelectDialog } from '../../../dialog/SelectDialog.js';
 import { ShowDialog } from '../../../dialog/ShowDialog.js';
 import { dealCard } from '../animation.js';
 import { createGame, play, jester, needsRescue } from './rules.js';
-import { initView, draw as drawView, DECK, USED, DISCARD, deckBottom, handPosition, enemyName, enemyCardOrigin, flashEnemy, dissolveEnemy, walkInEnemy, handCompaction, slideHand, sortHandAnimation } from './render.js';
+import { initView, draw as drawView, DECK, USED, DISCARD, deckBottom, handPosition, enemyName, enemyCardOrigin, flashEnemy, dissolveEnemy, walkInEnemy, handCompaction, slideHand, sortHandAnimation, attackPosition, createAttackStage } from './render.js';
 
 const EVENT_BUFFERS = new Map();
 
@@ -18,7 +18,8 @@ export class RegicideGame {
         this.state = createGame(); this.arrivalPending = true; this.counterEffect = null; this.selected = new Set(); this.cursor = 0;
         this.dealNewCards([]);
     }
-    stopDeals() {
+    stopDeals({ preserveStaged = false } = {}) {
+        if (!preserveStaged) this.clearStagedAttack();
         this.clearEvent();
         this.hideBanner();
         clearTimeout(this.finishTimer); this.finishTimer = null;
@@ -35,7 +36,8 @@ export class RegicideGame {
         this.anims.clear(); this.dealing = false; this.hidden = new Set(); this.pending = 0; this.dealTotal = 0;
     }
     dealNewCards(retained, presentation = null) {
-        this.stopDeals();
+        // Recovery/dealing are substeps of an attack: keep its parked cards.
+        this.stopDeals({ preserveStaged: true });
         // An arrival is pending: keep the enemy hidden and unhyped while dealing.
         if (this.arrivalPending) { this.rosterHold = true; this.enemyCleared = true; }
         this.presentation = presentation;
@@ -68,7 +70,7 @@ export class RegicideGame {
         launch();
     }
     recoverCards(retained, effect) {
-        this.stopDeals();
+        this.stopDeals({ preserveStaged: true });
         const batch = this.batch;
         this.dealing = true; this.recovering = true;
         this.hidden = new Set(this.state.hand.map((_, i) => i).filter(i => !retained.includes(this.state.hand[i])));
@@ -96,6 +98,74 @@ export class RegicideGame {
             this.anims.add(cancel);
         };
         this.draw(); launch();
+    }
+    clearStagedAttack() {
+        if (!this.stagedAttack) return;
+        this.stagedAttack.view.close();
+        this.stagedAttack = null;
+        this.usedDisplay = null;
+    }
+    stageAttack(oldHand, indices, before, onComplete) {
+        this.stopDeals();
+        const batch = this.batch;
+        const cards = indices.map(i => oldHand[i]);
+        const view = createAttackStage(this.cmd, cards);
+        this.stagedAttack = { cards, view };
+        this.usedDisplay = before.used;
+        this.presentation = before;
+        this.dealing = true;
+        this.handOverride = oldHand;
+        this.hidden = new Set(indices);
+        this.draw();
+        let landed = 0;
+        indices.forEach((index, slot) => {
+            let cancel;
+            cancel = dealCard(this.cmd, oldHand[index], handPosition(index), attackPosition(slot), {
+                faceUp: true, duration: 260,
+            }, () => {
+                if (this.disposed || batch !== this.batch) return;
+                this.anims.delete(cancel);
+                view.setVisible(slot, true);
+                if (++landed === cards.length) {
+                    this.handOverride = null;
+                    this.hidden.clear();
+                    onComplete();
+                }
+            });
+            this.anims.add(cancel);
+        });
+    }
+    collectAttack() {
+        const batch = this.batch;
+        const { cards, view } = this.stagedAttack;
+        this.dealing = true;
+        let next = 0, landed = 0;
+        const launch = () => {
+            if (this.disposed || batch !== this.batch || next >= cards.length) return;
+            const slot = next++, card = cards[slot];
+            view.setVisible(slot, false);
+            let launched = false;
+            const advance = () => { if (!launched) { launched = true; launch(); } };
+            const cancel = dealCard(this.cmd, card, attackPosition(slot), USED, {
+                faceUp: true, duration: 260,
+                onStep: (_step, ratio) => { if (ratio >= 0.45) advance(); },
+            }, () => {
+                if (this.disposed || batch !== this.batch) return;
+                this.anims.delete(cancel);
+                this.usedDisplay.push(card);
+                advance();
+                if (++landed === cards.length) {
+                    const used = this.usedDisplay;
+                    this.clearStagedAttack();
+                    this.usedDisplay = this.defeatEffect ? used : null;
+                    this.dealing = false;
+                    this.finishEffects();
+                }
+                this.draw();
+            });
+            this.anims.add(cancel);
+        };
+        launch();
     }
     clearEvent() {
         clearTimeout(this.eventTimer); this.eventTimer = null;
@@ -151,6 +221,7 @@ export class RegicideGame {
                 });
             return;
         }
+        if (this.stagedAttack) { this.collectAttack(); return; }
         if (this.defeatEffect) {
             const effect = this.defeatEffect; this.defeatEffect = null;
             const batch = this.batch;
@@ -395,7 +466,7 @@ export class RegicideGame {
             const selectedIndices = [...this.selected].sort((a, b) => a - b);
             const retained = this.state.hand.filter((_, i) => !this.selected.has(i));
             const wasDefend = this.state.phase === 'defend';
-            const before = { deckCount: this.state.deck.length,
+            const before = { used: [...this.state.played], deckCount: this.state.deck.length,
                 discardCount: this.state.discard.length, discardTop: this.state.discard.at(-1) ?? null };
             const effects = [];
             if (play(this.state, selectedIndices, effects)) {
@@ -410,20 +481,21 @@ export class RegicideGame {
                 this.attackEffect = effects.find(e => e.type === 'attack');
                 this.displayHp = this.attackEffect?.beforeHp ?? null;
                 this.defeatEffect = effects.find(e => e.type === 'defeat');
-                this.usedDisplay = this.defeatEffect?.used || null;
                 this.displayEnemy = this.defeatEffect?.enemy || null;
-                const recovery = effects.find(e => e.type === 'recover');
-                if (recovery) this.recoverCards(retained, recovery);
-                else {
-                    const defeat = this.defeatEffect;
-                    const beforeDiscard = defeat ? defeat.discard.slice(0,
-                        defeat.discard.length - defeat.used.length - (defeat.exact ? 0 : 1)) : null;
-                    this.dealNewCards(retained, defeat ? {
-                        deckCount: defeat.deckCount - (defeat.exact ? 1 : 0) +
-                            (effects.find(e => e.type === 'draw')?.count || 0),
-                        discardCount: beforeDiscard.length, discardTop: beforeDiscard.at(-1),
-                    } : null);
-                }
+                this.stageAttack(oldHand, selectedIndices, before, () => {
+                    const recovery = effects.find(e => e.type === 'recover');
+                    if (recovery) this.recoverCards(retained, recovery);
+                    else {
+                        const defeat = this.defeatEffect;
+                        const beforeDiscard = defeat ? defeat.discard.slice(0,
+                            defeat.discard.length - defeat.used.length - (defeat.exact ? 0 : 1)) : null;
+                        this.dealNewCards(retained, defeat ? {
+                            deckCount: defeat.deckCount - (defeat.exact ? 1 : 0) +
+                                (effects.find(e => e.type === 'draw')?.count || 0),
+                            discardCount: beforeDiscard.length, discardTop: beforeDiscard.at(-1),
+                        } : null);
+                    }
+                });
                 return;
             }
         } else return;

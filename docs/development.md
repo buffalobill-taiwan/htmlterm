@@ -357,4 +357,13 @@ right-moving cards drop two rows, then all travel horizontally and return.
 Check no-op sorts, new-game reset, S during dealing/sorting, cancelling an exit
 dialog, returning to the menu, and Ctrl+C/reopening without leftover overlays.
 
+Run `node tools/test-regicide-attack.mjs` for attack staging, recovery/draw
+ordering, used-pile counts, exact/overkill/final kills and cancellation.
+In the browser, play one card, an A pair and four matching cards. They fly
+face-up to the gap above hand slots two and three, stay through suit effects
+and damage flashes, then fly into the used pile before counterattack/defeat.
+The first staged card starts four rows above the hand; additional cards sit
+nine columns apart. Verify used counts increase only on landing, and cancel
+at departure, recovery, flashing and collection without leftover overlays.
+
 Rules reference: https://www.regicidegame.com/site_files/33132/upload_files/RegicideRulesA4.pdf?v=2
