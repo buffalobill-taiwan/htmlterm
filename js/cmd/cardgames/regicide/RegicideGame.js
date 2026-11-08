@@ -5,7 +5,7 @@ import { SelectDialog } from '../../../dialog/SelectDialog.js';
 import { ShowDialog } from '../../../dialog/ShowDialog.js';
 import { dealCard } from '../animation.js';
 import { createGame, play, jester, needsRescue } from './rules.js';
-import { initView, draw as drawView, DECK, USED, DISCARD, handPosition, enemyName, flashEnemy, dissolveEnemy } from './render.js';
+import { initView, draw as drawView, DECK, USED, DISCARD, deckBottom, handPosition, enemyName, enemyCardOrigin, flashEnemy, dissolveEnemy } from './render.js';
 
 const EVENT_BUFFERS = new Map();
 
@@ -13,15 +13,18 @@ export class RegicideGame {
     constructor(cmd) { this.cmd = cmd; initView(this); this.anims = new Set(); this.batch = 0; }
     start() {
         this.stopDeals(); this.attackEffect = null; this.displayHp = null; this.defeatEffect = null; this.usedDisplay = null; this.displayEnemy = null;
-        this.enemyDefeated = false;
+        this.enemyCleared = false; this.rosterHold = false;
         this.state = createGame(); this.arrivalPending = true; this.counterEffect = null; this.selected = new Set(); this.cursor = 0;
         this.dealNewCards([]);
     }
     stopDeals() {
         this.clearEvent();
+        this.hideBanner();
+        clearTimeout(this.finishTimer); this.finishTimer = null;
         this.cancelDissolve?.(); this.cancelDissolve = null; this.dissolving = false;
         this.cancelFlash?.(); this.cancelFlash = null; this.flashing = false;
         this.batch++; this.collecting = false; this.recovering = false; this.presentation = null;
+        this.enemyCleared = false; this.rosterHold = false;
         for (const cancel of this.anims) cancel();
         this.anims.clear(); this.dealing = false; this.hidden = new Set(); this.pending = 0;
     }
@@ -69,7 +72,9 @@ export class RegicideGame {
             next++; this.presentation.discardCount--; this.draw();
             let launched = false;
             const advance = () => { if (!launched) { launched = true; launch(); } };
-            const cancel = dealCard(this.cmd, null, DISCARD, DECK, {
+            // Recovered cards go under the deck, so aim below the top card.
+            const to = deckBottom(this.presentation.deckCount + 1);
+            const cancel = dealCard(this.cmd, null, DISCARD, to, {
                 faceDown: true, duration: 180,
                 onStep: (_step, ratio) => { if (ratio >= 0.45) advance(); },
             }, () => {
@@ -107,6 +112,22 @@ export class RegicideGame {
         }, 800);
         this.draw();
     }
+    // Persistent call-effect box used across a whole defeat sequence.
+    showBanner(text) {
+        this.hideBanner();
+        if (!EVENT_BUFFERS.has(text)) EVENT_BUFFERS.set(text, buildCallEffectBuffer(text));
+        const buffer = EVENT_BUFFERS.get(text), w = buffer[0].length, h = buffer.length;
+        this.bannerOverlay = {x: Math.floor((80 - w) / 2), y: Math.floor((25 - h) / 2),
+            w, h, owner: this.cmd, getCell: makeOverlayGetCell(buffer, w, h)};
+        term.addOverlay(this.bannerOverlay);
+        this.bannerCleanup = this.cmd.addCleanup(() => this.hideBanner());
+        this.draw();
+    }
+    hideBanner() {
+        if (this.bannerOverlay) term.removeOverlay(this.bannerOverlay);
+        this.bannerOverlay = null;
+        this.bannerCleanup?.(); this.bannerCleanup = null;
+    }
     finishEffects() {
         if (this.attackEffect) {
             const effect = this.attackEffect; this.attackEffect = null;
@@ -125,12 +146,17 @@ export class RegicideGame {
         if (this.defeatEffect) {
             const effect = this.defeatEffect; this.defeatEffect = null;
             const batch = this.batch;
+            // Step 1: the defeated roster entry turns grey and the next enemy is
+            // not highlighted until it arrives. Step 2: banner, then dissolve.
+            this.rosterHold = true;
             this.dealing = true; this.dissolving = true;
-            this.draw();
+            this.showBanner(enemyName(effect.enemy) + '被擊倒');
             this.cancelDissolve = dissolveEnemy(this, () => {
                 if (this.disposed || batch !== this.batch) return;
-                this.cancelDissolve = null; this.dissolving = false; this.enemyDefeated = true;
-                this.showEvent(enemyName(effect.enemy) + '被擊倒', () => this.collectUsed(effect));
+                this.cancelDissolve = null; this.dissolving = false;
+                // Step 3: the fully black grid clears, then the 1x card flies out.
+                this.enemyCleared = true;
+                this.flyDefeatedCard(effect);
             });
             return;
         }
@@ -141,18 +167,56 @@ export class RegicideGame {
         }
         if (this.arrivalPending) {
             this.arrivalPending = false;
+            // The next enemy only appears and gets its green roster entry now.
+            this.rosterHold = false; this.enemyCleared = false;
             this.showEvent(enemyName(this.state.enemy) + '來襲！', () => {});
         }
     }
-    collectUsed(effect) {
-        this.stopDeals();
+    flyDefeatedCard(effect) {
         const batch = this.batch;
+        const from = enemyCardOrigin(effect.enemy);
+        const to = effect.exact ? DECK : DISCARD;
         this.collecting = true; this.dealing = true;
         this.displayEnemy = effect.enemy;
         this.usedDisplay = [...effect.used];
-        const oldDiscard = effect.discard.slice(0, effect.discard.length - effect.used.length);
-        this.presentation = { deckCount: effect.deckCount, discardCount: oldDiscard.length,
-            discardTop: oldDiscard.at(-1) };
+        // Presentation starts before the enemy reaches its pile; the counters
+        // advance only when the card lands.
+        const beforeDiscard = effect.discard.slice(0,
+            effect.discard.length - effect.used.length - (effect.exact ? 0 : 1));
+        this.presentation = { deckCount: effect.deckCount - (effect.exact ? 1 : 0),
+            discardCount: beforeDiscard.length, discardTop: beforeDiscard.at(-1) ?? null };
+        this.draw();
+        const cancel = dealCard(this.cmd, effect.enemy, from, to, {
+            faceUp: true, duration: 400,
+        }, () => {
+            if (this.disposed || batch !== this.batch) return;
+            this.anims.delete(cancel);
+            if (effect.exact) this.presentation.deckCount++;
+            else { this.presentation.discardCount++; this.presentation.discardTop = effect.enemy; }
+            this.draw();
+            this.collectUsed(effect);
+        });
+        this.anims.add(cancel);
+    }
+    collectUsed(effect) {
+        const batch = this.batch;
+        this.collecting = true; this.dealing = true;
+        this.usedDisplay = [...effect.used];
+        const finish = () => {
+            this.collecting = false; this.dealing = false; this.presentation = null;
+            this.usedDisplay = null; this.displayEnemy = null;
+            // Step 7: everything has landed; hold the banner briefly, then close.
+            this.finishTimer = setTimeout(() => {
+                this.finishTimer = null;
+                if (this.disposed || batch !== this.batch) return;
+                this.hideBanner();
+                if (this.state.phase !== 'win') {
+                    this.arrivalPending = true; this.finishEffects();
+                }
+                this.draw();
+            }, 200);
+        };
+        if (!effect.used.length) { finish(); this.draw(); return; }
         let next = 0, landed = 0;
         const launch = () => {
             if (this.disposed || batch !== this.batch || next >= effect.used.length) return;
@@ -168,14 +232,7 @@ export class RegicideGame {
                 this.anims.delete(cancel);
                 this.presentation.discardCount++; this.presentation.discardTop = card;
                 advance();
-                if (++landed === effect.used.length) {
-                    this.collecting = false; this.dealing = false; this.presentation = null;
-                    this.usedDisplay = null; this.displayEnemy = null;
-                    if (this.state.phase !== 'win') {
-                        this.enemyDefeated = false;
-                        this.arrivalPending = true; this.finishEffects();
-                    }
-                }
+                if (++landed === effect.used.length) finish();
                 this.draw();
             });
             this.anims.add(cancel);

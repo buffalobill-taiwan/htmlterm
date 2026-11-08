@@ -33,6 +33,12 @@ export const JESTER_STEP = 7;
 export const DECK = { x: LAYOUT.deck.x + PILE_CARD.x, y: LAYOUT.deck.y + PILE_CARD.y };
 export const USED = { x: LAYOUT.used.x + PILE_CARD.x, y: LAYOUT.used.y + PILE_CARD.y };
 export const DISCARD = { x: LAYOUT.discard.x + PILE_CARD.x, y: LAYOUT.discard.y + PILE_CARD.y };
+// Top-left for a card entering the bottom of the deck: its bottom row lines up
+// with the deepest stack edge drawn by drawPile() for that deck size.
+export function deckBottom(count) {
+    const edges = Math.min(3, Math.max(0, count - 1));
+    return { x: DECK.x, y: DECK.y + edges };
+}
 export const handPosition = index => ({ x: LAYOUT.hand.x + index * HAND_STEP, y: LAYOUT.hand.y });
 
 const SUITS = '♠♥♦♣';
@@ -116,6 +122,16 @@ function enemyView(card) {
     return enemyFaces.get(base);
 }
 
+// Top-left of a 1x (5x3) card centered on the enemy's scaled face.
+export function enemyCardOrigin(card) {
+    const { face, x: offsetX, y: offsetY } = enemyView(card);
+    const base = cardBuffer(card);
+    return {
+        x: LAYOUT.enemy.x + offsetX + Math.floor((face.width - base.width) / 2),
+        y: LAYOUT.enemy.y + offsetY + Math.floor((face.height - base.height) / 2),
+    };
+}
+
 const hitFaces = new WeakMap();
 const BLACK_CELL = makeCell(' ', 0, 0, false);
 
@@ -171,10 +187,12 @@ export function flashEnemy(game, count, onComplete) {
 function drawEnemy(game) {
     const { vb } = game.areas.enemy;
     vb.clearCells();
+    // Once the dissolve finishes the whole enemy region is emptied, stats included.
+    if (game.enemyCleared) return;
     const s = game.state, enemy = game.displayEnemy || s.enemy;
     const { face, x: offsetX, y: offsetY } = enemyView(enemy);
     for (let y = 0; y < face.height; y++) for (let x = 0; x < face.width; x++)
-        vb.setCell(y + offsetY, x + offsetX, game.enemyDefeated ? BLACK_CELL : face.getCell(y, x));
+        vb.setCell(y + offsetY, x + offsetX, face.getCell(y, x));
     vb.centerRow(offsetY + face.height, '生命' + (game.displayHp ?? (game.displayEnemy ? 0 : Math.max(0, s.hp))) +
         '  攻擊' + Math.max(0, value(s.enemy) - s.shield));
 }
@@ -198,7 +216,8 @@ function drawRoster(game) {
     vb.clearCells();
     vb.writeStr(0, 0, '剩餘敵人');
     const s = game.state;
-    const active = game.displayEnemy || (s.phase === 'win' ? null : s.enemy);
+    // While a defeated enemy is being cleared the next one is not highlighted yet.
+    const active = game.rosterHold ? null : (game.displayEnemy || (s.phase === 'win' ? null : s.enemy));
     // Enemies still in the castle or currently faced are not defeated.
     const remaining = new Set();
     if (s.phase !== 'win') {
@@ -250,7 +269,7 @@ function drawStatus(game) {
     const { vb } = game.areas.status;
     vb.clearCells();
     const s = game.state;
-    const status = game.eventOverlay ? '' : game.dissolving ? '敵人被擊倒…' : game.flashing ? '攻擊中…' : game.collecting ? '收牌中…' : game.recovering ? '回收中…' : game.dealing ? '發牌中…' : s.phase === 'win' ? ['銅', '銀', '金'][s.jesters] + '牌勝利！Enter 新局' :
+    const status = game.eventOverlay || game.bannerOverlay ? '' : game.dissolving ? '敵人被擊倒…' : game.flashing ? '攻擊中…' : game.collecting ? '收牌中…' : game.recovering ? '回收中…' : game.dealing ? '發牌中…' : s.phase === 'win' ? ['銅', '銀', '金'][s.jesters] + '牌勝利！Enter 新局' :
         s.phase === 'loss' ? (s.lossReason || '挑戰失敗') + '。Enter 新局' : s.phase === 'attack' ? '選牌攻擊' : '選牌抵傷';
     const hint = !game.dealing && needsRescue(s) ? '手牌不足，需使用小丑換手：按 Enter 或 J' : '';
     const text = status && hint ? status + '   ' + hint : hint || status;
