@@ -5,7 +5,7 @@ import { SelectDialog } from '../../../dialog/SelectDialog.js';
 import { ShowDialog } from '../../../dialog/ShowDialog.js';
 import { dealCard } from '../animation.js';
 import { createGame, play, jester, needsRescue } from './rules.js';
-import { initView, draw as drawView, DECK, USED, DISCARD, deckBottom, handPosition, enemyName, enemyCardOrigin, flashEnemy, dissolveEnemy, walkInEnemy } from './render.js';
+import { initView, draw as drawView, DECK, USED, DISCARD, deckBottom, handPosition, enemyName, enemyCardOrigin, flashEnemy, dissolveEnemy, walkInEnemy, handCompaction, slideHand } from './render.js';
 
 const EVENT_BUFFERS = new Map();
 
@@ -25,10 +25,12 @@ export class RegicideGame {
         this.cancelArrival?.(); this.cancelArrival = null; this.arriving = false;
         this.cancelDissolve?.(); this.cancelDissolve = null; this.dissolving = false;
         this.cancelFlash?.(); this.cancelFlash = null; this.flashing = false;
+        this.cancelSlide?.(); this.cancelSlide = null;
+        this.discarding = false; this.discardText = null; this.handOverride = null;
         this.batch++; this.collecting = false; this.recovering = false; this.presentation = null;
         this.enemyCleared = false; this.rosterHold = false;
         for (const cancel of this.anims) cancel();
-        this.anims.clear(); this.dealing = false; this.hidden = new Set(); this.pending = 0;
+        this.anims.clear(); this.dealing = false; this.hidden = new Set(); this.pending = 0; this.dealTotal = 0;
     }
     dealNewCards(retained, presentation = null) {
         this.stopDeals();
@@ -280,6 +282,58 @@ export class RegicideGame {
         };
         this.draw(); launch();
     }
+    // Fly every discarded card from its hand slot to the discard pile at the
+    // same time, then run the follow-up step (hand compaction or a new deal).
+    discardCards(oldHand, indices, before, text, onComplete) {
+        const batch = this.batch;
+        this.dealing = true; this.discarding = true; this.discardText = text;
+        this.handOverride = oldHand;
+        this.hidden = new Set(indices);
+        this.presentation = { deckCount: before.deckCount,
+            discardCount: before.discardCount, discardTop: before.discardTop };
+        this.draw();
+        if (!indices.length) {
+            this.discarding = false; this.handOverride = null; this.hidden = new Set();
+            onComplete(); return;
+        }
+        let landed = 0;
+        for (const index of indices) {
+            const card = oldHand[index];
+            let cancel;
+            cancel = dealCard(this.cmd, card, handPosition(index), DISCARD, {
+                faceUp: true, duration: 260,
+            }, () => {
+                if (this.disposed || batch !== this.batch) return;
+                this.anims.delete(cancel);
+                this.presentation.discardCount++;
+                this.presentation.discardTop = card;
+                if (++landed === indices.length) {
+                    // The override stays until the slide overlay takes over so
+                    // the gaps do not snap closed before the compaction runs.
+                    this.discarding = false; this.handOverride = null; this.hidden = new Set();
+                    onComplete();
+                } else this.draw();
+            });
+            this.anims.add(cancel);
+        }
+    }
+    startHandSlide(oldHand, selected) {
+        const batch = this.batch;
+        const moves = handCompaction(oldHand, selected);
+        this.draw();
+        if (!moves.length) { this.finishDefend(); return; }
+        this.cancelSlide = slideHand(this, moves, () => {
+            if (this.disposed || batch !== this.batch) return;
+            this.cancelSlide = null;
+            this.finishDefend();
+        });
+    }
+    finishDefend() {
+        this.cancelSlide = null;
+        this.discarding = false; this.discardText = null; this.handOverride = null;
+        this.hidden = new Set(); this.presentation = null; this.dealing = false;
+        this.draw();
+    }
     ask(message, action) {
         this.dialog = this.cmd.openDialog(SelectDialog, null, {
             title: message, options: ['取消', '確定'],
@@ -301,17 +355,34 @@ export class RegicideGame {
         }
         if (['win', 'loss'].includes(this.state.phase)) { if (data === '\r') this.start(); return; }
         if ((/^[jJ]$/.test(data) || ((data === '\r' || data === '\n') && needsRescue(this.state))) && this.state.jesters) return this.ask('消耗小丑換手？', () => {
-            jester(this.state); this.selected.clear(); this.cursor = 0; this.dealNewCards([]);
+            const oldHand = [...this.state.hand];
+            const indices = oldHand.map((_, i) => i);
+            const before = { deckCount: this.state.deck.length,
+                discardCount: this.state.discard.length, discardTop: this.state.discard.at(-1) ?? null };
+            jester(this.state); this.selected.clear(); this.cursor = 0;
+            this.discardCards(oldHand, indices, before, '換手中…', () => this.dealNewCards([]));
         });
         if (data === '\x1b[D') this.cursor = Math.max(0, this.cursor - 1);
         else if (data === '\x1b[C') this.cursor = Math.min(this.state.hand.length - 1, this.cursor + 1);
         else if (data === ' ' && this.state.hand[this.cursor]) {
             if (this.selected.has(this.cursor)) this.selected.delete(this.cursor); else this.selected.add(this.cursor);
         } else if (data === '\r') {
+            const oldHand = [...this.state.hand];
+            const selectedIndices = [...this.selected].sort((a, b) => a - b);
             const retained = this.state.hand.filter((_, i) => !this.selected.has(i));
+            const wasDefend = this.state.phase === 'defend';
+            const before = { deckCount: this.state.deck.length,
+                discardCount: this.state.discard.length, discardTop: this.state.discard.at(-1) ?? null };
             const effects = [];
-            if (play(this.state, [...this.selected], effects)) {
+            if (play(this.state, selectedIndices, effects)) {
                 this.selected.clear(); this.cursor = 0;
+                // Defence discards the chosen cards and compacts the hand; it
+                // has no attack/defeat effects to resolve.
+                if (wasDefend) {
+                    this.discardCards(oldHand, selectedIndices, before, '抵傷中…',
+                        () => this.startHandSlide(oldHand, new Set(selectedIndices)));
+                    return;
+                }
                 this.attackEffect = effects.find(e => e.type === 'attack');
                 this.displayHp = this.attackEffect?.beforeHp ?? null;
                 this.defeatEffect = effects.find(e => e.type === 'defeat');

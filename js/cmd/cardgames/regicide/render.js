@@ -1,4 +1,4 @@
-import { VirtualBuffer } from '../../../util/VirtualBuffer.js';
+import { VirtualBuffer, _blankCell } from '../../../util/VirtualBuffer.js';
 import { displayWidth } from '../../../util/display-width.js';
 import { term } from '../../../system/sys.js';
 import { overlayFlash } from '../../../util/flash-helper.js';
@@ -40,6 +40,19 @@ export function deckBottom(count) {
     return { x: DECK.x, y: DECK.y + edges };
 }
 export const handPosition = index => ({ x: LAYOUT.hand.x + index * HAND_STEP, y: LAYOUT.hand.y });
+
+// Retained hand cards keep their order but close the gaps left by the cards
+// that were played. Return each card's old and new horizontal offsets.
+export function handCompaction(oldHand, selected) {
+    const moves = [];
+    let to = 0;
+    for (let from = 0; from < oldHand.length; from++) {
+        if (selected.has(from)) continue;
+        moves.push({ card: oldHand[from], fromX: from * HAND_STEP, toX: to * HAND_STEP });
+        to++;
+    }
+    return moves;
+}
 
 const SUITS = '♠♥♦♣';
 const RANK_LABELS = ['', '', '', '', '', '', '', '', '', '', '', 'J', 'Q', 'K'];
@@ -216,6 +229,45 @@ export function flashEnemy(game, count, onComplete) {
     return overlayFlash(game.cmd, term, overlay, count, { holdBusy: false, onComplete });
 }
 
+const HAND_SLIDE_MS = 180;
+// Slide the retained hand cards left into their compacted slots. The overlay
+// covers the whole hand region so the pre-compaction layout underneath is
+// hidden while the cards move.
+export function slideHand(game, moves, onComplete) {
+    const scratch = new VirtualBuffer(LAYOUT.hand.w, LAYOUT.hand.h);
+    let start = null, complete = false, lastKey = null;
+    const build = progress => {
+        const xs = moves.map(m => Math.round(m.fromX + (m.toX - m.fromX) * progress));
+        const key = xs.join(',');
+        if (key === lastKey) return;
+        lastKey = key;
+        scratch.clearCells();
+        moves.forEach((move, i) => {
+            const face = cardBuffer(move.card);
+            for (let y = 0; y < 3; y++) for (let x = 0; x < 5; x++)
+                scratch.setCell(y, xs[i] + x, face.getCell(y, x));
+        });
+        for (let r = 0; r < LAYOUT.hand.h; r++) term.markRowDirty(LAYOUT.hand.y + r);
+    };
+    // Seed the scratch buffer before the overlay is added, so the first
+    // composited frame already shows the cards at their old positions.
+    build(0);
+    const animation = startBufferAnimation(game.cmd,
+        (r, c) => scratch.getCell(r, c) || _blankCell,
+        ts => {
+            if (start === null) start = ts;
+            const t = Math.min(1, (ts - start) / HAND_SLIDE_MS);
+            build(1 - (1 - t) ** 3);
+            if (t >= 1) { complete = true; return true; }
+            return false;
+        }, {
+            x: LAYOUT.hand.x, y: LAYOUT.hand.y, w: LAYOUT.hand.w, h: LAYOUT.hand.h,
+            hideCursor: false, holdBusy: false,
+            onCleanup: () => { if (complete) onComplete(); },
+        });
+    return () => animation.stop();
+}
+
 function drawEnemy(game) {
     const { vb } = game.areas.enemy;
     vb.clearCells();
@@ -284,8 +336,11 @@ function drawHand(game) {
     const { vb } = game.areas.hand;
     vb.clearCells();
     const s = game.state, enemy = game.displayEnemy || s.enemy;
-    s.hand.forEach((c, i) => {
-        if (game.hidden.has(i)) return;
+    // While cards are flying to the discard pile the override keeps every
+    // other card in its old slot, leaving the played cards' gaps visible.
+    const hand = game.handOverride || s.hand;
+    hand.forEach((c, i) => {
+        if (!c || game.hidden.has(i)) return;
         const base = cardBuffer(c);
         // Same-suit cards mute the suit glyph; the defence tint waits for effects to finish.
         let face = !game.dealing && enemy && c.suit === enemy.suit ? immuneFace(base) : base;
@@ -293,7 +348,8 @@ function drawHand(game) {
         const x = i * HAND_STEP;
         for (let y = 0; y < 3; y++) for (let k = 0; k < 5; k++)
             vb.setCell(y, x + k, face.getCell(y, k));
-        vb.writeStr(3, x, (i === game.cursor ? '>' : ' ') + (game.selected.has(i) ? '[X]' : '[ ]'));
+        if (!game.discarding)
+            vb.writeStr(3, x, (i === game.cursor ? '>' : ' ') + (game.selected.has(i) ? '[X]' : '[ ]'));
     });
 }
 
@@ -301,7 +357,7 @@ function drawStatus(game) {
     const { vb } = game.areas.status;
     vb.clearCells();
     const s = game.state;
-    const status = game.eventOverlay || game.bannerOverlay || game.arriving ? '' : game.dissolving ? '敵人被擊倒…' : game.flashing ? '攻擊中…' : game.collecting ? '收牌中…' : game.recovering ? '回收中…' : game.dealing ? '發牌中…' : s.phase === 'win' ? ['銅', '銀', '金'][s.jesters] + '牌勝利！Enter 新局' :
+    const status = game.eventOverlay || game.bannerOverlay || game.arriving ? '' : game.dissolving ? '敵人被擊倒…' : game.flashing ? '攻擊中…' : game.collecting ? '收牌中…' : game.recovering ? '回收中…' : game.discardText ? game.discardText : game.dealing ? '發牌中…' : s.phase === 'win' ? ['銅', '銀', '金'][s.jesters] + '牌勝利！Enter 新局' :
         s.phase === 'loss' ? (s.lossReason || '挑戰失敗') + '。Enter 新局' : s.phase === 'attack' ? '選牌攻擊' : '選牌抵傷';
     const hint = !game.dealing && needsRescue(s) ? '手牌不足，需使用小丑換手：按 Enter 或 J' : '';
     const text = status && hint ? status + '   ' + hint : hint || status;
