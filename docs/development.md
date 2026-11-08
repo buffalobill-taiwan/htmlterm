@@ -348,4 +348,13 @@ royals, defence and solo Jester resets. Open `cardgames regicide` or its menu
 entry; check selection previews, attack/defence, help, Jester confirmation,
 game over and reopening. Exercise Escape sequences and Ctrl+C inside dialogs;
 verify no overlay survives and other card games still work.
+Run `node tools/test-regicide-sort.mjs` for alternating rank/suit sorting,
+selection identity, animation lane positions/tints, input gating and cleanup.
+In the browser, press S repeatedly after each animation: rank order is A–K,
+suit order is ♠♥♦♣, and selected cards/cursor follow their original cards.
+Check eight-card hands and defence tint: left-moving cards rise two rows,
+right-moving cards drop two rows, then all travel horizontally and return.
+Check no-op sorts, new-game reset, S during dealing/sorting, cancelling an exit
+dialog, returning to the menu, and Ctrl+C/reopening without leftover overlays.
+
 Rules reference: https://www.regicidegame.com/site_files/33132/upload_files/RegicideRulesA4.pdf?v=2

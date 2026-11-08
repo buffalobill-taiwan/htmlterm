@@ -5,7 +5,7 @@ import { SelectDialog } from '../../../dialog/SelectDialog.js';
 import { ShowDialog } from '../../../dialog/ShowDialog.js';
 import { dealCard } from '../animation.js';
 import { createGame, play, jester, needsRescue } from './rules.js';
-import { initView, draw as drawView, DECK, USED, DISCARD, deckBottom, handPosition, enemyName, enemyCardOrigin, flashEnemy, dissolveEnemy, walkInEnemy, handCompaction, slideHand } from './render.js';
+import { initView, draw as drawView, DECK, USED, DISCARD, deckBottom, handPosition, enemyName, enemyCardOrigin, flashEnemy, dissolveEnemy, walkInEnemy, handCompaction, slideHand, sortHandAnimation } from './render.js';
 
 const EVENT_BUFFERS = new Map();
 
@@ -14,6 +14,7 @@ export class RegicideGame {
     start() {
         this.stopDeals(); this.attackEffect = null; this.displayHp = null; this.defeatEffect = null; this.usedDisplay = null; this.displayEnemy = null;
         this.enemyCleared = false; this.rosterHold = false;
+        this.sortBySuit = false;
         this.state = createGame(); this.arrivalPending = true; this.counterEffect = null; this.selected = new Set(); this.cursor = 0;
         this.dealNewCards([]);
     }
@@ -25,6 +26,7 @@ export class RegicideGame {
         this.cancelArrival?.(); this.cancelArrival = null; this.arriving = false;
         this.cancelDissolve?.(); this.cancelDissolve = null; this.dissolving = false;
         this.cancelFlash?.(); this.cancelFlash = null; this.flashing = false;
+        this.cancelSort?.(); this.cancelSort = null; this.sorting = false;
         this.cancelSlide?.(); this.cancelSlide = null;
         this.discarding = false; this.discardText = null; this.handOverride = null;
         this.batch++; this.collecting = false; this.recovering = false; this.presentation = null;
@@ -334,6 +336,27 @@ export class RegicideGame {
         this.hidden = new Set(); this.presentation = null; this.dealing = false;
         this.draw();
     }
+    sortHand() {
+        const oldHand = this.state.hand;
+        const hand = [...oldHand].sort(this.sortBySuit ?
+            (a, b) => a.suit - b.suit || a.rank - b.rank :
+            (a, b) => a.rank - b.rank || a.suit - b.suit);
+        this.sortBySuit = !this.sortBySuit;
+        if (hand.every((card, i) => card === oldHand[i])) return;
+        const selected = new Set([...this.selected].map(i => oldHand[i]));
+        const cursorCard = oldHand[this.cursor];
+        const batch = this.batch;
+        this.sorting = true;
+        this.draw();
+        this.cancelSort = sortHandAnimation(this, hand, () => {
+            if (this.disposed || batch !== this.batch) return;
+            this.cancelSort = null; this.sorting = false;
+            this.state.hand = hand;
+            this.selected = new Set(hand.flatMap((card, i) => selected.has(card) ? [i] : []));
+            this.cursor = Math.max(0, hand.indexOf(cursorCard));
+            this.draw();
+        });
+    }
     ask(message, action) {
         this.dialog = this.cmd.openDialog(SelectDialog, null, {
             title: message, options: ['取消', '確定'],
@@ -345,15 +368,16 @@ export class RegicideGame {
     key(data) {
         if (data === '\x1b' || /^[qQ]$/.test(data)) return this.ask('離開遊戲？', () => this.cmd._quit());
         if (/^[nN]$/.test(data)) return this.ask('返回選單？', () => this.cmd._menu());
-        if (this.dealing) return;
+        if (this.dealing || this.sorting) return;
         if (/^[hH]$/.test(data)) {
             this.dialog = this.cmd.openDialog(ShowDialog, null, {
                 title: 'Regicide 規則', width: 72,
-                message: '擊敗四名 J、四名 Q、四名 K。\n單牌、A 配一張牌，或同點數合計不超過 10。\n♥ 回收棄牌至牌堆底；♦ 抽牌至最多八張。\n♣ 雙倍傷害；♠ 累積降低當前敵人攻擊。\n敵人免疫同花色效果。先回收，再抽牌。\n抵傷棄牌不觸發能力。精準擊殺將敵牌放牌堆頂。\nJ/Q/K 入手後值為 10/15/20。\n小丑可在出牌或抵傷前換手，共兩次，不解除免疫。\n單人不能跳過回合；沒有悔棋。',
+                message: '擊敗四名 J、四名 Q、四名 K。\n單牌、A 配一張牌，或同點數合計不超過 10。\n♥ 回收棄牌至牌堆底；♦ 抽牌至最多八張。\n♣ 雙倍傷害；♠ 累積降低當前敵人攻擊。\n敵人免疫同花色效果。先回收，再抽牌。\n抵傷棄牌不觸發能力。精準擊殺將敵牌放牌堆頂。\nJ/Q/K 入手後值為 10/15/20。\n小丑可在出牌或抵傷前換手，共兩次，不解除免疫。\nS 交替排序：點數 A–K／花色 ♠♥♦♣；保留選牌。\n單人不能跳過回合；沒有悔棋。',
                 onExit: () => { this.dialog = null; }, onAbort: () => this.cmd._quit(),
             }); return;
         }
         if (['win', 'loss'].includes(this.state.phase)) { if (data === '\r') this.start(); return; }
+        if (/^[sS]$/.test(data)) return this.sortHand();
         if ((/^[jJ]$/.test(data) || ((data === '\r' || data === '\n') && needsRescue(this.state))) && this.state.jesters) return this.ask('消耗小丑換手？', () => {
             const oldHand = [...this.state.hand];
             const indices = oldHand.map((_, i) => i);

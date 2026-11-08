@@ -20,10 +20,10 @@ export const LAYOUT = {
     used:     { x: 51, y: 3,  w: 9,  h: 8 },
     discard:  { x: 61, y: 3,  w: 9,  h: 8 },
     deck:     { x: 71, y: 3,  w: 9,  h: 8 },
-    status:   { x: 2,  y: 15, w: 76, h: 1 },
-    hand:     { x: 3,  y: 17, w: 69, h: 4 },
-    preview:  { x: 2,  y: 21, w: 76, h: 1 },
-    controls: { x: 2,  y: 22, w: 76, h: 1 },
+    status:   { x: 2,  y: 16, w: 76, h: 1 },
+    hand:     { x: 3,  y: 18, w: 69, h: 4 },
+    preview:  { x: 2,  y: 22, w: 76, h: 1 },
+    controls: { x: 2,  y: 23, w: 76, h: 1 },
 };
 
 export const PILE_CARD = { x: 2, y: 2 };
@@ -88,7 +88,7 @@ function immuneFace(base) {
 }
 
 export function initView(game) {
-    game.vb = new VirtualBuffer(80, 23);
+    game.vb = new VirtualBuffer(80, 24);
     game.areas = {};
     for (const [name, rect] of Object.entries(LAYOUT)) {
         const vb = new VirtualBuffer(rect.w, rect.h);
@@ -268,6 +268,61 @@ export function slideHand(game, moves, onComplete) {
     return () => animation.stop();
 }
 
+// Sorting uses two lanes around the original hand row. All cards share
+// phase boundaries; cards that keep their slot remain on the baseline.
+export function sortHandAnimation(game, sortedHand, onComplete) {
+    const { x, y, w } = LAYOUT.hand;
+    const scratch = new VirtualBuffer(w, 7);
+    const enemy = game.displayEnemy || game.state.enemy;
+    const moves = game.state.hand.map((card, from) => {
+        const to = sortedHand.indexOf(card);
+        let face = cardBuffer(card);
+        if (enemy && card.suit === enemy.suit) face = immuneFace(face);
+        if (game.state.phase === 'defend') face = greyFace(face);
+        return { face, from: from * HAND_STEP, to: to * HAND_STEP,
+            lane: Math.sign(to - from) * 2, x: -1, y: -1 };
+    });
+    const markRowDirty = term.markRowDirty;
+    let start = null, complete = false;
+    const ease = t => 1 - (1 - t) ** 3;
+    const build = elapsed => {
+        let changed = false;
+        for (const move of moves) {
+            const nextX = elapsed < 120 ? move.from : elapsed < 360 ?
+                Math.round(move.from + (move.to - move.from) * ease((elapsed - 120) / 240)) : move.to;
+            const offset = elapsed < 120 ? move.lane * ease(elapsed / 120) : elapsed < 360 ?
+                move.lane : move.lane * (1 - ease(Math.min(1, (elapsed - 360) / 120)));
+            const nextY = 2 + Math.round(offset);
+            if (nextX !== move.x || nextY !== move.y) {
+                for (let row = 0; row < 3; row++) {
+                    if (move.y >= 0) markRowDirty(y - 2 + move.y + row);
+                    markRowDirty(y - 2 + nextY + row);
+                }
+                changed = true; move.x = nextX; move.y = nextY;
+            }
+        }
+        if (!changed) return;
+        scratch.clearCells();
+        for (const move of moves)
+            for (let row = 0; row < 3; row++) for (let col = 0; col < 5; col++)
+                scratch.setCell(move.y + row, move.x + col, move.face.getCell(row, col));
+    };
+    build(0);
+    const animation = startBufferAnimation(game.cmd,
+        (r, c) => scratch.getCell(r, c) || _blankCell,
+        ts => {
+            if (start === null) start = ts;
+            const elapsed = ts - start;
+            build(elapsed);
+            if (elapsed >= 480) { complete = true; return true; }
+            return false;
+        }, {
+            x, y: y - 2, w, h: 7, hideCursor: false, holdBusy: false,
+            onCleanup: () => { if (complete) onComplete(); },
+        });
+    return () => animation.stop();
+}
+
 function drawEnemy(game) {
     const { vb } = game.areas.enemy;
     vb.clearCells();
@@ -335,6 +390,7 @@ function drawPile(game, name, label, count, face) {
 function drawHand(game) {
     const { vb } = game.areas.hand;
     vb.clearCells();
+    if (game.sorting) return;
     const s = game.state, enemy = game.displayEnemy || s.enemy;
     // While cards are flying to the discard pile the override keeps every
     // other card in its old slot, leaving the played cards' gaps visible.
@@ -356,6 +412,7 @@ function drawHand(game) {
 function drawStatus(game) {
     const { vb } = game.areas.status;
     vb.clearCells();
+    if (game.sorting) return;
     const s = game.state;
     const status = game.eventOverlay || game.bannerOverlay || game.arriving ? '' : game.dissolving ? '敵人被擊倒…' : game.flashing ? '攻擊中…' : game.collecting ? '收牌中…' : game.recovering ? '回收中…' : game.discardText ? game.discardText : game.dealing ? '發牌中…' : s.phase === 'win' ? ['銅', '銀', '金'][s.jesters] + '牌勝利！Enter 新局' :
         s.phase === 'loss' ? (s.lossReason || '挑戰失敗') + '。Enter 新局' : s.phase === 'attack' ? '選牌攻擊' : '選牌抵傷';
@@ -367,6 +424,7 @@ function drawStatus(game) {
 function drawPreview(game) {
     const { vb } = game.areas.preview;
     vb.clearCells();
+    if (game.sorting) return;
     const s = game.state;
     const p = preview(s, [...game.selected]);
     if (!p) return;
@@ -379,7 +437,7 @@ function drawPreview(game) {
 function drawControls(game) {
     const { vb } = game.areas.controls;
     vb.clearCells();
-    vb.writeStr(0, 0, '←→ 移動  Space 選牌  Enter 確認  J 小丑  H 規則  N 選單  Q/Esc 離開');
+    vb.writeStr(0, 0, '←→ 移動  Space 選牌  Enter 確認  S 排序  J 小丑  H 規則  N 選單  Q/Esc 離開');
 }
 
 export function draw(game) {
