@@ -359,11 +359,17 @@ dialog, returning to the menu, and Ctrl+C/reopening without leftover overlays.
 
 Run `node tools/test-regicide-attack.mjs` for attack staging, recovery/draw
 ordering, used-pile counts, exact/overkill/final kills and cancellation.
+It also checks sequential effect banners, power versus actual counts, immunity,
+delayed attack display, the one-second minimum, and longer recovery animations.
 In the browser, play one card, an A pair and four matching cards. They fly
 face-up to the gap above hand slots two and three, stay through suit effects
 and damage flashes, then fly into the used pile before counterattack/defeat.
 The first staged card starts four rows above the hand; additional cards sit
 nine columns apart. Verify used counts increase only on landing, and cancel
 at departure, recovery, flashing and collection without leftover overlays.
+Check ♥回收N → ♦抽牌N → ♠減攻N → 傷害N (or ♣倍傷N): skip inactive
+effects, display original power even when capped, and wait for both the animation
+and one second before advancing. Enemy attack changes when the spade banner
+appears. Initial deals and Jester exchanges must not show these attack banners.
 
 Rules reference: https://www.regicidegame.com/site_files/33132/upload_files/RegicideRulesA4.pdf?v=2

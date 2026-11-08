@@ -58,16 +58,21 @@ export function play(s, indices, effects) {
         shuffle(s.discard, s.rng);
         const recovered = s.discard.splice(0, p.total);
         s.deck.push(...recovered);
-        if (recovered.length) effects?.push({ type: 'recover', count: recovered.length,
+        if (recovered.length) effects?.push({ type: 'recover', power: p.total, count: recovered.length,
             deckCount: s.deck.length, discard: [...s.discard] });
     }
     if (p.suits.has(2)) {
         const before = s.hand.length;
         draw(s, p.total);
-        if (s.hand.length > before) effects?.push({ type: 'draw', count: s.hand.length - before });
+        if (s.hand.length > before) effects?.push({ type: 'draw', power: p.total, count: s.hand.length - before });
     }
-    if (p.suits.has(0)) s.shield += p.total;
-    effects?.push({type: 'attack', enemy: s.enemy, incoming: Math.max(0, value(s.enemy) - s.shield), damage: p.damage, beforeHp: s.hp, afterHp: Math.max(0, s.hp - p.damage)});
+    const beforeAttack = Math.max(0, value(s.enemy) - s.shield);
+    if (p.suits.has(0)) {
+        s.shield += p.total;
+        if (beforeAttack > 0) effects?.push({type: 'shield', power: p.total,
+            beforeAttack, afterAttack: Math.max(0, value(s.enemy) - s.shield)});
+    }
+    effects?.push({type: 'attack', beforeAttack, doubled: p.suits.has(3), enemy: s.enemy, incoming: Math.max(0, value(s.enemy) - s.shield), damage: p.damage, beforeHp: s.hp, afterHp: Math.max(0, s.hp - p.damage)});
     s.hp -= p.damage;
     if (s.hp <= 0) {
         const used = [...s.played], enemy = s.enemy, exact = s.hp === 0;

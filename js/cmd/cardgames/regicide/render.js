@@ -367,7 +367,7 @@ function drawEnemy(game) {
     for (let y = 0; y < face.height; y++) for (let x = 0; x < face.width; x++)
         vb.setCell(y + offsetY, x + offsetX, face.getCell(y, x));
     vb.centerRow(offsetY + face.height, '生命' + (game.displayHp ?? (game.displayEnemy ? 0 : Math.max(0, s.hp))) +
-        '  攻擊' + Math.max(0, value(s.enemy) - s.shield));
+        '  攻擊' + (game.displayAttack ?? Math.max(0, value(s.enemy) - s.shield)));
 }
 
 function drawJesters(game) {

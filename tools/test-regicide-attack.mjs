@@ -104,5 +104,69 @@ for (const phase of ['departure', 'recovery', 'flash', 'collection']) {
     for (let i = 0; i < 100; i++) step();
     assert.equal(overlays.size, 0); assert.equal(g.stagedAttack, null);
 }
+// Effect banners show power, not capped counts, and advance only after both gates.
+function trackPhases(g) {
+    const records = [], original = g.runEffectPhase.bind(g);
+    g.runEffectPhase = (text, animate, next) => {
+        const record = { text, start: now, attack: g.displayAttack };
+        records.push(record);
+        original(text, done => animate(() => { record.animationEnd = now; done(); }), () => {
+            record.end = now; next();
+        });
+    };
+    return records;
+}
+const mixed = fixture([c(2, 0), c(2, 1), c(2, 2), c(2, 3)], {
+    enemy: c(13, 3), discard: [c(7, 0)], deck: [],
+});
+const phases = trackPhases(mixed);
+mixed.key('\r');
+assert.equal(mixed.displayAttack, 20);
+until(() => mixed.recovering);
+assert.equal(mixed.displayAttack, 20);
+until(() => phases.length === 2);
+assert.equal(mixed.displayAttack, 20);
+until(() => phases.length === 3);
+assert.equal(mixed.displayAttack, 12);
+until(() => !mixed.dealing);
+assert.deepEqual(phases.map(p => p.text), ['♥回收8', '♦抽牌8', '♠減攻8', '傷害8']);
+for (let i = 0; i < phases.length; i++) {
+    assert.ok(phases[i].end - phases[i].start >= 1000);
+    assert.ok(phases[i].end >= phases[i].animationEnd);
+    if (i) assert.equal(phases[i].start, phases[i - 1].end);
+}
+assert.equal(mixed.state.hand.length, 2); // Only one card was recovered/drawn.
+dispose(mixed);
+for (const [cards, options, expected] of [
+    [[c(2, 1)], {}, ['傷害2']], // No discard to recover.
+    [[c(2, 2)], { deck: [] }, ['傷害2']],
+    [[c(2, 0)], { enemy: c(13, 1), shield: 20 }, ['傷害2']],
+    [[c(2, 3)], {}, ['♣倍傷4']],
+    [[c(2, 3)], { enemy: c(13, 3) }, ['傷害2']],
+    [[c(10, 0)], { enemy: c(11, 1), shield: 5 }, ['♠減攻10', '傷害10']],
+]) {
+    const g = fixture(cards, options), records = trackPhases(g);
+    g.key('\r'); until(() => !g.dealing);
+    assert.deepEqual(records.map(p => p.text), expected);
+    dispose(g);
+}
+const long = fixture([c(1, 1), c(13, 0)], {
+    discard: Array.from({ length: 21 }, (_, i) => c(2 + i % 9, i % 4)),
+});
+const longPhases = trackPhases(long);
+long.key('\r'); until(() => !long.dealing);
+assert.equal(longPhases[0].text, '♥回收21');
+assert.ok(longPhases[0].animationEnd - longPhases[0].start > 1000);
+assert.equal(longPhases[0].end, longPhases[0].animationEnd);
+dispose(long);
+// Cancellation during the extra reading-time hold must suppress the next phase.
+const waiting = fixture([c(2, 1)], { discard: [c(7, 0)] });
+const waitingPhases = trackPhases(waiting);
+waiting.key('\r'); until(() => waitingPhases[0]?.animationEnd !== undefined);
+assert.ok(waiting.effectPhase); assert.equal(waitingPhases[0].end, undefined);
+dispose(waiting);
+for (let i = 0; i < 100; i++) step();
+assert.equal(waitingPhases.length, 1);
+console.log('Regicide effect banners: sequence, power, immunity, attack timing, minimum duration and long animations passed');
 setSystem(null);
 console.log('Regicide attack staging: positions, effects, counts, kills, gating and cleanup passed');

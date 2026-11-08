@@ -19,6 +19,8 @@ export class RegicideGame {
         this.dealNewCards([]);
     }
     stopDeals({ preserveStaged = false } = {}) {
+        this.clearEffectPhase();
+        this.displayAttack = null;
         if (!preserveStaged) this.clearStagedAttack();
         this.clearEvent();
         this.hideBanner();
@@ -35,9 +37,9 @@ export class RegicideGame {
         for (const cancel of this.anims) cancel();
         this.anims.clear(); this.dealing = false; this.hidden = new Set(); this.pending = 0; this.dealTotal = 0;
     }
-    dealNewCards(retained, presentation = null) {
+    dealNewCards(retained, presentation = null, onComplete = null) {
         // Recovery/dealing are substeps of an attack: keep its parked cards.
-        this.stopDeals({ preserveStaged: true });
+        if (!onComplete) this.stopDeals({ preserveStaged: true });
         // An arrival is pending: keep the enemy hidden and unhyped while dealing.
         if (this.arrivalPending) { this.rosterHold = true; this.enemyCleared = true; }
         this.presentation = presentation;
@@ -45,7 +47,11 @@ export class RegicideGame {
         const indices = [];
         this.state.hand.forEach((card, i) => { if (!retained.includes(card)) indices.push(i); });
         this.hidden = new Set(indices); this.pending = indices.length; this.dealTotal = indices.length;
-        this.dealing = indices.length > 0;
+        this.dealing = !!onComplete || indices.length > 0;
+        const finish = () => {
+            if (onComplete) onComplete();
+            else { this.dealing = false; this.finishEffects(); }
+        };
         this.draw();
         let next = 0, landed = 0;
         const launch = () => {
@@ -61,16 +67,16 @@ export class RegicideGame {
                 if (this.disposed || batch !== this.batch) return;
                 this.anims.delete(cancel); advance();
                 this.hidden.delete(index);
-                if (++landed === indices.length) { this.dealing = false; this.finishEffects(); }
+                if (++landed === indices.length) finish();
                 this.draw();
             });
             this.anims.add(cancel);
         };
-        if (!indices.length) { this.finishEffects(); this.draw(); }
+        if (!indices.length) { finish(); this.draw(); }
         launch();
     }
-    recoverCards(retained, effect) {
-        this.stopDeals({ preserveStaged: true });
+    recoverCards(retained, effect, onComplete = null) {
+        if (!onComplete) this.stopDeals({ preserveStaged: true });
         const batch = this.batch;
         this.dealing = true; this.recovering = true;
         this.hidden = new Set(this.state.hand.map((_, i) => i).filter(i => !retained.includes(this.state.hand[i])));
@@ -91,8 +97,10 @@ export class RegicideGame {
                 if (this.disposed || batch !== this.batch) return;
                 this.anims.delete(cancel); this.presentation.deckCount++; advance();
                 if (++landed === effect.count) {
-                    this.dealNewCards(retained, { deckCount: effect.deckCount,
-                        discardCount: effect.discard.length, discardTop: effect.discard.at(-1) });
+                    this.recovering = false;
+                    this.presentation.discardTop = effect.discard.at(-1) ?? null;
+                    if (onComplete) { onComplete(); this.draw(); }
+                    else this.dealNewCards(retained, { ...this.presentation });
                 } else this.draw();
             });
             this.anims.add(cancel);
@@ -108,6 +116,7 @@ export class RegicideGame {
     stageAttack(oldHand, indices, before, onComplete) {
         this.stopDeals();
         const batch = this.batch;
+        this.displayAttack = this.attackEffect?.beforeAttack ?? null;
         const cards = indices.map(i => oldHand[i]);
         const view = createAttackStage(this.cmd, cards);
         this.stagedAttack = { cards, view };
@@ -158,6 +167,7 @@ export class RegicideGame {
                     const used = this.usedDisplay;
                     this.clearStagedAttack();
                     this.usedDisplay = this.defeatEffect ? used : null;
+                    if (!this.defeatEffect) this.displayAttack = null;
                     this.dealing = false;
                     this.finishEffects();
                 }
@@ -206,19 +216,73 @@ export class RegicideGame {
         this.bannerOverlay = null;
         this.bannerCleanup?.(); this.bannerCleanup = null;
     }
+    clearEffectPhase() {
+        const phase = this.effectPhase;
+        if (!phase) return;
+        this.effectPhase = null;
+        clearTimeout(phase.timer);
+        phase.removeCleanup?.();
+        this.hideBanner();
+    }
+    // Both the animation and the minimum reading time must finish before advancing.
+    runEffectPhase(text, animate, next) {
+        this.clearEffectPhase();
+        const phase = { timer: null, elapsed: false, animated: false, removeCleanup: null };
+        const active = this.cmd.executionGuard(), batch = this.batch;
+        this.effectPhase = phase;
+        this.dealing = true;
+        const finish = () => {
+            if (this.effectPhase !== phase || !active() || this.disposed || batch !== this.batch) return;
+            if (!phase.elapsed || !phase.animated) return;
+            this.clearEffectPhase();
+            next();
+        };
+        phase.removeCleanup = this.cmd.addCleanup(() => this.clearEffectPhase());
+        this.showBanner(text);
+        phase.timer = setTimeout(() => { phase.elapsed = true; finish(); }, 1000);
+        animate(() => { phase.animated = true; finish(); });
+    }
+    runAttackEffects(retained, effects) {
+        const recovery = effects.find(e => e.type === 'recover');
+        const draw = effects.find(e => e.type === 'draw');
+        const shield = effects.find(e => e.type === 'shield');
+        const reduceAttack = () => {
+            if (!shield) { this.finishEffects(); return; }
+            this.runEffectPhase('♠減攻' + shield.power, done => {
+                this.displayAttack = shield.afterAttack;
+                this.draw(); done();
+            }, () => this.finishEffects());
+        };
+        const drawCards = () => {
+            // Preserve pile snapshots even when the rules have already defeated the enemy.
+            const presentation = { ...this.presentation };
+            if (draw) this.runEffectPhase('♦抽牌' + draw.power,
+                done => this.dealNewCards(retained, presentation, done), reduceAttack);
+            else this.dealNewCards(retained, presentation, reduceAttack);
+        };
+        if (recovery) this.runEffectPhase('♥回收' + recovery.power,
+            done => this.recoverCards(retained, recovery, done), drawCards);
+        else drawCards();
+    }
     finishEffects() {
         if (this.attackEffect) {
             const effect = this.attackEffect; this.attackEffect = null;
             this.counterEffect = !this.defeatEffect && effect.incoming > 0 ? effect : null;
             const batch = this.batch;
-            this.dealing = true; this.flashing = true; this.displayHp = effect.afterHp;
-            this.draw();
-            this.cancelFlash = flashEnemy(this,
-                effect.damage <= 5 ? 1 : effect.damage <= 10 ? 2 : 3, () => {
-                    if (this.disposed || batch !== this.batch) return;
-                    this.cancelFlash = null; this.flashing = false; this.dealing = false;
-                    this.displayHp = null; if (!this.defeatEffect) this.presentation = null; this.finishEffects(); this.draw();
-                });
+            this.runEffectPhase((effect.doubled ? '♣倍傷' : '傷害') + effect.damage, done => {
+                this.flashing = true; this.displayHp = effect.afterHp;
+                this.draw();
+                this.cancelFlash = flashEnemy(this,
+                    effect.damage <= 5 ? 1 : effect.damage <= 10 ? 2 : 3, () => {
+                        if (this.disposed || batch !== this.batch) return;
+                        this.cancelFlash = null; this.flashing = false;
+                        done(); this.draw();
+                    });
+            }, () => {
+                this.displayHp = null;
+                if (!this.defeatEffect) this.presentation = null;
+                this.finishEffects(); this.draw();
+            });
             return;
         }
         if (this.stagedAttack) { this.collectAttack(); return; }
@@ -318,7 +382,7 @@ export class RegicideGame {
         this.usedDisplay = [...effect.used];
         const finish = () => {
             this.collecting = false; this.presentation = null;
-            this.usedDisplay = null; this.displayEnemy = null;
+            this.usedDisplay = null; this.displayEnemy = null; this.displayAttack = null;
             // Step 7: everything has landed; hold the banner briefly, then close.
             // Keep dealing true so input stays blocked through the hold.
             this.finishTimer = setTimeout(() => {
@@ -482,20 +546,8 @@ export class RegicideGame {
                 this.displayHp = this.attackEffect?.beforeHp ?? null;
                 this.defeatEffect = effects.find(e => e.type === 'defeat');
                 this.displayEnemy = this.defeatEffect?.enemy || null;
-                this.stageAttack(oldHand, selectedIndices, before, () => {
-                    const recovery = effects.find(e => e.type === 'recover');
-                    if (recovery) this.recoverCards(retained, recovery);
-                    else {
-                        const defeat = this.defeatEffect;
-                        const beforeDiscard = defeat ? defeat.discard.slice(0,
-                            defeat.discard.length - defeat.used.length - (defeat.exact ? 0 : 1)) : null;
-                        this.dealNewCards(retained, defeat ? {
-                            deckCount: defeat.deckCount - (defeat.exact ? 1 : 0) +
-                                (effects.find(e => e.type === 'draw')?.count || 0),
-                            discardCount: beforeDiscard.length, discardTop: beforeDiscard.at(-1),
-                        } : null);
-                    }
-                });
+                this.stageAttack(oldHand, selectedIndices, before,
+                    () => this.runAttackEffects(retained, effects));
                 return;
             }
         } else return;
