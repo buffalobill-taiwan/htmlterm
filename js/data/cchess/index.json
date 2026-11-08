@@ -60,6 +60,12 @@
     "file": "endgame-014.json"
   },
   {
+    "id": "endgame-028",
+    "name": "斜陣兵",
+    "step": 5,
+    "file": "endgame-028.json"
+  },
+  {
     "id": "endgame-006",
     "name": "俥炮兵打",
     "step": 6,
