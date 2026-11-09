@@ -9,13 +9,16 @@ function shuffle(a, rng) {
 export function createGame(rng = Math.random) {
     const cards = Array.from({length: 52}, (_, i) => ({suit: Math.floor(i / 13), rank: i % 13 + 1}));
     const s = {rng, deck: shuffle(cards.filter(c => c.rank <= 10), rng), castle: [],
-        hand: [], discard: [], played: [], shield: 0, jesters: 2, defeated: 0, phase: 'attack'};
+        hand: [], discard: [], played: [], shield: 0, jesters: 2, cheatMode: false, defeated: 0, phase: 'attack'};
     for (const rank of [11, 12, 13]) s.castle.push(...shuffle(cards.filter(c => c.rank === rank), rng));
+    s.stats = { order: [...s.castle], exact: [], damage: 0, maxDamage: 0, incoming: 0, recovered: 0, drawn: 0, reduction: 0, attacks: 0, jesterUses: 0 };
     s.enemy = s.castle.shift(); s.hp = value(s.enemy) * 2;
     draw(s, 8); return s;
 }
 function draw(s, n) {
+    const before = s.hand.length;
     while (n-- > 0 && s.deck.length && s.hand.length < 8) s.hand.push(s.deck.shift());
+    if (s.stats) s.stats.drawn += s.hand.length - before;
 }
 export function preview(s, indices) {
     const cards = indices.map(i => s.hand[i]);
@@ -42,7 +45,9 @@ function check(s) {
 }
 export function jester(s) {
     if (!['attack', 'defend'].includes(s.phase) || !s.jesters) return false;
-    s.jesters--; s.discard.push(...s.hand); s.hand = []; draw(s, 8); check(s); return true;
+    if (!s.cheatMode) s.jesters--;
+    if (s.stats) s.stats.jesterUses++;
+    s.discard.push(...s.hand); s.hand = []; draw(s, 8); check(s); return true;
 }
 export function play(s, indices, effects) {
     if (!['attack', 'defend'].includes(s.phase)) return false;
@@ -53,11 +58,13 @@ export function play(s, indices, effects) {
     if (s.phase === 'defend') {
         s.discard.push(...cards); s.phase = 'attack'; check(s); return true;
     }
+    if (s.stats) { s.stats.attacks++; s.stats.damage += p.damage; s.stats.maxDamage = Math.max(s.stats.maxDamage, p.damage); }
     s.played.push(...cards);
     if (p.suits.has(1)) {
         shuffle(s.discard, s.rng);
         const recovered = s.discard.splice(0, p.total);
         s.deck.push(...recovered);
+        if (s.stats) s.stats.recovered += recovered.length;
         if (recovered.length) effects?.push({ type: 'recover', power: p.total, count: recovered.length,
             deckCount: s.deck.length, discard: [...s.discard] });
     }
@@ -69,6 +76,7 @@ export function play(s, indices, effects) {
     const beforeAttack = Math.max(0, value(s.enemy) - s.shield);
     if (p.suits.has(0)) {
         s.shield += p.total;
+        if (s.stats) s.stats.reduction += beforeAttack - Math.max(0, value(s.enemy) - s.shield);
         if (beforeAttack > 0) effects?.push({type: 'shield', power: p.total,
             beforeAttack, afterAttack: Math.max(0, value(s.enemy) - s.shield)});
     }
@@ -76,11 +84,15 @@ export function play(s, indices, effects) {
     s.hp -= p.damage;
     if (s.hp <= 0) {
         const used = [...s.played], enemy = s.enemy, exact = s.hp === 0;
+        if (exact && s.stats) s.stats.exact.push(enemy);
         if (s.hp === 0) s.deck.unshift(s.enemy); else s.discard.push(s.enemy);
         s.discard.push(...s.played); s.played = []; s.shield = 0; s.defeated++;
         effects?.push({type: 'defeat', used, enemy, exact, deckCount: s.deck.length, discard: [...s.discard]});
         if (!s.castle.length) { s.phase = 'win'; return true; }
         s.enemy = s.castle.shift(); s.hp = value(s.enemy) * 2;
-    } else if (value(s.enemy) > s.shield) s.phase = 'defend';
+    } else if (value(s.enemy) > s.shield) {
+        if (s.stats) s.stats.incoming += value(s.enemy) - s.shield;
+        s.phase = 'defend';
+    }
     check(s); return true;
 }

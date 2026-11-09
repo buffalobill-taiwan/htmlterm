@@ -14,7 +14,7 @@ export class RegicideGame {
     start() {
         this.stopDeals(); this.attackEffect = null; this.displayHp = null; this.defeatEffect = null; this.usedDisplay = null; this.displayEnemy = null;
         this.enemyCleared = false; this.rosterHold = false;
-        this.sortBySuit = false;
+        this.sortBySuit = false; this.cheatKeys = [];
         this.state = createGame(); this.arrivalPending = true; this.counterEffect = null; this.selected = new Set(); this.cursor = 0;
         this.dealNewCards([]);
     }
@@ -501,6 +501,23 @@ export class RegicideGame {
     }
     draw() { drawView(this); }
     key(data) {
+        const eligible = !this.dealing && !this.sorting && !this.dialog &&
+            ['attack', 'defend'].includes(this.state.phase);
+        if (!eligible || !/^[cC]$/.test(data)) this.cheatKeys = [];
+        if (eligible && /^[cC]$/.test(data)) {
+            if (!this.state.cheatMode) {
+                const now = performance.now();
+                this.cheatKeys = (this.cheatKeys || []).filter(time => now - time <= 1000);
+                this.cheatKeys.push(now);
+                if (this.cheatKeys.length === 5) {
+                    this.state.cheatMode = true;
+                    this.state.jesters = 2;
+                    this.cheatKeys = [];
+                    this.draw();
+                }
+            }
+            return;
+        }
         if (data === '\x1b' || /^[qQ]$/.test(data)) return this.ask('離開遊戲？', () => this.cmd._quit());
         if (/^[nN]$/.test(data)) return this.ask('返回選單？', () => this.cmd._menu());
         if (this.dealing || this.sorting) return;
@@ -513,7 +530,7 @@ export class RegicideGame {
         }
         if (['win', 'loss'].includes(this.state.phase)) { if (data === '\r') this.start(); return; }
         if (/^[sS]$/.test(data)) return this.sortHand();
-        if ((/^[jJ]$/.test(data) || ((data === '\r' || data === '\n') && needsRescue(this.state))) && this.state.jesters) return this.ask('消耗小丑換手？', () => {
+        if ((/^[jJ]$/.test(data) || ((data === '\r' || data === '\n') && needsRescue(this.state))) && this.state.jesters) return this.ask(this.state.cheatMode ? '使用小丑換手？' : '消耗小丑換手？', () => {
             const oldHand = [...this.state.hand];
             const indices = oldHand.map((_, i) => i);
             const before = { deckCount: this.state.deck.length,

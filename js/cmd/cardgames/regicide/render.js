@@ -138,7 +138,7 @@ export function initView(game) {
 function drawTitle(game) {
     const { vb } = game.areas.title;
     vb.clearCells();
-    const text = 'Regicide 弒君者';
+    const text = game.state.cheatMode ? 'Regicide 作弊模式' : 'Regicide 弒君者';
     vb.writeStr(0, vb.width - displayWidth(text), text);
 }
 
@@ -477,6 +477,32 @@ function drawControls(game) {
 export function draw(game) {
     const root = game.vb;
     for (let r = 0; r < root.height; r++) root.writeStr(r, 0, BLANK_ROW);
+
+    const summary = game.state.phase === 'win' && !game.dealing;
+    for (const area of Object.values(game.areas)) area.slot.active = !summary;
+    if (summary) {
+        const s = game.state, stats = s.stats;
+        root.centerRow(1, 'Regicide 弒君者 — ' + (s.cheatMode ? '作弊模式勝利' : ['銅', '銀', '金'][s.jesters] + '牌勝利'));
+        root.writeStr(3, 4, '敵人順序（★ 精準擊殺）');
+        // Fixed cell columns keep double-width stars from shifting later entries.
+        stats.order.forEach((card, index) => {
+            const row = 5 + Math.floor(index / 4), col = 4 + (index % 4) * 12;
+            root.writeStr(row, col, String(index + 1).padStart(2, '0') + '.');
+            root.writeStr(row, col + 4, enemyName(card));
+            if (stats.exact.includes(card)) root.writeStr(row, col + 8, '★');
+        });
+        const lines = [
+            '精準擊殺：' + stats.exact.length + ' / 12',
+            '總造成傷害：' + stats.damage + '    單次最高傷害：' + stats.maxDamage,
+            '總受傷：' + stats.incoming + '    總減攻：' + stats.reduction,
+            '總回收牌張：' + stats.recovered + '    總抽牌：' + stats.drawn,
+            '攻擊次數：' + stats.attacks + '    小丑使用次數：' + stats.jesterUses,
+        ];
+        lines.forEach((line, i) => root.writeStr(10 + i * 2, 4, line));
+        root.centerRow(22, 'Enter 新局    N 選單    Q/Esc 離開');
+        term.writeVB(root);
+        return;
+    }
 
     drawTitle(game);
     drawEnemy(game);
