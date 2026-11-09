@@ -4,7 +4,8 @@ import { term } from '../../../system/sys.js';
 import { overlayFlash } from '../../../util/flash-helper.js';
 import { startBufferAnimation } from '../../../system/RAFAnimationHelper.js';
 import { makeCell } from '../../../util/sgr.js';
-import { cardBuffer } from '../cards.js';
+import { cardBuffer, cardBufferVariant, drawCardStack, mutedCardBuffer, stampCard } from '../cards.js';
+import { cardId, SUITS } from '../deck.js';
 import { needsRescue, preview, value } from './rules.js';
 
 const BLANK_ROW = ' '.repeat(80);
@@ -88,37 +89,19 @@ export function handCompaction(oldHand, selected) {
     return moves;
 }
 
-const SUITS = '♠♥♦♣';
 const RANK_LABELS = ['', '', '', '', '', '', '', '', '', '', '', 'J', 'Q', 'K'];
 export const enemyName = card => SUITS[card.suit] + RANK_LABELS[card.rank];
 
 const JESTER_CARDS = [{ suit: 0, rank: 0 }, { suit: 1, rank: 0 }];
 const ROSTER_RANKS = [11, 12, 13];
 
-const greyFaces = new WeakMap();
-function greyFace(base) {
-    if (!greyFaces.has(base)) {
-        const vb = new VirtualBuffer(base.width, base.height);
-        for (let y = 0; y < base.height; y++) for (let x = 0; x < base.width; x++)
-            vb.setCell(y, x, { ...base.getCell(y, x), bg: 8 });
-        greyFaces.set(base, vb);
-    }
-    return greyFaces.get(base);
-}
-
 // Same-suit hand cards: the suit glyph becomes dim white instead of black/red.
 const DIM_WHITE = 250;
-const immuneFaces = new WeakMap();
 function immuneFace(base) {
-    if (!immuneFaces.has(base)) {
-        const vb = new VirtualBuffer(base.width, base.height);
-        for (let y = 0; y < base.height; y++) for (let x = 0; x < base.width; x++)
-            vb.setCell(y, x, base.getCell(y, x));
+    return cardBufferVariant(base, 'immune', vb => {
         // The suit glyph sits in the middle row right after the left border.
-        vb.setCell(1, 1, { ...base.getCell(1, 1), fg: DIM_WHITE });
-        immuneFaces.set(base, vb);
-    }
-    return immuneFaces.get(base);
+        vb.setCell(1, 1, { ...vb.getCell(1, 1), fg: DIM_WHITE });
+    });
 }
 
 export function initView(game) {
@@ -179,7 +162,6 @@ export function enemyCardOrigin(card) {
     };
 }
 
-const hitFaces = new WeakMap();
 const BLACK_CELL = makeCell(' ', 0, 0, false);
 
 export function dissolveEnemy(game, onComplete) {
@@ -249,13 +231,10 @@ export function walkInEnemy(game, onComplete) {
 
 export function flashEnemy(game, count, onComplete) {
     const { face, x: offsetX, y: offsetY } = enemyView(game.displayEnemy || game.state.enemy);
-    if (!hitFaces.has(face)) {
-        const vb = new VirtualBuffer(face.width, face.height);
-        for (let y = 0; y < face.height; y++) for (let x = 0; x < face.width; x++)
-            vb.setCell(y, x, { ...face.getCell(y, x), bg: 52 });
-        hitFaces.set(face, vb);
-    }
-    const hit = hitFaces.get(face);
+    const hit = cardBufferVariant(face, 'hit', vb => {
+        for (let y = 0; y < vb.height; y++) for (let x = 0; x < vb.width; x++)
+            vb.setCell(y, x, { ...vb.getCell(y, x), bg: 52 });
+    });
     const overlay = {
         x: LAYOUT.enemy.x + offsetX, y: LAYOUT.enemy.y + offsetY, w: hit.width, h: hit.height,
         owner: game.cmd, getCell: (y, x) => hit.getCell(y, x),
@@ -312,7 +291,7 @@ export function sortHandAnimation(game, sortedHand, onComplete) {
         const to = sortedHand.indexOf(card);
         let face = cardBuffer(card);
         if (enemy && card.suit === enemy.suit) face = immuneFace(face);
-        if (game.state.phase === 'defend') face = greyFace(face);
+        if (game.state.phase === 'defend') face = mutedCardBuffer(face);
         return { face, from: from * HAND_STEP, to: to * HAND_STEP,
             lane: Math.sign(to - from) * 2, x: -1, y: -1 };
     });
@@ -377,10 +356,8 @@ function drawJesters(game) {
     // Used jesters stay visible on a grey background instead of disappearing.
     JESTER_CARDS.forEach((card, i) => {
         const base = cardBuffer(card);
-        const face = i < game.state.jesters ? base : greyFace(base);
-        const x = i * JESTER_STEP;
-        for (let y = 0; y < 3; y++) for (let k = 0; k < 5; k++)
-            vb.setCell(2 + y, x + k, face.getCell(y, k));
+        const face = i < game.state.jesters ? base : mutedCardBuffer(base);
+        stampCard(vb, face, i * JESTER_STEP, 2);
     });
 }
 
@@ -394,15 +371,15 @@ function drawRoster(game) {
     // Enemies still in the castle or currently faced are not defeated.
     const remaining = new Set();
     if (s.phase !== 'win') {
-        if (s.enemy) remaining.add(s.enemy.suit * 13 + s.enemy.rank);
-        for (const card of s.castle) remaining.add(card.suit * 13 + card.rank);
+        if (s.enemy) remaining.add(cardId(s.enemy));
+        for (const card of s.castle) remaining.add(cardId(card));
     }
     for (let r = 0; r < ROSTER_RANKS.length; r++) {
         const rank = ROSTER_RANKS[r];
         for (let suit = 0; suit < 4; suit++) {
             const text = SUITS[suit] + RANK_LABELS[rank];
             const isActive = active && active.suit === suit && active.rank === rank;
-            const defeated = !remaining.has(suit * 13 + rank);
+            const defeated = !remaining.has(cardId({ suit, rank }));
             const style = isActive ? '\x1B[30;42m' : defeated ? '\x1B[90m' : '';
             vb.writeStr(1 + r, suit * 3, style ? style + text + '\x1B[0m' : text);
         }
@@ -414,11 +391,7 @@ function drawPile(game, name, label, count, face) {
     vb.clearCells();
     vb.writeStr(0, 0, label);
     if (!count) { vb.writeStr(3, PILE_CARD.x, '[空]'); return; }
-    for (let y = 0; y < 3; y++) for (let x = 0; x < 5; x++)
-        vb.setCell(PILE_CARD.y + y, PILE_CARD.x + x, face.getCell(y, x));
-    for (let i = 1; i <= Math.min(3, count - 1); i++)
-        for (let x = 0; x < 5; x++)
-            vb.setCell(PILE_CARD.y + 2 + i, PILE_CARD.x + x, face.getCell(2, x));
+    drawCardStack(vb, face, PILE_CARD.x, PILE_CARD.y, Math.min(3, count - 1));
 }
 
 function drawHand(game) {
@@ -434,10 +407,9 @@ function drawHand(game) {
         const base = cardBuffer(c);
         // Same-suit cards mute the suit glyph; the defence tint waits for effects to finish.
         let face = !game.dealing && enemy && c.suit === enemy.suit ? immuneFace(base) : base;
-        if (!game.dealing && s.phase === 'defend') face = greyFace(face);
+        if (!game.dealing && s.phase === 'defend') face = mutedCardBuffer(face);
         const x = i * HAND_STEP;
-        for (let y = 0; y < 3; y++) for (let k = 0; k < 5; k++)
-            vb.setCell(y, x + k, face.getCell(y, k));
+        stampCard(vb, face, x, 0);
         if (!game.discarding && !game.stagedAttack)
             vb.writeStr(3, x, (i === game.cursor ? '>' : ' ') + (game.selected.has(i) ? '[X]' : '[ ]'));
     });

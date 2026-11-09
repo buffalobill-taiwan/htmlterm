@@ -1,19 +1,15 @@
-import { buildCallEffectBuffer } from '../../../util/call-effect.js';
-import { makeOverlayGetCell } from '../../../util/sgr.js';
-import { term } from '../../../system/sys.js';
 import { SelectDialog } from '../../../dialog/SelectDialog.js';
 import { ShowDialog } from '../../../dialog/ShowDialog.js';
-import { dealCard } from '../animation.js';
+import { installMethods } from '../../../util/install-methods.js';
+import { dealCard, staggerFlights } from '../animation.js';
 import { createGame, play, jester, needsRescue } from './rules.js';
 import { initView, draw as drawView, DECK, USED, DISCARD, deckBottom, handPosition, enemyName, enemyCardOrigin, flashEnemy, dissolveEnemy, walkInEnemy, handCompaction, slideHand, sortHandAnimation, attackPosition, createAttackStage } from './render.js';
-
-const EVENT_BUFFERS = new Map();
+import { presentationMethods, snapshotPiles } from './presentation.js';
 
 export class RegicideGame {
     constructor(cmd) { this.cmd = cmd; initView(this); this.anims = new Set(); this.batch = 0; }
     start() {
-        this.stopDeals(); this.attackEffect = null; this.displayHp = null; this.defeatEffect = null; this.usedDisplay = null; this.displayEnemy = null;
-        this.enemyCleared = false; this.rosterHold = false;
+        this.stopDeals(); this.resetPresentation();
         this.sortBySuit = false; this.cheatKeys = [];
         this.state = createGame(); this.arrivalPending = true; this.counterEffect = null; this.selected = new Set(); this.cursor = 0;
         this.dealNewCards([]);
@@ -53,27 +49,23 @@ export class RegicideGame {
             else { this.dealing = false; this.finishEffects(); }
         };
         this.draw();
-        let next = 0, landed = 0;
-        const launch = () => {
-            if (this.disposed || batch !== this.batch || next >= indices.length) return;
-            const index = indices[next++];
-            this.pending--; this.draw();
-            let launched = false;
-            const advance = () => { if (!launched) { launched = true; launch(); } };
-            const cancel = dealCard(this.cmd, this.state.hand[index], DECK, handPosition(index), {
-                duration: 180, flipDuration: 180,
-                onStep: (_step, ratio) => { if (ratio >= 0.45) advance(); },
-            }, () => {
-                if (this.disposed || batch !== this.batch) return;
-                this.anims.delete(cancel); advance();
-                this.hidden.delete(index);
-                if (++landed === indices.length) finish();
+        if (!indices.length) { finish(); this.draw(); return; }
+        staggerFlights(this.anims, {
+            count: indices.length,
+            isActive: () => !this.disposed && batch === this.batch,
+            start: (slot, { onStep, onLand }) => {
+                const index = indices[slot];
+                this.pending--; this.draw();
+                return dealCard(this.cmd, this.state.hand[index], DECK, handPosition(index), {
+                    duration: 180, flipDuration: 180, onStep,
+                }, onLand);
+            },
+            land: slot => {
+                this.hidden.delete(indices[slot]);
                 this.draw();
-            });
-            this.anims.add(cancel);
-        };
-        if (!indices.length) { finish(); this.draw(); }
-        launch();
+            },
+            done: finish,
+        });
     }
     recoverCards(retained, effect, onComplete = null) {
         if (!onComplete) this.stopDeals({ preserveStaged: true });
@@ -82,30 +74,26 @@ export class RegicideGame {
         this.hidden = new Set(this.state.hand.map((_, i) => i).filter(i => !retained.includes(this.state.hand[i])));
         this.presentation = { deckCount: effect.deckCount - effect.count,
             discardCount: effect.discard.length + effect.count, discardTop: null };
-        let next = 0, landed = 0;
-        const launch = () => {
-            if (this.disposed || batch !== this.batch || next >= effect.count) return;
-            next++; this.presentation.discardCount--; this.draw();
-            let launched = false;
-            const advance = () => { if (!launched) { launched = true; launch(); } };
-            // Recovered cards go under the deck, so aim below the top card.
-            const to = deckBottom(this.presentation.deckCount + 1);
-            const cancel = dealCard(this.cmd, null, DISCARD, to, {
-                faceDown: true, duration: 180,
-                onStep: (_step, ratio) => { if (ratio >= 0.45) advance(); },
-            }, () => {
-                if (this.disposed || batch !== this.batch) return;
-                this.anims.delete(cancel); this.presentation.deckCount++; advance();
-                if (++landed === effect.count) {
-                    this.recovering = false;
-                    this.presentation.discardTop = effect.discard.at(-1) ?? null;
-                    if (onComplete) { onComplete(); this.draw(); }
-                    else this.dealNewCards(retained, { ...this.presentation });
-                } else this.draw();
-            });
-            this.anims.add(cancel);
-        };
-        this.draw(); launch();
+        this.draw();
+        staggerFlights(this.anims, {
+            count: effect.count,
+            isActive: () => !this.disposed && batch === this.batch,
+            start: (_slot, { onStep, onLand }) => {
+                this.presentation.discardCount--; this.draw();
+                // Recovered cards go under the deck, so aim below the top card.
+                const to = deckBottom(this.presentation.deckCount + 1);
+                return dealCard(this.cmd, null, DISCARD, to, {
+                    faceDown: true, duration: 180, onStep,
+                }, onLand);
+            },
+            land: () => { this.presentation.deckCount++; this.draw(); },
+            done: () => {
+                this.recovering = false;
+                this.presentation.discardTop = effect.discard.at(-1) ?? null;
+                if (onComplete) { onComplete(); this.draw(); }
+                else this.dealNewCards(retained, { ...this.presentation });
+            },
+        });
     }
     clearStagedAttack() {
         if (!this.stagedAttack) return;
@@ -148,99 +136,30 @@ export class RegicideGame {
         const batch = this.batch;
         const { cards, view } = this.stagedAttack;
         this.dealing = true;
-        let next = 0, landed = 0;
-        const launch = () => {
-            if (this.disposed || batch !== this.batch || next >= cards.length) return;
-            const slot = next++, card = cards[slot];
-            view.setVisible(slot, false);
-            let launched = false;
-            const advance = () => { if (!launched) { launched = true; launch(); } };
-            const cancel = dealCard(this.cmd, card, attackPosition(slot), USED, {
-                faceUp: true, duration: 260,
-                onStep: (_step, ratio) => { if (ratio >= 0.45) advance(); },
-            }, () => {
-                if (this.disposed || batch !== this.batch) return;
-                this.anims.delete(cancel);
-                this.usedDisplay.push(card);
-                advance();
-                if (++landed === cards.length) {
-                    const used = this.usedDisplay;
-                    this.clearStagedAttack();
-                    this.usedDisplay = this.defeatEffect ? used : null;
-                    if (!this.defeatEffect) this.displayAttack = null;
-                    this.dealing = false;
-                    this.finishEffects();
-                }
+        staggerFlights(this.anims, {
+            count: cards.length,
+            isActive: () => !this.disposed && batch === this.batch,
+            start: (slot, { onStep, onLand }) => {
+                const card = cards[slot];
+                view.setVisible(slot, false);
+                return dealCard(this.cmd, card, attackPosition(slot), USED, {
+                    faceUp: true, duration: 260, onStep,
+                }, onLand);
+            },
+            land: slot => {
+                this.usedDisplay.push(cards[slot]);
                 this.draw();
-            });
-            this.anims.add(cancel);
-        };
-        launch();
-    }
-    clearEvent() {
-        clearTimeout(this.eventTimer); this.eventTimer = null;
-        if (this.eventOverlay) term.removeOverlay(this.eventOverlay);
-        this.eventOverlay = null;
-        this.eventCleanup?.(); this.eventCleanup = null;
-    }
-    showEvent(text, done) {
-        this.clearEvent();
-        const batch = this.batch, active = this.cmd.executionGuard();
-        if (!EVENT_BUFFERS.has(text)) EVENT_BUFFERS.set(text, buildCallEffectBuffer(text));
-        const buffer = EVENT_BUFFERS.get(text), w = buffer[0].length, h = buffer.length;
-        this.dealing = true;
-        this.eventOverlay = {x: Math.floor((80 - w) / 2), y: Math.floor((25 - h) / 2),
-            w, h, owner: this.cmd, getCell: makeOverlayGetCell(buffer, w, h)};
-        term.addOverlay(this.eventOverlay);
-        this.eventCleanup = this.cmd.addCleanup(() => this.clearEvent());
-        this.eventTimer = setTimeout(() => {
-            this.clearEvent();
-            if (this.disposed || batch !== this.batch || !active()) return;
-            this.dealing = false; done(); this.draw();
-        }, 800);
-        this.draw();
-    }
-    // Persistent call-effect box used across a whole defeat sequence.
-    showBanner(text) {
-        this.hideBanner();
-        if (!EVENT_BUFFERS.has(text)) EVENT_BUFFERS.set(text, buildCallEffectBuffer(text));
-        const buffer = EVENT_BUFFERS.get(text), w = buffer[0].length, h = buffer.length;
-        this.bannerOverlay = {x: Math.floor((80 - w) / 2), y: Math.floor((25 - h) / 2),
-            w, h, owner: this.cmd, getCell: makeOverlayGetCell(buffer, w, h)};
-        term.addOverlay(this.bannerOverlay);
-        this.bannerCleanup = this.cmd.addCleanup(() => this.hideBanner());
-        this.draw();
-    }
-    hideBanner() {
-        if (this.bannerOverlay) term.removeOverlay(this.bannerOverlay);
-        this.bannerOverlay = null;
-        this.bannerCleanup?.(); this.bannerCleanup = null;
-    }
-    clearEffectPhase() {
-        const phase = this.effectPhase;
-        if (!phase) return;
-        this.effectPhase = null;
-        clearTimeout(phase.timer);
-        phase.removeCleanup?.();
-        this.hideBanner();
-    }
-    // Both the animation and the minimum reading time must finish before advancing.
-    runEffectPhase(text, animate, next) {
-        this.clearEffectPhase();
-        const phase = { timer: null, elapsed: false, animated: false, removeCleanup: null };
-        const active = this.cmd.executionGuard(), batch = this.batch;
-        this.effectPhase = phase;
-        this.dealing = true;
-        const finish = () => {
-            if (this.effectPhase !== phase || !active() || this.disposed || batch !== this.batch) return;
-            if (!phase.elapsed || !phase.animated) return;
-            this.clearEffectPhase();
-            next();
-        };
-        phase.removeCleanup = this.cmd.addCleanup(() => this.clearEffectPhase());
-        this.showBanner(text);
-        phase.timer = setTimeout(() => { phase.elapsed = true; finish(); }, 1000);
-        animate(() => { phase.animated = true; finish(); });
+            },
+            done: () => {
+                const used = this.usedDisplay;
+                this.clearStagedAttack();
+                this.usedDisplay = this.defeatEffect ? used : null;
+                if (!this.defeatEffect) this.displayAttack = null;
+                this.dealing = false;
+                this.finishEffects();
+                this.draw();
+            },
+        });
     }
     runAttackEffects(retained, effects) {
         const recovery = effects.find(e => e.type === 'recover');
@@ -397,27 +316,24 @@ export class RegicideGame {
             }, 200);
         };
         if (!effect.used.length) { finish(); this.draw(); return; }
-        let next = 0, landed = 0;
-        const launch = () => {
-            if (this.disposed || batch !== this.batch || next >= effect.used.length) return;
-            const card = effect.used[next++];
-            this.usedDisplay.shift(); this.draw();
-            let launched = false;
-            const advance = () => { if (!launched) { launched = true; launch(); } };
-            const cancel = dealCard(this.cmd, card, USED, DISCARD, {
-                faceUp: true, duration: 180,
-                onStep: (_step, ratio) => { if (ratio >= 0.45) advance(); },
-            }, () => {
-                if (this.disposed || batch !== this.batch) return;
-                this.anims.delete(cancel);
-                this.presentation.discardCount++; this.presentation.discardTop = card;
-                advance();
-                if (++landed === effect.used.length) finish();
+        this.draw();
+        staggerFlights(this.anims, {
+            count: effect.used.length,
+            isActive: () => !this.disposed && batch === this.batch,
+            start: (slot, { onStep, onLand }) => {
+                const card = effect.used[slot];
+                this.usedDisplay.shift(); this.draw();
+                return dealCard(this.cmd, card, USED, DISCARD, {
+                    faceUp: true, duration: 180, onStep,
+                }, onLand);
+            },
+            land: slot => {
+                this.presentation.discardCount++;
+                this.presentation.discardTop = effect.used[slot];
                 this.draw();
-            });
-            this.anims.add(cancel);
-        };
-        this.draw(); launch();
+            },
+            done: finish,
+        });
     }
     // Fly every discarded card from its hand slot to the discard pile at the
     // same time, then run the follow-up step (hand compaction or a new deal).
@@ -533,8 +449,7 @@ export class RegicideGame {
         if ((/^[jJ]$/.test(data) || ((data === '\r' || data === '\n') && needsRescue(this.state))) && this.state.jesters) return this.ask(this.state.cheatMode ? '使用小丑換手？' : '消耗小丑換手？', () => {
             const oldHand = [...this.state.hand];
             const indices = oldHand.map((_, i) => i);
-            const before = { deckCount: this.state.deck.length,
-                discardCount: this.state.discard.length, discardTop: this.state.discard.at(-1) ?? null };
+            const before = snapshotPiles(this.state);
             jester(this.state); this.selected.clear(); this.cursor = 0;
             this.discardCards(oldHand, indices, before, '換手中…', () => this.dealNewCards([]));
         });
@@ -547,8 +462,7 @@ export class RegicideGame {
             const selectedIndices = [...this.selected].sort((a, b) => a - b);
             const retained = this.state.hand.filter((_, i) => !this.selected.has(i));
             const wasDefend = this.state.phase === 'defend';
-            const before = { used: [...this.state.played], deckCount: this.state.deck.length,
-                discardCount: this.state.discard.length, discardTop: this.state.discard.at(-1) ?? null };
+            const before = { ...snapshotPiles(this.state), used: [...this.state.played] };
             const effects = [];
             if (play(this.state, selectedIndices, effects)) {
                 this.selected.clear(); this.cursor = 0;
@@ -570,5 +484,7 @@ export class RegicideGame {
         } else return;
         this.draw();
     }
-    dispose() { this.counterEffect = null; this.arrivalPending = false; this.attackEffect = null; this.displayHp = null; this.defeatEffect = null; this.usedDisplay = null; this.displayEnemy = null; this.disposed = true; this.stopDeals(); this.dialog?.close(); this.dialog = null; }
+    dispose() { this.counterEffect = null; this.arrivalPending = false; this.resetPresentation(); this.disposed = true; this.stopDeals(); this.dialog?.close(); this.dialog = null; }
 }
+
+installMethods(RegicideGame, presentationMethods);

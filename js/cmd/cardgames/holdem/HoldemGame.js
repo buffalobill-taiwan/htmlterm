@@ -1,14 +1,12 @@
 import { term } from '../../../system/sys.js';
-import { makeOverlayGetCell } from '../../../util/sgr.js';
-import { buildCallEffectBuffer } from '../../../util/call-effect.js';
+import { callEffectOverlay, callEffectSize } from '../../../util/call-effect.js';
 import { SelectDialog } from '../../../dialog/SelectDialog.js';
 import { InputDialog } from '../../../dialog/InputDialog.js';
 import { ShowDialog } from '../../../dialog/ShowDialog.js';
 import { createTable, startHand, act, advanceStreet, legalActions, observation, BUY_IN } from './rules.js';
 import { evaluate, handName } from './evaluate.js';
 import { HoldemView, resultText, DECK, seatName } from './view.js';
-import { dealCard } from '../animation.js';
-const EFFECT_BUFFERS = new Map();
+import { dealCard, staggerFlights } from '../animation.js';
 
 export class HoldemGame {
     constructor(cmd) {
@@ -88,32 +86,29 @@ export class HoldemGame {
         advanceStreet(s);
         if (s.phase === 'result' || s.board.length === from) { this.pump(); return; }
         const added = s.board.length - from;
-        let next = from, landed = 0;
         this.dealing = true;
         this.revealed = s.board.map((_, i) => i < from);
         this.status = '發牌中…';
         this.view.draw(this);
-        const launch = () => {
-            if (this.disposed || next >= s.board.length) return;
-            const index = next++;
-            let launchedNext = false;
-            const cancel = dealCard(this.cmd, s.board[index], DECK, { x: 25 + index * 6, y: 11 }, {
-                onStep: step => {
-                    if (!launchedNext && step >= 2) { launchedNext = true; launch(); }
-                },
-            }, () => {
-                this.anims.delete(cancel);
-                this.revealed[index] = true;
+        staggerFlights(this.anims, {
+            count: added,
+            isActive: () => !this.disposed,
+            nextAt: step => step >= 2,
+            start: (slot, { onStep, onLand }) => {
+                const index = from + slot;
+                return dealCard(this.cmd, s.board[index], DECK, { x: 25 + index * 6, y: 11 },
+                    { onStep }, onLand);
+            },
+            land: slot => {
+                this.revealed[from + slot] = true;
                 this.view.draw(this);
-                if (++landed === added) {
-                    this.dealing = false; this.revealed = null;
-                    this.view.draw(this);
-                    this.pump();
-                }
-            });
-            this.anims.add(cancel);
-        };
-        launch();
+            },
+            done: () => {
+                this.dealing = false; this.revealed = null;
+                this.view.draw(this);
+                this.pump();
+            },
+        });
     }
     // Deal 2 hole cards to each player sequentially in standard poker order:
     // 2 rounds starting from the small blind (button + 1) to the button.
@@ -134,44 +129,36 @@ export class HoldemGame {
             }
         }
 
-        let nextDeal = 0, landed = 0;
-        const launch = () => {
-            if (this.disposed || !this.dealingHole || nextDeal >= deals.length) return;
-            const { seat, round } = deals[nextDeal++];
-            const isPlayer = seat === 0;
-            const card = s.players[seat].hole[round];
-            const to = isPlayer ?
-                { x: round === 0 ? 34 : 40, y: 16 } :
-                { x: 1 + (seat - 1) * 16 + 1 + round * 6, y: 5 };
-            let launchedNext = false;
-            const maybeNext = ratio => {
-                if (!launchedNext && (ratio >= 0.45 || nextDeal === deals.length)) {
-                    launchedNext = true;
-                    launch();
-                }
-            };
-            const cancel = dealCard(this.cmd, card, DECK, to, {
-                faceDown: !isPlayer,
-                duration: 180,
-                flipDuration: 180,
-                onStep: (_step, ratio) => maybeNext(ratio),
-            }, () => {
-                this.anims.delete(cancel);
-                if (this.disposed || !this.dealingHole) return;
-                maybeNext(1);
+        staggerFlights(this.anims, {
+            count: deals.length,
+            isActive: () => !this.disposed && this.dealingHole,
+            start: (slot, { onStep, onLand }) => {
+                const { seat, round } = deals[slot];
+                const isPlayer = seat === 0;
+                const card = s.players[seat].hole[round];
+                const to = isPlayer ?
+                    { x: round === 0 ? 34 : 40, y: 16 } :
+                    { x: 1 + (seat - 1) * 16 + 1 + round * 6, y: 5 };
+                return dealCard(this.cmd, card, DECK, to, {
+                    faceDown: !isPlayer,
+                    duration: 180,
+                    flipDuration: 180,
+                    onStep,
+                }, onLand);
+            },
+            land: slot => {
+                const { seat, round } = deals[slot];
                 this.dealtHole.add(seat * 2 + round);
                 this.view.draw(this);
-                if (++landed === deals.length) {
-                    this.dealing = false;
-                    this.dealingHole = false;
-                    this.dealtHole = null;
-                    this.view.draw(this);
-                    this.pump();
-                }
-            });
-            this.anims.add(cancel);
-        };
-        launch();
+            },
+            done: () => {
+                this.dealing = false;
+                this.dealingHole = false;
+                this.dealtHole = null;
+                this.view.draw(this);
+                this.pump();
+            },
+        });
     }
     finishHoleDeal() {
         if (!this.dealingHole) return;
@@ -271,13 +258,10 @@ export class HoldemGame {
     // Draw the frame above the player's cards and below a computer's cards so
     // it never covers a card face. Clamp the rightmost seats inside the screen.
     showEffect(seat, text) {
-        if (!EFFECT_BUFFERS.has(text)) EFFECT_BUFFERS.set(text, buildCallEffectBuffer(text));
-        const buffer = EFFECT_BUFFERS.get(text), w = buffer[0].length;
+        const { w } = callEffectSize(text);
         const x = Math.max(0, Math.min(seat === 0 ? 35 : 3 + (seat - 1) * 16, 80 - w));
-        this.effect = {
-            seat, x, y: seat === 0 ? 13 : 8, w, h: buffer.length,
-            owner: this.cmd, getCell: makeOverlayGetCell(buffer, w, buffer.length),
-        };
+        this.effect = callEffectOverlay(text, { x, y: seat === 0 ? 13 : 8, owner: this.cmd });
+        this.effect.seat = seat;
         this.actions = [];
         this.status = `${seatName(this.state, seat)}：${text}`;
         this.view.draw(this);

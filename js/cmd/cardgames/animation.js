@@ -2,6 +2,36 @@ import { RAFAnimationManager } from '../../system/RAFAnimationHelper.js';
 import { term } from '../../system/sys.js';
 import { cardBuffer, cardFlipFrames } from './cards.js';
 
+// Run one deal/fly animation per item, launching the next while the current
+// card is still in the air. `start(index, { onStep, onLand })` must pass both
+// callbacks to dealCard and return its cancel function. `land` runs before the
+// next launch so pile snapshots and targets are up to date; `done` runs once
+// every card has landed.
+export function staggerFlights(anims, {
+    count, isActive = () => true, nextAt = (_step, ratio) => ratio >= 0.45,
+    start, land = () => {}, done = () => {},
+}) {
+    let next = 0, landed = 0;
+    const launch = () => {
+        if (!isActive() || next >= count) return;
+        const index = next++;
+        let advanced = false;
+        const advance = () => { if (!advanced) { advanced = true; launch(); } };
+        let cancel;
+        cancel = start(index, {
+            onStep: (step, ratio) => { if (nextAt(step, ratio)) advance(); },
+            onLand: () => {
+                anims.delete(cancel);
+                land(index);
+                advance();
+                if (++landed === count) done();
+            },
+        });
+        anims.add(cancel);
+    };
+    launch();
+}
+
 export function flipCard(cmd, card, x, y, done) {
     const frames = cardFlipFrames(card);
     let progress = 0, start = null, complete = false;

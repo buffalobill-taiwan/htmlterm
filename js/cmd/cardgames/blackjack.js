@@ -1,3 +1,6 @@
+import { createDeck } from './deck.js';
+import { shuffle } from '../../util/random.js';
+
 export function score(hand) {
     let total = 0, aces = 0;
     for (const card of hand) {
@@ -16,10 +19,5 @@ export function outcome(player, dealer) {
     return p === d ? 'draw' : p > d ? 'win' : 'loss';
 }
 export function shuffledDeck() {
-    const deck = Array.from({ length: 52 }, (_, i) => ({ suit: Math.floor(i / 13), rank: i % 13 + 1 }));
-    for (let i = 51; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [deck[i], deck[j]] = [deck[j], deck[i]];
-    }
-    return deck;
+    return shuffle(createDeck());
 }

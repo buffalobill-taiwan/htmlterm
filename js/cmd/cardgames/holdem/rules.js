@@ -1,14 +1,11 @@
+import { createDeck } from '../deck.js';
+import { shuffle } from '../../../util/random.js';
 import { createPersonality } from './personality.js';
 import { evaluate } from './evaluate.js';
 export const BUY_IN = 1000, SMALL_BLIND = 5, BIG_BLIND = 10;
 export const STREETS = ['翻牌前', '翻牌', '轉牌', '河牌'];
 export function deck(rng = Math.random) {
-    const cards = Array.from({ length: 52 }, (_, i) => ({ suit: Math.floor(i / 13), rank: i % 13 + 1 }));
-    for (let i = 51; i > 0; i--) {
-        const j = Math.floor(rng() * (i + 1));
-        [cards[i], cards[j]] = [cards[j], cards[i]];
-    }
-    return cards;
+    return shuffle(createDeck(), rng);
 }
 export function createTable(rng = Math.random) {
     return { players: Array.from({ length: 6 }, (_, id) => ({ id, number: id, stack: BUY_IN, ...(id ? { personality: createPersonality(rng) } : {}) })),

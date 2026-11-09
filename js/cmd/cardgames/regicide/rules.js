@@ -1,13 +1,10 @@
+import { createDeck } from '../deck.js';
+import { shuffle } from '../../../util/random.js';
+
 export const value = c => c.rank > 10 ? (c.rank - 9) * 5 : c.rank;
 const sum = cards => cards.reduce((n, c) => n + value(c), 0);
-function shuffle(a, rng) {
-    for (let i = a.length - 1; i > 0; i--) {
-        const j = Math.floor(rng() * (i + 1)); [a[i], a[j]] = [a[j], a[i]];
-    }
-    return a;
-}
 export function createGame(rng = Math.random) {
-    const cards = Array.from({length: 52}, (_, i) => ({suit: Math.floor(i / 13), rank: i % 13 + 1}));
+    const cards = createDeck();
     const s = {rng, deck: shuffle(cards.filter(c => c.rank <= 10), rng), castle: [],
         hand: [], discard: [], played: [], shield: 0, jesters: 2, cheatMode: false, defeated: 0, phase: 'attack'};
     for (const rank of [11, 12, 13]) s.castle.push(...shuffle(cards.filter(c => c.rank === rank), rng));

@@ -1,4 +1,4 @@
-import { makeCell } from './sgr.js';
+import { makeCell, makeOverlayGetCell } from './sgr.js';
 import { bufWidth, isWide } from './display-width.js';
 
 export function buildCallEffectBuffer(text) {
@@ -32,4 +32,21 @@ export function buildCallEffectBuffer(text) {
         x += width;
     }
     return buf;
+}
+
+const buffers = new Map();
+function cachedBuffer(text) {
+    if (!buffers.has(text)) buffers.set(text, buildCallEffectBuffer(text));
+    return buffers.get(text);
+}
+
+export function callEffectSize(text) {
+    const buffer = cachedBuffer(text);
+    return { w: buffer[0].length, h: buffer.length };
+}
+
+// Build a ready-to-add overlay; callers only choose the position and owner.
+export function callEffectOverlay(text, { x = 0, y = 0, owner = null } = {}) {
+    const buffer = cachedBuffer(text), w = buffer[0].length, h = buffer.length;
+    return { x, y, w, h, owner, getCell: makeOverlayGetCell(buffer, w, h) };
 }

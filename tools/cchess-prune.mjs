@@ -4,12 +4,11 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { pruneEndgame } from '../js/cmd/cchess/endgames.js';
+import { ENDGAME_FILE, parseOutput } from './cchess-files.mjs';
 
 async function main() {
-    const args = process.argv.slice(2), option = args.indexOf('--output');
-    if (option < 0 || !args[option+1]) throw new Error('Usage: node tools/cchess-prune.mjs --output <directory>');
-    const directory = path.resolve(args[option+1]);
-    const files = (await fs.readdir(directory)).filter(f => /^[a-z0-9-]+\.json$/.test(f) && f !== 'index.json');
+    const directory = parseOutput(process.argv.slice(2), 'Usage: node tools/cchess-prune.mjs --output <directory>');
+    const files = (await fs.readdir(directory)).filter(f => ENDGAME_FILE.test(f) && f !== 'index.json');
     let before = 0, after = 0;
     for (const file of files) {
         const puzzle = JSON.parse(await fs.readFile(path.join(directory, file), 'utf8'));

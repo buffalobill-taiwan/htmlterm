@@ -1,28 +1,16 @@
 import { VirtualBuffer, _blankCell } from '../../../util/VirtualBuffer.js';
 import { bufWidth } from '../../../util/display-width.js';
 import { term } from '../../../system/sys.js';
-import { cardBuffer } from '../cards.js';
+import { cardBuffer, drawCardStack, mutedCardBuffer } from '../cards.js';
 import { STREETS, potSize } from './rules.js';
 import { handName } from './evaluate.js';
 export const seatName = (s, id) => id === 0 ? '你' : '電腦 ' + s.players[id].number;
 export const DECK = { x: 73, y: 14 };
 const RESET = '\x1B[0m';
 function deckStackBuffer() {
-    const back = cardBuffer(null), vb = new VirtualBuffer(5, 6);
-    for (let r = 0; r < 3; r++) for (let c = 0; c < 5; c++) vb.setCell(r, c, back.getCell(r, c));
-    // Cards below the top one show only their bottom border.
-    for (let i = 1; i <= 3; i++) for (let c = 0; c < 5; c++) vb.setCell(2 + i, c, back.getCell(2, c));
+    const vb = new VirtualBuffer(5, 6);
+    drawCardStack(vb, cardBuffer(null), 0, 0);
     return vb;
-}
-const foldedCards = new WeakMap();
-function foldedCardBuffer(base) {
-    if (!foldedCards.has(base)) {
-        const vb = new VirtualBuffer(base.width, base.height);
-        for (let y = 0; y < base.height; y++) for (let x = 0; x < base.width; x++)
-            vb.setCell(y, x, { ...base.getCell(y, x), bg: 8 });
-        foldedCards.set(base, vb);
-    }
-    return foldedCards.get(base);
 }
 export class HoldemView {
     constructor() {
@@ -53,7 +41,7 @@ export class HoldemView {
     }
     card(index, card, x, y, active = true, folded = false) {
         const base = cardBuffer(card);
-        const slot = this.cards[index], vb = folded ? foldedCardBuffer(base) : base;
+        const slot = this.cards[index], vb = folded ? mutedCardBuffer(base) : base;
         if (slot.vb === vb && slot.active === active && slot.x === x && slot.y === y) return;
         if (slot.active) for (let r = slot.y; r < slot.y + 3; r++) this.dirty.add(r);
         Object.assign(slot, { vb, x, y, active });

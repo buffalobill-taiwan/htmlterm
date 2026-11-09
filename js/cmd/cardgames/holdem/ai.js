@@ -1,3 +1,4 @@
+import { cardFromId, cardId, DECK_SIZE } from '../deck.js';
 import { DEFAULT_PERSONALITY } from './personality.js';
 import { evaluate } from './evaluate.js';
 import { BIG_BLIND } from './rules.js';
@@ -8,13 +9,12 @@ const LIMP_EQUITY = 0.15;
 // Unknown folded cards and burns remain in the sampling pool: their identities
 // are not information available to a player.
 export function equity(view, trials = 1000, rng = Math.random) {
-    const known = new Set([...view.hole, ...view.board].map(c => c.suit * 13 + c.rank - 1));
-    const pool = Array.from({ length: 52 }, (_, i) => i).filter(i => !known.has(i));
-    const card = id => ({ suit: Math.floor(id / 13), rank: id % 13 + 1 });
+    const known = new Set([...view.hole, ...view.board].map(cardId));
+    const pool = Array.from({ length: DECK_SIZE }, (_, i) => i).filter(i => !known.has(i));
     let total = 0;
     for (let trial = 0; trial < trials; trial++) {
         const sample = pool.slice(); let left = sample.length;
-        const draw = () => { const i = Math.floor(rng() * left); const id = sample[i]; sample[i] = sample[--left]; return card(id); };
+        const draw = () => { const i = Math.floor(rng() * left); const id = sample[i]; sample[i] = sample[--left]; return cardFromId(id); };
         const board = view.board.slice();
         while (board.length < 5) board.push(draw());
         const mine = evaluate([...view.hole, ...board]);

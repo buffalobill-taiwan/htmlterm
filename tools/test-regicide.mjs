@@ -1,7 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
-const source = await readFile(new URL('../js/cmd/cardgames/regicide/rules.js', import.meta.url), 'utf8');
-const {createGame, preview, play, jester} = await import('data:text/javascript;base64,' + Buffer.from(source).toString('base64'));
+import { createGame, preview, play, jester } from '../js/cmd/cardgames/regicide/rules.js';
 const c = (rank, suit) => ({rank, suit});
 const s = createGame(() => 0.5);
 assert.equal(s.hand.length, 8);

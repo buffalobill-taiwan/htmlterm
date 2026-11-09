@@ -3,8 +3,7 @@ import { SelectDialog } from '../../../dialog/SelectDialog.js';
 import { ConfirmDialog } from '../../../dialog/ConfirmDialog.js';
 import { ShowDialog } from '../../../dialog/ShowDialog.js';
 import { term } from '../../../system/sys.js';
-import { makeOverlayGetCell } from '../../../util/sgr.js';
-import { buildCallEffectBuffer } from '../../../util/call-effect.js';
+import { callEffectOverlay } from '../../../util/call-effect.js';
 import { CHARS } from '../engine/constants.js';
 import { WINDS, createRound, actor, legalActions, applyAction, publicView } from './rules.js';
 import { chooseAction } from './ai.js';
@@ -24,8 +23,6 @@ const RULES = [
     'n 重新設定並清零積分；q 退出；Ctrl+C 立即退出。',
 ].join('\n');
 
-const CALL_BUFFERS = new Map();
-
 export const mahjongMethods = {
     _applyMahjongAction(action) {
         const state = this._mahjong, seat = actor(state);
@@ -35,13 +32,10 @@ export const mahjongMethods = {
         if (text) {
             this._render();
             const relative = (seat - state.human + 4) % 4;
-            if (!CALL_BUFFERS.has(text)) CALL_BUFFERS.set(text, buildCallEffectBuffer(text));
-            const buffer = CALL_BUFFERS.get(text);
-            const overlay = {
+            const overlay = callEffectOverlay(text, {
                 x: relative < 2 ? 35 : 9, y: relative === 0 || relative === 3 ? 17 : 2,
-                w: 10, h: 4, owner: this,
-                getCell: makeOverlayGetCell(buffer, 10, 4),
-            };
+                owner: this,
+            });
             this._mahjongCallOverlay = overlay;
             term.addOverlay(overlay);
             for (let row = overlay.y; row < overlay.y + overlay.h; row++) term.markRowDirty(row);

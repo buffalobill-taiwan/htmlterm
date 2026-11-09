@@ -4,14 +4,12 @@ import { test } from 'node:test';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { parseFen, boardToFen } from '../js/cmd/cchess/engine/notation.js';
-import { applyBoardCopy } from '../js/cmd/cchess/engine/board.js';
+import { parseFen } from '../js/cmd/cchess/engine/notation.js';
 import { chooseBlackReply } from '../js/cmd/cchess/black-ai.js';
-import { responseMove } from '../js/cmd/cchess/endgames.js';
+import { resultKey, responseMove } from '../js/cmd/cchess/endgames.js';
 
 const dir = path.dirname(fileURLToPath(new URL('../js/data/cchess/index.json', import.meta.url)));
 const index = JSON.parse(await fs.readFile(path.join(dir, 'index.json'), 'utf8'));
-const key = b => boardToFen(b).split(' ')[0];
 
 test('endgame index and shipped files agree', async () => {
     assert.ok(Array.isArray(index) && index.length > 0);
@@ -33,7 +31,7 @@ test('shipped tables keep only defenses the black AI does not reproduce', async 
             const k = keys[i], target = puzzle.table[k];
             const board = parseFen(k, { allowMissingKings: false }).board;
             const reply = await chooseBlackReply(board);
-            const after = reply ? key(applyBoardCopy(board, reply)) : null;
+            const after = reply ? resultKey(board, reply) : null;
             assert.notEqual(after, target, `${entry.file}: ${k} is still reproducible`);
             assert.ok(responseMove(board, target), `${entry.file}: ${k} target is not a legal reply`);
         }

@@ -4,7 +4,7 @@ import { term } from '../../system/sys.js';
 import { VirtualBuffer } from '../../util/VirtualBuffer.js';
 import { SelectDialog } from '../../dialog/SelectDialog.js';
 import { GAME_META } from '../game-meta.js';
-import { cardBuffer } from './cards.js';
+import { cardBuffer, drawCardStack, stampCard } from './cards.js';
 import { flipCard, dealCard } from './animation.js';
 import { score, natural, outcome, shuffledDeck } from './blackjack.js';
 import { FreeCellGame } from './freecell/FreeCellGame.js';
@@ -31,9 +31,7 @@ export class CardgamesCmd extends CmdBase {
         term.write('\x1B[2J\x1B[H\x1B[?25l');
         this.addCleanup(() => {
             this._stopAnims();
-            this._regicide?.dispose(); this._regicide = null;
-        this._holdem?.dispose(); this._holdem = null;
-            this._freecell?.dispose(); this._freecell = null;
+            this._disposeGames();
         });
         if (p.rest[0] === 'regicide') this._startRegicide();
         else if (p.rest[0] === 'holdem') this._startHoldem();
@@ -43,8 +41,7 @@ export class CardgamesCmd extends CmdBase {
     _startRegicide() { this._regicide = new RegicideGame(this); this._regicide.start(); }
     _startHoldem() {
         this._stopAnims();
-        this._regicide?.dispose(); this._regicide = null;
-        this._holdem?.dispose();
+        this._disposeGames();
         this._holdem = new HoldemGame(this);
         this._holdem.start();
     }
@@ -53,13 +50,14 @@ export class CardgamesCmd extends CmdBase {
         this._freecell = new FreeCellGame(this);
         this._freecell.start(seed);
     }
+    _disposeGames() {
+        this._regicide?.dispose(); this._regicide = null;
+        this._holdem?.dispose(); this._holdem = null;
+        this._freecell?.dispose(); this._freecell = null;
+    }
     handleMouse(type, info) { return this._freecell?.handleMouse(type, info) || false; }
     _menu() {
-        this._regicide?.dispose(); this._regicide = null;
-        this._holdem?.dispose();
-        this._holdem = null;
-        this._freecell?.dispose();
-        this._freecell = null;
+        this._disposeGames();
         term.write('\x1B[2J');
         this._stopAnims();
         this._flipping = null;
@@ -128,12 +126,7 @@ export class CardgamesCmd extends CmdBase {
     }
     _drawDeck() {
         if (!this._deck) return;
-        const back = cardBuffer(null);
-        for (let r = 0; r < 3; r++) for (let c = 0; c < 5; c++)
-            this._vb.setCell(DECK.y + r, DECK.x + c, back.getCell(r, c));
-        // Cards below the top one show only their bottom border.
-        for (let i = 1; i <= 3; i++) for (let c = 0; c < 5; c++)
-            this._vb.setCell(DECK.y + 2 + i, DECK.x + c, back.getCell(2, c));
+        drawCardStack(this._vb, cardBuffer(null), DECK.x, DECK.y);
         this._vb.writeStr(6, DECK.x - 1, '牌堆 ' + this._deck.length);
     }
     _flip(hand, index, row, done) {
@@ -170,8 +163,7 @@ export class CardgamesCmd extends CmdBase {
         hand.forEach((card, i) => {
             const covered = (hidden && i === 1) || (this._flipping?.hand === hand && this._flipping.index === i);
             const face = cardBuffer(covered ? null : card);
-            for (let r = 0; r < 3; r++) for (let c = 0; c < 5; c++)
-                this._vb.setCell(row + r, 2 + i * 6 + c, face.getCell(r, c));
+            stampCard(this._vb, face, 2 + i * 6, row);
         });
     }
     _draw() {
@@ -226,11 +218,7 @@ export class CardgamesCmd extends CmdBase {
         }
     }
     _quit() {
-        this._regicide?.dispose(); this._regicide = null;
-        this._holdem?.dispose();
-        this._holdem = null;
-        this._freecell?.dispose();
-        this._freecell = null;
+        this._disposeGames();
         this._stopAnims();
         this._flipping = null;
         if (this._dialog) { this._dialog.close(); this._dialog = null; }

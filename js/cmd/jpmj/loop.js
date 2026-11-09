@@ -1,6 +1,5 @@
 import { term } from '../../system/sys.js';
-import { makeOverlayGetCell } from '../../util/sgr.js';
-import { buildCallEffectBuffer } from '../../util/call-effect.js';
+import { callEffectOverlay } from '../../util/call-effect.js';
 import { checkTenpai } from './yaku/index.js';
 
 export const loopMixin = {
@@ -160,14 +159,9 @@ export const loopMixin = {
         if (!text) { this._gameTimer = setTimeout(() => this._continueGame(), 100); return; }
         const pos = this._getCallEffectPos(playerIdx);
         if (!pos) { this._gameTimer = setTimeout(() => this._continueGame(), 100); return; }
-        const buf = this._buildCallEffectBuffer(text);
-        this._callEffectOverlay = {
-            x: pos.x, y: pos.y, w: 10, h: 4,
-            owner: this,
-            getCell: makeOverlayGetCell(buf, 10, 4),
-        };
+        this._callEffectOverlay = callEffectOverlay(text, { x: pos.x, y: pos.y, owner: this });
         term.addOverlay(this._callEffectOverlay);
-        for (let r = pos.y; r < pos.y + 4; r++) term.markRowDirty(r);
+        for (let r = pos.y; r < pos.y + this._callEffectOverlay.h; r++) term.markRowDirty(r);
         this._render();
         this._callEffectTimer = setTimeout(() => {
             this._removeCallEffect();
@@ -177,10 +171,6 @@ export const loopMixin = {
             }
             this._continueGame();
         }, 500);
-    },
-
-    _buildCallEffectBuffer(text) {
-        return buildCallEffectBuffer(text);
     },
 
     _getCallEffectPos(playerIdx) {
@@ -205,7 +195,7 @@ export const loopMixin = {
     _removeCallEffect() {
         if (this._callEffectOverlay) {
             term.removeOverlay(this._callEffectOverlay);
-            for (let r = this._callEffectOverlay.y; r < this._callEffectOverlay.y + 4; r++) term.markRowDirty(r);
+            for (let r = this._callEffectOverlay.y; r < this._callEffectOverlay.y + this._callEffectOverlay.h; r++) term.markRowDirty(r);
             this._callEffectOverlay = null;
         }
         if (this._callEffectTimer) {

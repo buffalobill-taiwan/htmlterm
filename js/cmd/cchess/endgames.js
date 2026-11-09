@@ -5,12 +5,13 @@ import { chooseBlackReply } from './black-ai.js';
 
 export const boardKey = board => boardToFen(board).split(' ')[0];
 export const positionKey = (board, color) => `${color}:${boardKey(board)}`;
+export const resultKey = (board, move) => boardKey(applyBoardCopy(board, move));
 export function hasLost(board, color) {
     return !findKings(board)[color] || generateLegalMoves(board, color).length === 0;
 }
 
 export function responseMove(board, target) {
-    return generateLegalMoves(board, 'black').find(move => boardKey(applyBoardCopy(board, move)) === target) ?? null;
+    return generateLegalMoves(board, 'black').find(move => resultKey(board, move) === target) ?? null;
 }
 
 // The importer audits every reachable red alternative, including cycles.
@@ -58,7 +59,7 @@ export async function pruneEndgame(puzzle) {
         if (target === null) continue;
         const board = parseFen(key, { allowMissingKings: false }).board;
         const reply = await chooseBlackReply(board);
-        if (reply && boardKey(applyBoardCopy(board, reply)) === target) continue;
+        if (reply && resultKey(board, reply) === target) continue;
         table[key] = target;
     }
     return { ...puzzle, table };

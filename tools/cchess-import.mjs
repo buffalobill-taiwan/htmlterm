@@ -3,12 +3,11 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { validateEndgame, pruneEndgame } from '../js/cmd/cchess/endgames.js';
+import { ENDGAME_FILE, parseOutput } from './cchess-files.mjs';
 
 async function main() {
-    const args = process.argv.slice(2), option = args.indexOf('--output');
-    if (option < 0 || !args[option+1]) throw new Error('Usage: node tools/cchess-import.mjs --output <directory> <puzzle.json> ...');
-    const directory = path.resolve(args[option+1]);
-    args.splice(option, 2);
+    const args = process.argv.slice(2);
+    const directory = parseOutput(args, 'Usage: node tools/cchess-import.mjs --output <directory> <puzzle.json> ...');
     if (!args.length || args.some(arg => arg.startsWith('--'))) throw new Error('請指定殘局 JSON 檔案');
     const incoming = [];
     for (const file of args) {
@@ -21,7 +20,7 @@ async function main() {
     if (!Array.isArray(index)) throw new Error('索引格式錯誤');
     const byInit = new Map();
     for (const entry of index) {
-        if (!/^[a-z0-9-]+\.json$/.test(entry.file)) throw new Error('索引檔名錯誤');
+        if (!ENDGAME_FILE.test(entry.file)) throw new Error('索引檔名錯誤');
         const puzzle = JSON.parse(await fs.readFile(path.join(directory, entry.file), 'utf8'));
         byInit.set(puzzle.meta.init, entry);
     }
