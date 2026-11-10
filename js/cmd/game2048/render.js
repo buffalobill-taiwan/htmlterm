@@ -84,17 +84,8 @@ const renderMethods = {
             this._boardVB = new VirtualBuffer(BOARD_W, BOARD_H);
             this._sidebarVB = new VirtualBuffer(15, BOARD_H);
 
-            this._rootSlotBoard = this._rootVB.addChildSlot();
-            this._rootSlotBoard.vb = this._boardVB;
-            this._rootSlotBoard.x = BOARD_X;
-            this._rootSlotBoard.y = BOARD_Y;
-            this._rootSlotBoard.active = true;
-
-            this._rootSlotSidebar = this._rootVB.addChildSlot();
-            this._rootSlotSidebar.vb = this._sidebarVB;
-            this._rootSlotSidebar.x = SIDEBAR_X;
-            this._rootSlotSidebar.y = BOARD_Y;
-            this._rootSlotSidebar.active = true;
+            this._rootSlotBoard = this._rootVB.attach(this._boardVB, BOARD_X, BOARD_Y);
+            this._rootSlotSidebar = this._rootVB.attach(this._sidebarVB, SIDEBAR_X, BOARD_Y);
         }
 
         if (!this._tilePalette) {
@@ -132,10 +123,7 @@ const renderMethods = {
     _renderSidebar() {
         const vb = this._sidebarVB;
         const buf = vb._buffer;
-        for (let r = 0; r < vb.height; r++) {
-            const row = buf[r];
-            for (let c = 0; c < row.length; c++) row[c] = null;
-        }
+        vb.clearCells();
 
         vb.writeStr(0, 0, bold(yellow('  2048')));
         vb.writeStr(2, 0, gray(' Score'));

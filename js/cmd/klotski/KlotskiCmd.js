@@ -1,4 +1,5 @@
 import { CmdBase } from '../CmdBase.js';
+import { defineMetaGetters } from '../meta-getters.js';
 import { term, system } from '../../system/sys.js';
 import { CURSOR_HIDE } from '../../util/sgr.js';
 import { SelectDialog } from '../../dialog/SelectDialog.js';
@@ -6,6 +7,7 @@ import LEVELS from '../../data/klotski-levels.json' with { type: 'json' };
 import { ROWS, COLS, FINISH_FALL, BOARD_Y, BOARD_H } from './constants.js';
 import { NAME_COLOR, renderMethods } from './render.js';
 import { installMethods } from '../../util/install-methods.js';
+import { isSuppressedKey, SWALLOW_EDIT } from '../game-keys.js';
 import { ConfirmDialog } from '../../dialog/ConfirmDialog.js';
 import klotskiSolutions from '../../data/klotski-solutions.json' with { type: 'json' };
 import { GAME_META } from '../game-meta.js';
@@ -362,10 +364,7 @@ class KlotskiCmd extends CmdBase {
         if (this._autoPlay) {
             if (code === 0x1B) {
                 const s = typeof data === 'string' ? data : '';
-                if (s === '\x1B[A' || s === '\x1B[B' || s === '\x1B[C' || s === '\x1B[D') return;
-                if (s === '\x1B[3~' || s === '\x1B[2~') return;
-                if (s === '\x1B[H' || s === '\x1B[F') return;
-                if (s === '\x1B[5~' || s === '\x1B[6~') return;
+                if (isSuppressedKey(s)) return;
                 if (s === '\x1B' || data === 0x1B) this._quit();
                 return;
             }
@@ -382,10 +381,7 @@ class KlotskiCmd extends CmdBase {
         if (this._paused) {
             if (code === 0x1B) {
                 const s = typeof data === 'string' ? data : '';
-                if (s === '\x1B[A' || s === '\x1B[B' || s === '\x1B[C' || s === '\x1B[D') return;
-                if (s === '\x1B[3~' || s === '\x1B[2~') return;
-                if (s === '\x1B[H' || s === '\x1B[F') return;
-                if (s === '\x1B[5~' || s === '\x1B[6~') return;
+                if (isSuppressedKey(s)) return;
                 if (s === '\x1B' || data === 0x1B) this._quit();
                 return;
             }
@@ -405,12 +401,7 @@ class KlotskiCmd extends CmdBase {
             if (s === '\x1B[B') { this._selected === null ? this._moveCursor(1, 0) : this._slide(this._selected, 1, 0); return; }
             if (s === '\x1B[D') { this._selected === null ? this._moveCursor(0, -1) : this._slide(this._selected, 0, -1); return; }
             if (s === '\x1B[C') { this._selected === null ? this._moveCursor(0, 1) : this._slide(this._selected, 0, 1); return; }
-            if (s === '\x1B[3~') return;
-            if (s === '\x1B[2~') return;
-            if (s === '\x1B[H') return;
-            if (s === '\x1B[F') return;
-            if (s === '\x1B[5~') return;
-            if (s === '\x1B[6~') return;
+            if (isSuppressedKey(s, SWALLOW_EDIT)) return;
             if (s === '\x1B' || data === 0x1B) this._quit();
             return;
         }
@@ -428,13 +419,9 @@ class KlotskiCmd extends CmdBase {
             if (ch === 'q') { this._quit(); return; }
         }
     }
-
-
-    static get commandName() { return META.commandName; }
-    static get help() { return META.help; }
-    static get menu() { return META.menu; }
-    static get usage() { return META.usage; }
 }
+
+defineMetaGetters(KlotskiCmd, META);
 
 // Keep the command as the state owner and preserve class-method descriptors.
 installMethods(KlotskiCmd, renderMethods);

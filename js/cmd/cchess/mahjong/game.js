@@ -38,7 +38,6 @@ export const mahjongMethods = {
             });
             this._mahjongCallOverlay = overlay;
             term.addOverlay(overlay);
-            for (let row = overlay.y; row < overlay.y + overlay.h; row++) term.markRowDirty(row);
             const epoch = this._epoch;
             this._mahjongTimer = setTimeout(() => {
                 this._mahjongTimer = null;
@@ -53,7 +52,6 @@ export const mahjongMethods = {
         const overlay = this._mahjongCallOverlay;
         if (!overlay) return;
         term.removeOverlay(overlay);
-        for (let row = overlay.y; row < overlay.y + overlay.h; row++) term.markRowDirty(row);
         this._mahjongCallOverlay = null;
     },
 

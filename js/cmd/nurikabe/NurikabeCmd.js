@@ -1,4 +1,5 @@
-import { CmdBase } from '../CmdBase.js';
+import { CmdBase, DIFFICULTY_FLAGS } from '../CmdBase.js';
+import { defineMetaGetters } from '../meta-getters.js';
 import { DIFFICULTY, SEED_MAX, MIN_SIZE, MAX_SIZE, _sizeLabel } from './constants.js';
 import { term } from '../../system/sys.js';
 import { CURSOR_HIDE, yellow, bold, red, gray, green } from '../../util/sgr.js';
@@ -6,6 +7,7 @@ import { _create2D, _analyzeClueColors, _analyzePools, _analyzeSeaConnectivity }
 import { WHITE, geom, BLACK, isSolved } from '../../util/nurikabe-engine.js';
 import { renderMethods } from './render.js';
 import { installMethods } from '../../util/install-methods.js';
+import { isSuppressedKey, SWALLOW_EDIT } from '../game-keys.js';
 import { formatDuration } from '../../util/format.js';
 import { GAME_META } from '../game-meta.js';
 const META = GAME_META.nurikabe;
@@ -13,17 +15,12 @@ const META = GAME_META.nurikabe;
 class NurikabeCmd extends CmdBase {
     execute(args) {
         const p = this.parseArgs(args, {
-            flags: {
-                '--easy': Boolean, '--medium': Boolean, '--hard': Boolean,
-                '--seed': Number, '--size': Number,
-            },
+            flags: { ...DIFFICULTY_FLAGS, '--seed': Number, '--size': Number },
         });
         if (p.hasHelp) return this.showHelp();
 
-        let diffSize = null;
-        if (p.flag('--easy'))   diffSize = DIFFICULTY.easy.size;
-        if (p.flag('--medium')) diffSize = DIFFICULTY.medium.size;
-        if (p.flag('--hard'))   diffSize = DIFFICULTY.hard.size;
+        const diff = this.parseDifficulty(p);
+        const diffSize = diff ? DIFFICULTY[diff].size : null;
 
         if (p.rest.length > 2) return this._badArgs();
         let posSeed = null;
@@ -319,12 +316,7 @@ class NurikabeCmd extends CmdBase {
             if (s === '\x1B[B') { this._move(1, 0); return; }
             if (s === '\x1B[D') { this._move(0, -1); return; }
             if (s === '\x1B[C') { this._move(0, 1); return; }
-            if (s === '\x1B[3~') return;
-            if (s === '\x1B[2~') return;
-            if (s === '\x1B[H') return;
-            if (s === '\x1B[F') return;
-            if (s === '\x1B[5~') return;
-            if (s === '\x1B[6~') return;
+            if (isSuppressedKey(s, SWALLOW_EDIT)) return;
             if (s === '\x1B' || data === 0x1B) this._quit();
             return;
         }
@@ -412,13 +404,9 @@ class NurikabeCmd extends CmdBase {
     onCancel() {
         this._quit();
     }
-
-
-    static get commandName() { return META.commandName; }
-    static get help() { return META.help; }
-    static get menu() { return META.menu; }
-    static get usage() { return META.usage; }
 }
+
+defineMetaGetters(NurikabeCmd, META);
 
 // Keep the command as the state owner and preserve class-method descriptors.
 installMethods(NurikabeCmd, renderMethods);

@@ -1,5 +1,6 @@
 import { term } from '../../system/sys.js';
-import { CmdBase } from '../CmdBase.js';
+import { CmdBase, DIFFICULTY_FLAGS } from '../CmdBase.js';
+import { defineMetaGetters } from '../meta-getters.js';
 import { bold, red, green, yellow, cyan, gray, CURSOR_HIDE, makeCell } from '../../util/sgr.js';
 import { isWide } from '../../util/unicode-width.js';
 import { VirtualBuffer, _blankCell } from '../../util/VirtualBuffer.js';
@@ -50,14 +51,9 @@ function _shuffle(a) {
 
 export class MemoryCmd extends CmdBase {
     execute(args) {
-        const p = this.parseArgs(args, {
-            flags: { '--easy': Boolean, '--medium': Boolean, '--hard': Boolean },
-        });
+        const p = this.parseArgs(args, { flags: DIFFICULTY_FLAGS });
         if (p.hasHelp) return this.showHelp();
-        let diff = null;
-        if (p.flag('--easy'))   diff = 'easy';
-        if (p.flag('--medium')) diff = 'medium';
-        if (p.flag('--hard'))   diff = 'hard';
+        const diff = this.parseDifficulty(p);
         if (diff) {
             this._startGame(diff);
         } else {
@@ -470,10 +466,6 @@ export class MemoryCmd extends CmdBase {
     onCancel() {
         this._quit();
     }
-
-
-    static get commandName() { return META.commandName; }
-    static get help() { return META.help; }
-    static get menu() { return META.menu; }
-    static get usage() { return META.usage; }
 }
+
+defineMetaGetters(MemoryCmd, META);

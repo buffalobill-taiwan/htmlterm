@@ -1,5 +1,6 @@
 import { RegicideGame } from './regicide/RegicideGame.js';
 import { CmdBase } from '../CmdBase.js';
+import { defineMetaGetters } from '../meta-getters.js';
 import { term } from '../../system/sys.js';
 import { VirtualBuffer } from '../../util/VirtualBuffer.js';
 import { SelectDialog } from '../../dialog/SelectDialog.js';
@@ -14,10 +15,6 @@ const META = GAME_META.cardgames;
 const DECK = { x: 53, y: 8 };
 
 export class CardgamesCmd extends CmdBase {
-    static get commandName() { return META.commandName; }
-    static get help() { return META.help; }
-    static get usage() { return META.usage; }
-    static get menu() { return META.menu; }
     execute(args) {
         const p = this.parseArgs(args);
         if (p.hasHelp) return this.showHelp();
@@ -227,3 +224,5 @@ export class CardgamesCmd extends CmdBase {
     }
     onCancel() { this._quit(); super.onCancel(); }
 }
+
+defineMetaGetters(CardgamesCmd, META);

@@ -1,14 +1,12 @@
 import { term } from '../../../system/sys.js';
 import { VirtualBuffer, _blankCell } from '../../../util/VirtualBuffer.js';
-import { stackCardBuffer } from '../cards.js';
+import { cellsEqual } from '../../../util/cells.js';
+import { pasteCard, stackCardBuffer } from '../cards.js';
 
 const xAt = i => 4 + 9 * i;
 export function cardPosition(game, ref) {
     return { x: xAt(ref.index + (ref.zone === 'foundation' ? 4 : 0)),
         y: ref.zone === 'column' ? 6 + game.state.columns[ref.index].length - 1 - game.scroll[ref.index] : 2 };
-}
-function paste(vb, face, x, y, bottom = 25) {
-    for (let r = 0; r < face.height && y + r < bottom; r++) for (let c = 0; c < 5; c++) vb.setCell(y + r, x + c, face.getCell(r, c));
 }
 function style(game, zone, index, card = 0) {
     const selected = game.selected, cursor = game.cursor;
@@ -32,7 +30,7 @@ export function drawBoard(game) {
             const card = i < 4 ? (hidden?.zone === 'cell' && hidden.index === i ? null : state.cells[i]) : state.foundations[index] ? index * 13 + state.foundations[index] - 1 : null;
             vb.writeStr(1, xAt(i), i < 4 ? '空格' : '收牌');
             if (card === null) empty(vb, xAt(i), 2, i < 4 ? ' · ' : ' ' + '♠♥♦♣'[index] + ' ', style(game, zone, index));
-            else paste(vb, stackCardBuffer(card, false, style(game, zone, index)), xAt(i), 2);
+            else pasteCard(vb, stackCardBuffer(card, false, style(game, zone, index)), xAt(i), 2);
             const col = state.columns[i];
             const length = col.length - (hidden?.zone === 'column' && hidden.index === i ? 1 : 0);
             game.scroll[i] = Math.max(0, Math.min(game.scroll[i], Math.max(0, col.length - 13)));
@@ -40,7 +38,7 @@ export function drawBoard(game) {
             vb.writeStr(5, xAt(i) + 2, String(i + 1));
             if (!length) empty(vb, xAt(i), 6, '   ', style(game, 'column', i));
             for (let j = start; j < length && 6 + j - start < 21; j++)
-                paste(vb, stackCardBuffer(col[j], j < length - 1, style(game, 'column', i, j)), xAt(i), 6 + j - start, 21);
+                pasteCard(vb, stackCardBuffer(col[j], j < length - 1, style(game, 'column', i, j)), xAt(i), 6 + j - start, 21);
             if (start) vb.writeStr(6, xAt(i) + 6, '↑');
             if (col.length - start + 2 > 15) vb.writeStr(20, xAt(i) + 6, '↓');
         }
@@ -54,7 +52,7 @@ export function drawBoard(game) {
         const row = game.rows[r]; let changed = false;
         for (let c = 0; c < 80; c++) {
             const next = vb.getCell(r, c), old = row.getCell(0, c);
-            if (!old || next.ch !== old.ch || next.fg !== old.fg || next.bg !== old.bg || next.bold !== old.bold || next.width !== old.width) changed = true;
+            if (!old || !next || !cellsEqual(old, next)) changed = true;
             row.setCell(0, c, next);
         }
         if (changed) term.writeVB(row, 0, r);
@@ -75,6 +73,6 @@ export function hitTest(game, x, y) {
 }
 export function drawGhost(cards) {
     const vb = new VirtualBuffer(5, cards.length + 2);
-    cards.forEach((c, i) => paste(vb, stackCardBuffer(c, i < cards.length - 1, 2), 0, i));
+    cards.forEach((c, i) => pasteCard(vb, stackCardBuffer(c, i < cards.length - 1, 2), 0, i));
     return vb;
 }

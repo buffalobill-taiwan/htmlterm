@@ -9,6 +9,11 @@ function isDigit(ch) { return ch >= '0' && ch <= '9'; }
 // the difficulty key the onConfirm callback receives.
 const DIFFICULTY_OPTIONS = [['Easy', 'easy'], ['Medium', 'medium'], ['Hard', 'hard']];
 
+/** Standard flags shared by commands that accept an optional difficulty. */
+export const DIFFICULTY_FLAGS = Object.freeze({
+    '--easy': Boolean, '--medium': Boolean, '--hard': Boolean,
+});
+
 /**
  * Base class for all commands.
  * Commands are instantiated by CommandRegistry and reused across executions.
@@ -316,6 +321,14 @@ export class CmdBase {
      */
     openDialog(DialogClass, key, opts) {
         return system.createDialog(DialogClass, key, opts);
+    }
+
+    /** Resolve the shared --easy/--medium/--hard flags to one key, or null. */
+    parseDifficulty(p) {
+        if (p.flag('--hard')) return 'hard';
+        if (p.flag('--medium')) return 'medium';
+        if (p.flag('--easy')) return 'easy';
+        return null;
     }
 
     /**

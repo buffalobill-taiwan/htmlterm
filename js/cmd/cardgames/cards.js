@@ -44,6 +44,14 @@ export function stampCard(vb, face, x, y) {
         for (let c = 0; c < face.width; c++) vb.setCell(y + r, x + c, face.getCell(r, c));
 }
 
+// Copy a card face clipped to an absolute bottom row (exclusive).
+export function pasteCard(vb, face, x, y, clipBottom = Infinity) {
+    const rows = Math.min(face.height, clipBottom - y);
+    for (let r = 0; r < rows; r++)
+        for (let c = 0; c < face.width; c++)
+            vb.setCell(y + r, x + c, face.getCell(r, c));
+}
+
 // Top card plus the exposed bottom borders of the cards underneath it.
 export function drawCardStack(vb, face, x, y, edges = 3) {
     stampCard(vb, face, x, y);

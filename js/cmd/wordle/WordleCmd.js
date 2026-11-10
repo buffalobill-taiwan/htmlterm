@@ -1,5 +1,6 @@
 import { term } from '../../system/sys.js';
 import { CmdBase } from '../CmdBase.js';
+import { defineMetaGetters } from '../meta-getters.js';
 import { CURSOR_HIDE, makeCell } from '../../util/sgr.js';
 import { bufWidth } from '../../util/display-width.js';
 import { VirtualBuffer } from '../../util/VirtualBuffer.js';
@@ -352,10 +353,6 @@ export class WordleCmd extends CmdBase {
         this.placeShellCursor(KEYBOARD_Y + KEYBOARD_H);
         super.close();
     }
-
-
-    static get commandName() { return META.commandName; }
-    static get help() { return META.help; }
-    static get menu() { return META.menu; }
-    static get usage() { return META.usage; }
 }
+
+defineMetaGetters(WordleCmd, META);

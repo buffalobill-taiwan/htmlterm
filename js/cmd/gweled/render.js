@@ -6,6 +6,7 @@ import {
 import { bold, cyan, gray, makeCell, yellow } from '../../util/sgr.js';
 import { term } from '../../system/sys.js';
 import { buildStatRow as _buildDynRow, writeStatRow as _writeDynRow } from '../../util/stat-row.js';
+import { buildFrameCells, buildTextInner } from '../../util/overlay-frame.js';
 
 /** Pre-render all static sidebar text into cell arrays (one-time cost). */
 function _buildStaticSidebar() {
@@ -20,85 +21,22 @@ function _buildStaticSidebar() {
     vb.writeStr(10, 0, gray(' Arrows Swap'));
     vb.writeStr(11, 0, gray(' P Pause  N New'));
     vb.writeStr(12, 0, gray(' Q Quit'));
-    const snapshot = [];
-    for (let r = 0; r < SIDEBAR_H; r++) {
-        const row = vb._buffer[r];
-        let end = row.length;
-        while (end > 0 && row[end - 1] === null) end--;
-        snapshot.push(row.slice(0, end));
-    }
-    return snapshot;
-}
-
-/** Pre-build an overlay frame border (double-line box). */
-function _buildOverlayFrame(fw, fh, color) {
-    const bc = (ch) => makeCell(ch, color, 0, true);
-    const cells = [];
-    for (let r = 0; r < fh; r++) {
-        const row = new Array(fw).fill(null);
-        if (r === 0) {
-            row[0] = bc('╔');
-            for (let c = 1; c < fw - 1; c++) row[c] = bc('═');
-            row[fw - 1] = bc('╗');
-        } else if (r === fh - 1) {
-            row[0] = bc('╚');
-            for (let c = 1; c < fw - 1; c++) row[c] = bc('═');
-            row[fw - 1] = bc('╝');
-        } else {
-            row[0] = bc('║');
-            row[fw - 1] = bc('║');
-        }
-        cells.push(row);
-    }
-    return cells;
-}
-
-/** Pre-build overlay inner content cells (background + text). */
-function _buildOverlayInner(cw, ch, text) {
-    const vb = new VirtualBuffer(cw, ch);
-    const e = makeCell(' ', 0, 0, false);
-    for (let r = 0; r < ch; r++)
-        for (let c = 0; c < cw; c++)
-            vb._buffer[r][c] = e;
-    const tw = cw - 2;
-    const tx = Math.floor((cw - tw) / 2);
-    vb.writeStr(1, tx, text);
-    return vb._buffer.map(row => row.slice());
+    return vb.snapshotRows();
 }
 
 const renderMethods = {
     _initVBs() {
         if (this._rootVB) {
-            for (const vb of [this._rootVB, this._boardVB, this._sidebarVB]) {
-                for (let r = 0; r < vb.height; r++) {
-                    const row = vb._buffer[r];
-                    for (let c = 0; c < vb.width; c++) row[c] = null;
-                }
-            }
+            for (const vb of [this._rootVB, this._boardVB, this._sidebarVB]) vb.clearCells();
         } else {
             this._rootVB = new VirtualBuffer(term.cols, term.rows);
             this._boardVB = new VirtualBuffer(BOARD_W, BOARD_H);
             this._sidebarVB = new VirtualBuffer(SIDEBAR_W, SIDEBAR_H);
 
-            this._rootSlotBoard = this._rootVB.addChildSlot();
-            this._rootSlotBoard.vb = this._boardVB;
-            this._rootSlotBoard.x = BOARD_X;
-            this._rootSlotBoard.y = BOARD_Y;
-            this._rootSlotBoard.active = true;
-
-            this._rootSlotSidebar = this._rootVB.addChildSlot();
-            this._rootSlotSidebar.vb = this._sidebarVB;
-            this._rootSlotSidebar.x = SIDEBAR_X;
-            this._rootSlotSidebar.y = SIDEBAR_Y;
-            this._rootSlotSidebar.active = true;
-
+            this._rootSlotBoard = this._rootVB.attach(this._boardVB, BOARD_X, BOARD_Y);
+            this._rootSlotSidebar = this._rootVB.attach(this._sidebarVB, SIDEBAR_X, SIDEBAR_Y);
             this._boardSlotPause = this._boardVB.addChildSlot();
-            this._boardSlotPause.active = false;
-
-            this._boardSlotChain = this._rootVB.addChildSlot();
-            this._boardSlotChain.x = BOARD_X;
-            this._boardSlotChain.y = BOARD_Y - 4;
-            this._boardSlotChain.active = false;
+            this._boardSlotChain = this._rootVB.attach(null, BOARD_X, BOARD_Y - 4, false);
         }
 
         if (!this._cellEmpty) {
@@ -120,15 +58,11 @@ const renderMethods = {
 
         if (!this._sidebarStatic) {
             this._sidebarStatic = _buildStaticSidebar();
-            this._pauseFrameCells = _buildOverlayFrame(14, 5, 11);
-            this._pauseInnerCells = _buildOverlayInner(12, 3, '\x1B[1;37;44m  PAUSED!  \x1B[0m');
+            this._pauseFrameCells = buildFrameCells(14, 5, 11);
+            this._pauseInnerCells = buildTextInner(12, 3, '\x1B[1;37;44m  PAUSED!  \x1B[0m');
             this._pauseFrameVB = new VirtualBuffer(14, 5);
             this._pauseInnerVB = new VirtualBuffer(12, 3);
-            this._pauseSlotInner = this._pauseFrameVB.addChildSlot();
-            this._pauseSlotInner.vb = this._pauseInnerVB;
-            this._pauseSlotInner.x = 1;
-            this._pauseSlotInner.y = 1;
-            this._pauseSlotInner.active = true;
+            this._pauseSlotInner = this._pauseFrameVB.attach(this._pauseInnerVB, 1, 1);
 
             this._dynScore = _buildDynRow(' Score  ');
             this._dynChain = _buildDynRow(' Chain  ');
@@ -194,11 +128,7 @@ const renderMethods = {
         const vb = this._boardVB;
         const buf = vb._buffer;
 
-        const ec = this._cellEmpty;
-        for (let r = 0; r < BOARD_H; r++) {
-            const row = buf[r];
-            for (let c = 0; c < BOARD_W; c++) row[c] = ec;
-        }
+        vb.fill(this._cellEmpty);
 
         const cont = this._cellEmptyWide;
         const pal = this._palette;

@@ -1,5 +1,6 @@
 import { system, term } from '../../system/sys.js';
 import { CmdBase } from '../CmdBase.js';
+import { defineMetaGetters } from '../meta-getters.js';
 import { CURSOR_HIDE, CURSOR_SHOW, makeCell } from '../../util/sgr.js';
 import { SettingsDialog } from '../../dialog/SettingsDialog.js';
 import { ConfirmDialog } from '../../dialog/ConfirmDialog.js';
@@ -219,12 +220,8 @@ export class JpmjCmd extends CmdBase {
     _removeOverlays() {
         if (this._pauseOverlay) { term.removeOverlay(this._pauseOverlay); this._pauseOverlay = null; }
     }
-
-
-    static get commandName() { return META.commandName; }
-    static get help() { return META.help; }
-    static get menu() { return META.menu; }
-    static get usage() { return META.usage; }
 }
+
+defineMetaGetters(JpmjCmd, META);
 
 Object.assign(JpmjCmd.prototype, palettesMixin, renderMixin, loopMixin, inputMixin);

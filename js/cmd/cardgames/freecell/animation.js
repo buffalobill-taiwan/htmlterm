@@ -1,6 +1,7 @@
 import { RAFAnimationManager } from '../../../system/RAFAnimationHelper.js';
 import { term } from '../../../system/sys.js';
-import { stackCardBuffer } from '../cards.js';
+import { pasteCard, stackCardBuffer } from '../cards.js';
+import { markDirtyRows } from '../../../util/drag.js';
 import { CURSOR_HIDE, CURSOR_SHOW } from '../../../util/sgr.js';
 
 // Update every 20ms, spreading long flights over at most 15 ticks (300ms).
@@ -15,9 +16,7 @@ export function flyCard(cmd, card, from, to, done) {
     manager.initOverlay((r, c) => face.getCell(r, c));
     const active = cmd.executionGuard();
     let start = null, progress = 0, complete = false, cancelled = false;
-    const dirty = () => {
-        for (let r = manager.overlay.y; r < manager.overlay.y + 3; r++) term.markRowDirty(r);
-    };
+    const dirty = () => markDirtyRows(term, manager.overlay.y, 3);
     const finish = () => { if (complete && !cancelled && active()) done(); };
     manager.start(ts => {
         if (start === null) start = ts;
@@ -75,13 +74,7 @@ export function stepCard(card, bounds = WIN_BOUNDS) {
 // bounds so the bouncing card never writes off-screen. Never clears, so
 // successive stamps accumulate as an afterimage trail.
 export function blitCard(vb, cardId, x, y) {
-    const face = stackCardBuffer(cardId);
-    const px = Math.round(x), py = Math.round(y);
-    for (let r = 0; r < 3; r++) for (let c = 0; c < 5; c++) {
-        const yy = py + r, xx = px + c;
-        if (yy >= 0 && yy < vb.height && xx >= 0 && xx < vb.width)
-            vb.setCell(yy, xx, face.getCell(r, c));
-    }
+    pasteCard(vb, stackCardBuffer(cardId), Math.round(x), Math.round(y));
 }
 
 // ── Win celebration animation ────────────────────────────────────────────

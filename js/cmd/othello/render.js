@@ -47,11 +47,7 @@ const renderMethods = {
         if (this._rootVB) return;
         this._rootVB = new VirtualBuffer(term.cols, term.rows);
         this._boardVB = new VirtualBuffer(BOARD_W, BOARD_H);
-        this._slot = this._rootVB.addChildSlot();
-        this._slot.vb = this._boardVB;
-        this._slot.x = GRID_X;
-        this._slot.y = GRID_Y;
-        this._slot.active = true;
+        this._slot = this._rootVB.attach(this._boardVB, GRID_X, GRID_Y);
     },
 
     _render() {

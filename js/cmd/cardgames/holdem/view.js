@@ -1,6 +1,7 @@
 import { VirtualBuffer, _blankCell } from '../../../util/VirtualBuffer.js';
 import { bufWidth } from '../../../util/display-width.js';
 import { term } from '../../../system/sys.js';
+import { cellsEqual } from '../../../util/cells.js';
 import { cardBuffer, drawCardStack, mutedCardBuffer } from '../cards.js';
 import { STREETS, potSize } from './rules.js';
 import { handName } from './evaluate.js';
@@ -20,7 +21,7 @@ export class HoldemView {
         this.output = new VirtualBuffer(80, 1);
         this.seatRows = Array.from({ length: 4 }, () => new VirtualBuffer(80, 1));
         this.dirty = new Set();
-        this.rows.forEach((vb, y) => { const slot = this.root.addChildSlot(); Object.assign(slot, { vb, x: 0, y, active: true }); });
+        this.rows.forEach((vb, y) => { this.root.attach(vb, 0, y); });
         this.cards = Array.from({ length: 18 }, () => {
             const slot = this.root.addChildSlot(); slot.active = false; return slot;
         });
@@ -76,7 +77,7 @@ export class HoldemView {
             const cells = lines[i]; let changed = false;
             for (let x = 0; x < 80; x++) {
                 const a = this.rows[y].getCell(0, x), b = cells.getCell(0, x) || _blankCell;
-                if (a.ch !== b.ch || a.fg !== b.fg || a.bg !== b.bg || a.bold !== b.bold || a.dim !== b.dim || a.width !== b.width) changed = true;
+                if (!cellsEqual(a, b)) { changed = true; break; }
             }
             if (changed) {
                 for (let x = 0; x < 80; x++) this.rows[y].setCell(0, x, cells.getCell(0, x) || _blankCell);

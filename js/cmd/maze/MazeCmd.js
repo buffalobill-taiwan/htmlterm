@@ -1,4 +1,5 @@
 import { CmdBase } from '../CmdBase.js';
+import { defineMetaGetters } from '../meta-getters.js';
 import { GAME_META } from '../game-meta.js';
 import { term } from '../../system/sys.js';
 import { CURSOR_HIDE } from '../../util/sgr.js';
@@ -107,8 +108,6 @@ export class MazeCmd extends CmdBase {
     }
 
     onCancel() { this._quit(); }
-    static get commandName() { return META.commandName; }
-    static get help() { return META.help; }
-    static get usage() { return META.usage; }
-    static get menu() { return META.menu; }
 }
+
+defineMetaGetters(MazeCmd, META);

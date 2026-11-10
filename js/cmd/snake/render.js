@@ -3,38 +3,21 @@ import { term } from '../../system/sys.js';
 import { BOARD_W, BOARD_H, SIDEBAR_W, BOARD_X, BOARD_Y, SIDEBAR_X, DIFFICULTY, SPEED_LEVELS } from './constants.js';
 import { makeCell, bold, cyan, gray } from '../../util/sgr.js';
 import { buildStatRow, writeStatRow } from '../../util/stat-row.js';
+import { buildFrameCells, buildTextInner, buildGameOverInner } from '../../util/overlay-frame.js';
 
 const renderMethods = {
     _initVBs() {
         if (this._rootVB) {
-            for (const vb of [this._rootVB, this._boardVB, this._sidebarVB]) {
-                for (let r = 0; r < vb.height; r++) {
-                    const row = vb._buffer[r];
-                    for (let c = 0; c < vb.width; c++) row[c] = null;
-                }
-            }
+            for (const vb of [this._rootVB, this._boardVB, this._sidebarVB]) vb.clearCells();
         } else {
             this._rootVB = new VirtualBuffer(term.cols, term.rows);
             this._boardVB = new VirtualBuffer(BOARD_W, BOARD_H);
             this._sidebarVB = new VirtualBuffer(SIDEBAR_W, BOARD_H);
 
-            this._rootSlotBoard = this._rootVB.addChildSlot();
-            this._rootSlotBoard.vb = this._boardVB;
-            this._rootSlotBoard.x = BOARD_X;
-            this._rootSlotBoard.y = BOARD_Y;
-            this._rootSlotBoard.active = true;
-
-            this._rootSlotSidebar = this._rootVB.addChildSlot();
-            this._rootSlotSidebar.vb = this._sidebarVB;
-            this._rootSlotSidebar.x = SIDEBAR_X;
-            this._rootSlotSidebar.y = BOARD_Y;
-            this._rootSlotSidebar.active = true;
-
+            this._rootSlotBoard = this._rootVB.attach(this._boardVB, BOARD_X, BOARD_Y);
+            this._rootSlotSidebar = this._rootVB.attach(this._sidebarVB, SIDEBAR_X, BOARD_Y);
             this._boardSlotPause = this._boardVB.addChildSlot();
-            this._boardSlotPause.active = false;
-
             this._boardSlotGameOver = this._boardVB.addChildSlot();
-            this._boardSlotGameOver.active = false;
         }
 
         if (!this._cellEmpty) {
@@ -53,25 +36,17 @@ const renderMethods = {
         }
 
         if (!this._pauseFrameCells) {
-            this._pauseFrameCells = this._buildOverlayFrame(14, 5, 11);
-            this._pauseInnerCells = this._buildOverlayInner(12, 3, '\x1B[1;37;44m  PAUSED!  \x1B[0m');
+            this._pauseFrameCells = buildFrameCells(14, 5, 11);
+            this._pauseInnerCells = buildTextInner(12, 3, '\x1B[1;37;44m  PAUSED!  \x1B[0m');
             this._pauseFrameVB = new VirtualBuffer(14, 5);
             this._pauseInnerVB = new VirtualBuffer(12, 3);
-            this._pauseSlotInner = this._pauseFrameVB.addChildSlot();
-            this._pauseSlotInner.vb = this._pauseInnerVB;
-            this._pauseSlotInner.x = 1;
-            this._pauseSlotInner.y = 1;
-            this._pauseSlotInner.active = true;
+            this._pauseSlotInner = this._pauseFrameVB.attach(this._pauseInnerVB, 1, 1);
 
-            this._gameOverFrameCells = this._buildOverlayFrame(16, 6, 1);
-            this._gameOverInnerCells = this._buildGameOverInner(14, 4);
+            this._gameOverFrameCells = buildFrameCells(16, 6, 1);
+            this._gameOverInnerCells = buildGameOverInner(14, 4);
             this._gameOverFrameVB = new VirtualBuffer(16, 6);
             this._gameOverInnerVB = new VirtualBuffer(14, 4);
-            this._gameOverSlotInner = this._gameOverFrameVB.addChildSlot();
-            this._gameOverSlotInner.vb = this._gameOverInnerVB;
-            this._gameOverSlotInner.x = 1;
-            this._gameOverSlotInner.y = 1;
-            this._gameOverSlotInner.active = true;
+            this._gameOverSlotInner = this._gameOverFrameVB.attach(this._gameOverInnerVB, 1, 1);
         }
 
         if (!this._dynScore) {
@@ -82,64 +57,8 @@ const renderMethods = {
         }
     },
 
-    _buildOverlayFrame(fw, fh, color) {
-        const bc = (ch) => makeCell(ch, color, 0, true);
-        const cells = [];
-        for (let r = 0; r < fh; r++) {
-            const row = new Array(fw).fill(null);
-            if (r === 0) {
-                row[0] = bc('╔');
-                for (let c = 1; c < fw - 1; c++) row[c] = bc('═');
-                row[fw - 1] = bc('╗');
-            } else if (r === fh - 1) {
-                row[0] = bc('╚');
-                for (let c = 1; c < fw - 1; c++) row[c] = bc('═');
-                row[fw - 1] = bc('╝');
-            } else {
-                row[0] = bc('║');
-                row[fw - 1] = bc('║');
-            }
-            cells.push(row);
-        }
-        return cells;
-    },
-
-    _buildOverlayInner(cw, ch, text) {
-        const vb = new VirtualBuffer(cw, ch);
-        const e = makeCell(' ', 0, 0, false);
-        for (let r = 0; r < ch; r++)
-            for (let c = 0; c < cw; c++)
-                vb._buffer[r][c] = e;
-        const tw = cw - 2;
-        const tx = Math.floor((cw - tw) / 2);
-        vb.writeStr(1, tx, text);
-        return vb._buffer.map(row => row.slice());
-    },
-
-    _buildGameOverInner(cw, ch) {
-        const vb = new VirtualBuffer(cw, ch);
-        const e = makeCell(' ', 0, 0, false);
-        for (let r = 0; r < ch; r++)
-            for (let c = 0; c < cw; c++)
-                vb._buffer[r][c] = { ...e };
-        const t1 = ' GAME OVER ';
-        const t1x = Math.floor((cw - t1.length) / 2);
-        vb.writeStr(1, t1x, '\x1B[1;31m' + t1 + '\x1B[0m');
-        const sep = '─'.repeat(cw - 2);
-        const sx = 1;
-        vb.writeStr(2, sx, '\x1B[31m' + sep + '\x1B[0m');
-        const t2 = '[n]ew [q]uit';
-        const t2x = Math.floor((cw - t2.length) / 2);
-        vb.writeStr(3, t2x, '\x1B[90m' + t2 + '\x1B[0m');
-        return vb._buffer.map(row => row.slice());
-    },
-
     _render() {
-        const rootBuf = this._rootVB._buffer;
-        for (let r = 0; r < this._rootVB.height; r++) {
-            const row = rootBuf[r];
-            for (let c = 0; c < row.length; c++) row[c] = this._cellEmpty;
-        }
+        this._rootVB.fill(this._cellEmpty);
         this._renderSidebar();
         this._renderBoard();
     },
@@ -167,11 +86,7 @@ const renderMethods = {
         const vb = this._boardVB;
         const buf = vb._buffer;
 
-        const ec = this._cellEmpty;
-        for (let r = 0; r < BOARD_H; r++) {
-            const row = buf[r];
-            for (let c = 0; c < BOARD_W; c++) row[c] = ec;
-        }
+        vb.fill(this._cellEmpty);
 
         const topRow = buf[0], btmRow = buf[BOARD_H - 1];
         const bt = this._borderTop, bb = this._borderBottom;

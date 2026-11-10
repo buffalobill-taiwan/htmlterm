@@ -1,4 +1,5 @@
-import { CmdBase } from '../CmdBase.js';
+import { CmdBase, DIFFICULTY_FLAGS } from '../CmdBase.js';
+import { defineMetaGetters } from '../meta-getters.js';
 import { _createEmpty, _generate, _copyGrid } from './solver.js';
 import { SIZE, BOX } from './constants.js';
 import { term, system } from '../../system/sys.js';
@@ -14,7 +15,7 @@ const META = GAME_META.sudoku;
 class SudokuCmd extends CmdBase {
     execute(args) {
         const p = this.parseArgs(args, {
-            flags: { '--easy': Boolean, '--medium': Boolean, '--hard': Boolean, '--seed': String },
+            flags: { ...DIFFICULTY_FLAGS, '--seed': String },
         });
         if (p.hasHelp) return this.showHelp();
         const { seed, error } = seedFromArgs(args, p);
@@ -54,10 +55,7 @@ class SudokuCmd extends CmdBase {
             window.removeEventListener('blur', releaseHint);
             releaseHint();
         });
-        let diff = null;
-        if (p.flag('--easy'))   diff = 'easy';
-        if (p.flag('--medium')) diff = 'medium';
-        if (p.flag('--hard'))   diff = 'hard';
+        const diff = this.parseDifficulty(p);
         if (diff || seed !== undefined) {
             this._startGame(diff || 'medium', seed);
         } else {
@@ -367,13 +365,9 @@ class SudokuCmd extends CmdBase {
     onCancel() {
         this._quit();
     }
-
-
-    static get commandName() { return META.commandName; }
-    static get help() { return META.help; }
-    static get menu() { return META.menu; }
-    static get usage() { return META.usage; }
 }
+
+defineMetaGetters(SudokuCmd, META);
 
 // Keep the command as the state owner and preserve class-method descriptors.
 installMethods(SudokuCmd, renderMethods);

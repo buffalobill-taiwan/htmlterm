@@ -1,4 +1,5 @@
-import { CmdBase } from '../CmdBase.js';
+import { CmdBase, DIFFICULTY_FLAGS } from '../CmdBase.js';
+import { defineMetaGetters } from '../meta-getters.js';
 import { term } from '../../system/sys.js';
 import { CURSOR_HIDE } from '../../util/sgr.js';
 import {
@@ -6,19 +7,15 @@ import {
 } from './constants.js';
 import { renderMethods } from './render.js';
 import { installMethods } from '../../util/install-methods.js';
+import { isSuppressedKey, SWALLOW_EDIT } from '../game-keys.js';
 import { GAME_META } from '../game-meta.js';
 const META = GAME_META.snake;
 
 class SnakeCmd extends CmdBase {
     execute(args) {
-        const p = this.parseArgs(args, {
-            flags: { '--easy': Boolean, '--medium': Boolean, '--hard': Boolean },
-        });
+        const p = this.parseArgs(args, { flags: DIFFICULTY_FLAGS });
         if (p.hasHelp) return this.showHelp();
-        let diff = null;
-        if (p.flag('--easy'))   diff = 'easy';
-        if (p.flag('--medium')) diff = 'medium';
-        if (p.flag('--hard'))   diff = 'hard';
+        const diff = this.parseDifficulty(p);
         if (diff) {
             this._startGame(diff);
         } else {
@@ -174,16 +171,7 @@ class SnakeCmd extends CmdBase {
         if (this._paused) {
             if (code === 0x1B) {
                 const s = typeof data === 'string' ? data : '';
-                if (s === '\x1B[A') return;
-                if (s === '\x1B[B') return;
-                if (s === '\x1B[C') return;
-                if (s === '\x1B[D') return;
-                if (s === '\x1B[3~') return;
-                if (s === '\x1B[2~') return;
-                if (s === '\x1B[H') return;
-                if (s === '\x1B[F') return;
-                if (s === '\x1B[5~') return;
-                if (s === '\x1B[6~') return;
+                if (isSuppressedKey(s)) return;
                 if (s === '\x1B' || data === 0x1B) this._quit();
                 return;
             }
@@ -201,12 +189,7 @@ class SnakeCmd extends CmdBase {
             if (s === '\x1B[B') { this._queueDir(DIR.DOWN); return; }
             if (s === '\x1B[D') { this._queueDir(DIR.LEFT); return; }
             if (s === '\x1B[C') { this._queueDir(DIR.RIGHT); return; }
-            if (s === '\x1B[3~') return;
-            if (s === '\x1B[2~') return;
-            if (s === '\x1B[H') return;
-            if (s === '\x1B[F') return;
-            if (s === '\x1B[5~') return;
-            if (s === '\x1B[6~') return;
+            if (isSuppressedKey(s, SWALLOW_EDIT)) return;
             if (s === '\x1B' || data === 0x1B) this._quit();
             return;
         }
@@ -258,13 +241,9 @@ class SnakeCmd extends CmdBase {
     onCancel() {
         this._quit();
     }
-
-
-    static get commandName() { return META.commandName; }
-    static get help() { return META.help; }
-    static get menu() { return META.menu; }
-    static get usage() { return META.usage; }
 }
+
+defineMetaGetters(SnakeCmd, META);
 
 // Keep the command as the state owner and preserve class-method descriptors.
 installMethods(SnakeCmd, renderMethods);

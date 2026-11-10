@@ -4,15 +4,9 @@ import { makeCell, defaultAttr } from '../util/sgr.js';
 import { parseCSI } from '../system/TextInputModel.js';
 import { DEFAULT_DIALOG_WIDTH } from '../util/constants.js';
 import { VirtualBuffer } from '../util/VirtualBuffer.js';
+import { cellsEqual } from '../util/cells.js';
 
 const border = makeCell('│', defaultAttr(), 1);
-function sameCell(a, b) {
-    if (a === b) return true;
-    if (!a || !b) return false;
-    for (const key in a) if (a[key] !== b[key]) return false;
-    for (const key in b) if (a[key] !== b[key]) return false;
-    return true;
-}
 
 export class Dialog {
     constructor(term, opts) {
@@ -170,7 +164,7 @@ export class Dialog {
         for (let r = 0; r < this.h; r++) {
             const oldRow = this._buffer?.[this._sourceRow(r, this._publishedScroll)];
             const newRow = next[this._sourceRow(r, this._scroll)];
-            if (!oldRow || newRow.some((cell, c) => !sameCell(cell, oldRow[c])))
+            if (!oldRow || newRow.some((cell, c) => !cellsEqual(cell, oldRow[c])))
                 this.term.markRowDirty(this.y + r);
         }
         this._buffer = next;

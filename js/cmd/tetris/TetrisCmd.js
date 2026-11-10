@@ -1,4 +1,5 @@
-import { CmdBase } from '../CmdBase.js';
+import { CmdBase, DIFFICULTY_FLAGS } from '../CmdBase.js';
+import { defineMetaGetters } from '../meta-getters.js';
 import { term } from '../../system/sys.js';
 import { CURSOR_HIDE } from '../../util/sgr.js';
 import {
@@ -9,19 +10,15 @@ import { _createBoard, _bag, _fits, _isTSpin, _isTSpinMini } from './board.js';
 import { SHAPES, KICKS_I, KICKS_3x3, PIECE_COLORS } from './pieces.js';
 import { renderMethods } from './render.js';
 import { installMethods } from '../../util/install-methods.js';
+import { isSuppressedKey, SWALLOW_EDIT } from '../game-keys.js';
 import { GAME_META } from '../game-meta.js';
 const META = GAME_META.tetris;
 
 class TetrisCmd extends CmdBase {
     execute(args) {
-        const p = this.parseArgs(args, {
-            flags: { '--easy': Boolean, '--medium': Boolean, '--hard': Boolean },
-        });
+        const p = this.parseArgs(args, { flags: DIFFICULTY_FLAGS });
         if (p.hasHelp) return this.showHelp();
-        let diff = null;
-        if (p.flag('--easy'))   diff = 'easy';
-        if (p.flag('--medium')) diff = 'medium';
-        if (p.flag('--hard'))   diff = 'hard';
+        const diff = this.parseDifficulty(p);
         if (diff) {
             this._startGame(diff);
         } else {
@@ -386,16 +383,7 @@ class TetrisCmd extends CmdBase {
         if (this._paused) {
             if (code === 0x1B) {
                 const s = typeof data === 'string' ? data : '';
-                if (s === '\x1B[A') return;
-                if (s === '\x1B[B') return;
-                if (s === '\x1B[C') return;
-                if (s === '\x1B[D') return;
-                if (s === '\x1B[3~') return;
-                if (s === '\x1B[2~') return;
-                if (s === '\x1B[H') return;
-                if (s === '\x1B[F') return;
-                if (s === '\x1B[5~') return;
-                if (s === '\x1B[6~') return;
+                if (isSuppressedKey(s)) return;
                 if (s === '\x1B' || data === 0x1B) this._quit();
                 return;
             }
@@ -412,12 +400,7 @@ class TetrisCmd extends CmdBase {
             if (s === '\x1B[B') { this._softDrop(); return; }
             if (s === '\x1B[D') { if (this._move(-1, 0)) this._renderBoard(); return; }
             if (s === '\x1B[C') { if (this._move(1, 0)) this._renderBoard(); return; }
-            if (s === '\x1B[3~') return;
-            if (s === '\x1B[2~') return;
-            if (s === '\x1B[H') return;
-            if (s === '\x1B[F') return;
-            if (s === '\x1B[5~') return;
-            if (s === '\x1B[6~') return;
+            if (isSuppressedKey(s, SWALLOW_EDIT)) return;
             if (s === '\x1B' || data === 0x1B) this._quit();
             return;
         }
@@ -449,13 +432,9 @@ class TetrisCmd extends CmdBase {
     onCancel() {
         this._quit();
     }
-
-
-    static get commandName() { return META.commandName; }
-    static get help() { return META.help; }
-    static get menu() { return META.menu; }
-    static get usage() { return META.usage; }
 }
+
+defineMetaGetters(TetrisCmd, META);
 
 // Keep the command as the state owner and preserve class-method descriptors.
 installMethods(TetrisCmd, renderMethods);

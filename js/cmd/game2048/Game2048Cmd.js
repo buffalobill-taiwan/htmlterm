@@ -1,10 +1,12 @@
 import { CmdBase } from '../CmdBase.js';
+import { defineMetaGetters } from '../meta-getters.js';
 import { _emptyBoard, _spawnTile, _copyBoard, _slide, _hasWon, _canMove } from './board.js';
 import { term } from '../../system/sys.js';
 import { CURSOR_HIDE } from '../../util/sgr.js';
 import { BOARD_Y, BOARD_H } from './constants.js';
 import { renderMethods } from './render.js';
 import { installMethods } from '../../util/install-methods.js';
+import { isSuppressedKey, SWALLOW_EDIT } from '../game-keys.js';
 import { GAME_META } from '../game-meta.js';
 const META = GAME_META['2048'];
 
@@ -77,12 +79,7 @@ class Game2048Cmd extends CmdBase {
             }
             if (code === 0x1B) {
                 const s = typeof data === 'string' ? data : '';
-                if (s === '\x1B[3~') return;
-                if (s === '\x1B[2~') return;
-                if (s === '\x1B[H') return;
-                if (s === '\x1B[F') return;
-                if (s === '\x1B[5~') return;
-                if (s === '\x1B[6~') return;
+                if (isSuppressedKey(s, SWALLOW_EDIT)) return;
                 if (s === '\x1B' || data === 0x1B) this._quit();
                 return;
             }
@@ -97,12 +94,7 @@ class Game2048Cmd extends CmdBase {
             if (s === '\x1B[B') { this._move(2); return; }
             if (s === '\x1B[D') { this._move(1); return; }
             if (s === '\x1B[C') { this._move(3); return; }
-            if (s === '\x1B[3~') return;
-            if (s === '\x1B[2~') return;
-            if (s === '\x1B[H') return;
-            if (s === '\x1B[F') return;
-            if (s === '\x1B[5~') return;
-            if (s === '\x1B[6~') return;
+            if (isSuppressedKey(s, SWALLOW_EDIT)) return;
             if (s === '\x1B' || data === 0x1B) this._quit();
             return;
         }
@@ -195,13 +187,9 @@ class Game2048Cmd extends CmdBase {
     onCancel() {
         this._quit();
     }
-
-
-    static get commandName() { return META.commandName; }
-    static get help() { return META.help; }
-    static get menu() { return META.menu; }
-    static get usage() { return META.usage; }
 }
+
+defineMetaGetters(Game2048Cmd, META);
 
 // Keep the command as the state owner and preserve class-method descriptors.
 installMethods(Game2048Cmd, renderMethods);

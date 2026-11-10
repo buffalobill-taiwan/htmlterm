@@ -1,4 +1,5 @@
-import { CmdBase } from '../CmdBase.js';
+import { CmdBase, DIFFICULTY_FLAGS } from '../CmdBase.js';
+import { defineMetaGetters } from '../meta-getters.js';
 import { term } from '../../system/sys.js';
 import { CURSOR_HIDE, yellow, bold, green, red, gray } from '../../util/sgr.js';
 import { DIFFICULTY } from './constants.js';
@@ -14,7 +15,7 @@ const META = GAME_META.minesw;
 class MinesweeperCmd extends CmdBase {
     execute(args) {
         const p = this.parseArgs(args, {
-            flags: { '--easy': Boolean, '--medium': Boolean, '--hard': Boolean, '--seed': String, '--start': String },
+            flags: { ...DIFFICULTY_FLAGS, '--seed': String, '--start': String },
         });
         if (p.hasHelp) return this.showHelp();
         const { seed, error } = seedFromArgs(args, p);
@@ -22,10 +23,7 @@ class MinesweeperCmd extends CmdBase {
             this.error(error);
             return this.showHelp();
         }
-        let diff = null;
-        if (p.flag('--easy'))   diff = 'easy';
-        if (p.flag('--medium')) diff = 'medium';
-        if (p.flag('--hard'))   diff = 'hard';
+        const diff = this.parseDifficulty(p);
         const startArg = p.flag('--start');
         const start = startArg !== null ? parseStart(startArg, diff || 'medium') : null;
         if (startArg !== null && !start) {
@@ -238,13 +236,9 @@ class MinesweeperCmd extends CmdBase {
     onCancel() {
         this._quit();
     }
-
-
-    static get commandName() { return META.commandName; }
-    static get help() { return META.help; }
-    static get menu() { return META.menu; }
-    static get usage() { return META.usage; }
 }
+
+defineMetaGetters(MinesweeperCmd, META);
 
 // Keep the command as the state owner and preserve class-method descriptors.
 installMethods(MinesweeperCmd, renderMethods);

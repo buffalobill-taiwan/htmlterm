@@ -55,14 +55,12 @@ const overlaysMethods = {
             };
             term.addOverlay(this._pauseOverlay);
         }
-        for (let r = 2; r < 2 + oh; r++) term.markRowDirty(r);
     },
 
     _removePauseOverlay() {
         if (this._pauseOverlay) {
             term.removeOverlay(this._pauseOverlay);
             this._pauseOverlay = null;
-            for (let r = 2; r < 17; r++) term.markRowDirty(r);
         }
     },
 };

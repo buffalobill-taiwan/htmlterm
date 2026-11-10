@@ -1,5 +1,6 @@
 import { RAFAnimationManager } from '../../system/RAFAnimationHelper.js';
 import { term } from '../../system/sys.js';
+import { markDirtyRows } from '../../util/drag.js';
 import { cardBuffer, cardFlipFrames } from './cards.js';
 
 // Run one deal/fly animation per item, launching the next while the current
@@ -53,7 +54,7 @@ export function flipCard(cmd, card, x, y, done) {
         const next = Math.min(5, Math.floor((ts - start) / 40));
         if (next !== progress) {
             progress = next;
-            for (let r = y; r < y + 3; r++) term.markRowDirty(r);
+            markDirtyRows(term, y, 3);
         }
         if (ts - start >= 240) { complete = true; return true; }
         return false;
@@ -75,9 +76,7 @@ export function dealCard(cmd, card, from, to, { faceDown = false, faceUp = false
     let mode = 'fly', step = 0, flipStart = null, progress = 0, start = null;
     let complete = false, cancelled = false;
     manager.initOverlay((r, c) => (mode === 'fly' ? back : frames[progress]).getCell(r, c));
-    const dirtyAt = () => {
-        for (let r = manager.overlay.y; r < manager.overlay.y + 3; r++) term.markRowDirty(r);
-    };
+    const dirtyAt = () => markDirtyRows(term, manager.overlay.y, 3);
     const finish = () => { if (complete && !cancelled && active()) done(); };
     const cancel = () => { cancelled = true; manager.stop(finish); };
     manager.start(ts => {

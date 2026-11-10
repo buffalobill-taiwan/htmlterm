@@ -1,4 +1,5 @@
 import { CmdBase } from '../CmdBase.js';
+import { defineMetaGetters } from '../meta-getters.js';
 import { term } from '../../system/sys.js';
 import { CURSOR_HIDE } from '../../util/sgr.js';
 import { parseFen, moveToNotation } from './engine/notation.js';
@@ -323,11 +324,8 @@ export class CChessCmd extends CmdBase {
         this.close();
     }
     onCancel() { this._quit(); }
-
-    static get commandName() { return META.commandName; }
-    static get help() { return META.help; }
-    static get menu() { return META.menu; }
-    static get usage() { return META.usage; }
 }
+
+defineMetaGetters(CChessCmd, META);
 
 installMethods(CChessCmd, renderMethods, darkMethods, mahjongMethods, mahjongRenderMethods);

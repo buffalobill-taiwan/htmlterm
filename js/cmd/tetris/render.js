@@ -6,6 +6,7 @@ import {
 import { bold, cyan, gray, yellow } from '../../util/sgr.js';
 import { term } from '../../system/sys.js';
 import { buildStatRow as _buildDynRow, writeStatRow as _writeDynRow } from '../../util/stat-row.js';
+import { buildFrameCells, buildTextInner, buildGameOverInner } from '../../util/overlay-frame.js';
 import { _ghostY } from './board.js';
 
 function _drawPreviewVB(vb, ry, rx, type, innerW, innerH, cells) {
@@ -52,91 +53,7 @@ function _buildStaticSidebar() {
     vb.writeStr(19, 0, gray(' Space  Drop'));
     vb.writeStr(20, 0, gray(' H Hold  P Pause'));
     vb.writeStr(21, 0, gray(' Q Quit'));
-    // Snapshot: for each row, store only up to the last non-null cell
-    const snapshot = [];
-    for (let r = 0; r < BOARD_H; r++) {
-        const row = vb._buffer[r];
-        let end = row.length;
-        while (end > 0 && row[end - 1] === null) end--;
-        snapshot.push(row.slice(0, end));
-    }
-    return snapshot;
-}
-
-/** Pre-build pause frame border cells (yellow double-line box). */
-function _buildPauseFrame(fw, fh) {
-    const bc = (ch) => ({ ch, fg: 11, bg: 0, bold: true, dim: false, italic: false, underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: 1 });
-    const cells = [];
-    for (let r = 0; r < fh; r++) {
-        const row = new Array(fw).fill(null);
-        if (r === 0) {
-            row[0] = bc('╔');
-            for (let c = 1; c < fw - 1; c++) row[c] = bc('═');
-            row[fw - 1] = bc('╗');
-        } else if (r === fh - 1) {
-            row[0] = bc('╚');
-            for (let c = 1; c < fw - 1; c++) row[c] = bc('═');
-            row[fw - 1] = bc('╝');
-        } else {
-            row[0] = bc('║');
-            row[fw - 1] = bc('║');
-        }
-        cells.push(row);
-    }
-    return cells;
-}
-
-/** Pre-build pause inner content cells (background + "PAUSED!" text). */
-function _buildPauseInner(cw, ch) {
-    const vb = new VirtualBuffer(cw, ch);
-    const empty = { ch: ' ', fg: 0, bg: 0, bold: false, dim: false, italic: false, underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: 1 };
-    for (let r = 0; r < ch; r++)
-        for (let c = 0; c < cw; c++)
-            vb._buffer[r][c] = empty;
-    vb.writeStr(1, 2, '\x1B[1;37;44mPAUSED!\x1B[0m');
-    return vb._buffer.map(row => row.slice());
-}
-
-/** Pre-build game over frame border cells (red double-line box). */
-function _buildGameOverFrame(fw, fh) {
-    const bc = (ch) => ({ ch, fg: 1, bg: 0, bold: true, dim: false, italic: false, underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: 1 });
-    const cells = [];
-    for (let r = 0; r < fh; r++) {
-        const row = new Array(fw).fill(null);
-        if (r === 0) {
-            row[0] = bc('╔');
-            for (let c = 1; c < fw - 1; c++) row[c] = bc('═');
-            row[fw - 1] = bc('╗');
-        } else if (r === fh - 1) {
-            row[0] = bc('╚');
-            for (let c = 1; c < fw - 1; c++) row[c] = bc('═');
-            row[fw - 1] = bc('╝');
-        } else {
-            row[0] = bc('║');
-            row[fw - 1] = bc('║');
-        }
-        cells.push(row);
-    }
-    return cells;
-}
-
-/** Pre-build game over inner content cells (background + text). */
-function _buildGameOverInner(cw, ch) {
-    const vb = new VirtualBuffer(cw, ch);
-    const empty = { ch: ' ', fg: 0, bg: 0, bold: false, dim: false, italic: false, underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: 1 };
-    for (let r = 0; r < ch; r++)
-        for (let c = 0; c < cw; c++)
-            vb._buffer[r][c] = { ...empty };
-    const textW = 11; // " GAME OVER " = 11
-    const textX = Math.floor((cw - textW) / 2);
-    vb.writeStr(1, textX, '\x1B[1;31m GAME OVER \x1B[0m');
-    const sepLen = cw - 2;
-    const sepX = Math.floor((cw - sepLen) / 2);
-    vb.writeStr(2, sepX, '\x1B[31m' + '─'.repeat(sepLen) + '\x1B[0m');
-    const hintW = 13; // [n]ew [q]uit
-    const hintX = Math.floor((cw - hintW) / 2);
-    vb.writeStr(3, hintX, '\x1B[90m[n]ew [q]uit\x1B[0m');
-    return vb._buffer.map(row => row.slice());
+    return vb.snapshotRows();
 }
 
 const renderMethods = {
@@ -152,38 +69,16 @@ const renderMethods = {
 
             // Pre-allocate fixed child slots — zero alloc per frame
             // rootVB slots: [0]=sidebarVB, [1]=boardVB
-            this._rootSlotSidebar = this._rootVB.addChildSlot();
-            this._rootSlotBoard   = this._rootVB.addChildSlot();
-            this._rootSlotSidebar.vb = this._sidebarVB;
-            this._rootSlotSidebar.x  = SIDEBAR_X;
-            this._rootSlotSidebar.y  = BOARD_Y;
-            this._rootSlotSidebar.active = true;
-            this._rootSlotBoard.vb = this._boardVB;
-            this._rootSlotBoard.x  = BOARD_X;
-            this._rootSlotBoard.y  = BOARD_Y;
-            this._rootSlotBoard.active = true;
+            this._rootSlotSidebar = this._rootVB.attach(this._sidebarVB, SIDEBAR_X, BOARD_Y);
+            this._rootSlotBoard = this._rootVB.attach(this._boardVB, BOARD_X, BOARD_Y);
 
-            // boardVB slot for pause overlay
+            // boardVB slots for overlays, activated only when needed
             this._boardSlotPause = this._boardVB.addChildSlot();
-            this._boardSlotPause.active = false; // activated only when paused
-
-            // boardVB slot for game over overlay
             this._boardSlotGameOver = this._boardVB.addChildSlot();
-            this._boardSlotGameOver.active = false; // activated only when game over
 
-            // pauseFrameVB slot for inner content
-            this._pauseSlotInner = this._pauseFrameVB.addChildSlot();
-            this._pauseSlotInner.vb = this._pauseInnerVB;
-            this._pauseSlotInner.x  = 1;
-            this._pauseSlotInner.y  = 1;
-            this._pauseSlotInner.active = true;
-
-            // gameOverFrameVB slot for inner content
-            this._gameOverSlotInner = this._gameOverFrameVB.addChildSlot();
-            this._gameOverSlotInner.vb = this._gameOverInnerVB;
-            this._gameOverSlotInner.x  = 1;
-            this._gameOverSlotInner.y  = 1;
-            this._gameOverSlotInner.active = true;
+            // frame slots for inner content
+            this._pauseSlotInner = this._pauseFrameVB.attach(this._pauseInnerVB, 1, 1);
+            this._gameOverSlotInner = this._gameOverFrameVB.attach(this._gameOverInnerVB, 1, 1);
         }
 
         const cell = (ch, fg, bg, bld, dim) => ({ ch, fg, bg, bold: bld, dim, italic: false, underline: false, blink: false, inverse: false, conceal: false, crossedOut: false, width: 1 });
@@ -212,10 +107,10 @@ const renderMethods = {
         // Pre-render static sidebar cells (only once)
         if (!this._sidebarStatic) {
             this._sidebarStatic = _buildStaticSidebar();
-            this._pauseFrameCells = _buildPauseFrame(14, 5);
-            this._pauseInnerCells = _buildPauseInner(12, 3);
-            this._gameOverFrameCells = _buildGameOverFrame(16, 6);
-            this._gameOverInnerCells = _buildGameOverInner(14, 4);
+            this._pauseFrameCells = buildFrameCells(14, 5, 11);
+            this._pauseInnerCells = buildTextInner(12, 3, '\x1B[1;37;44mPAUSED!\x1B[0m', { x: 2 });
+            this._gameOverFrameCells = buildFrameCells(16, 6, 1);
+            this._gameOverInnerCells = buildGameOverInner(14, 4);
             // Pre-build mutable cell rows for score/level/lines (avoid makeCell each update)
             this._dynScore = _buildDynRow(' Score  ');
             this._dynSpeed = _buildDynRow(' Speed  ');
@@ -297,11 +192,7 @@ const renderMethods = {
         const buf = vb._buffer;
 
         // Fill board area with empty cells (reuse pre-allocated cell)
-        const ec = this._cellEmpty;
-        for (let r = 0; r < BOARD_H; r++) {
-            const row = buf[r];
-            for (let c = 0; c < BOARD_W; c++) row[c] = ec;
-        }
+        vb.fill(this._cellEmpty);
 
         // Board locked pieces
         const pal = this._boardPalette;

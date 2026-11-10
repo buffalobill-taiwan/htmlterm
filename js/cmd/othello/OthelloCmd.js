@@ -1,4 +1,5 @@
-import { CmdBase } from '../CmdBase.js';
+import { CmdBase, DIFFICULTY_FLAGS } from '../CmdBase.js';
+import { defineMetaGetters } from '../meta-getters.js';
 import { term } from '../../system/sys.js';
 import { CURSOR_HIDE, yellow, bold, green, red, fg } from '../../util/sgr.js';
 import { idx, isValid, applyMove, other, getValidMoves, countPieces } from './board.js';
@@ -6,19 +7,15 @@ import { BLACK, WHITE, N, FLIP_MS, PASS_MS, THINK_MS, BLINK_MS, CLEAR_ROW } from
 import { aiMoveEasy, aiMoveMedium, aiMoveHard } from './ai.js';
 import { renderMethods } from './render.js';
 import { installMethods } from '../../util/install-methods.js';
+import { isSuppressedKey, SWALLOW_EDIT_ALT } from '../game-keys.js';
 import { GAME_META } from '../game-meta.js';
 const META = GAME_META.othello;
 
 class OthelloCmd extends CmdBase {
     execute(args) {
-        const p = this.parseArgs(args, {
-            flags: { '--easy': Boolean, '--medium': Boolean, '--hard': Boolean },
-        });
+        const p = this.parseArgs(args, { flags: DIFFICULTY_FLAGS });
         if (p.hasHelp) return this.showHelp();
-        let diff = null;
-        if (p.flag('--easy'))   diff = 'easy';
-        if (p.flag('--medium')) diff = 'medium';
-        if (p.flag('--hard'))   diff = 'hard';
+        const diff = this.parseDifficulty(p);
         if (diff) {
             this._startGame(diff, 'black');
         } else {
@@ -284,12 +281,7 @@ class OthelloCmd extends CmdBase {
             if (s === '\x1B[B') { this._move(1, 0); return; }
             if (s === '\x1B[C') { this._move(0, 1); return; }
             if (s === '\x1B[D') { this._move(0, -1); return; }
-            if (s === '\x1B[3~') return;
-            if (s === '\x1B[2~') return;
-            if (s === '\x1B[H' || s === '\x1B[1~') return;
-            if (s === '\x1B[F' || s === '\x1B[4~') return;
-            if (s === '\x1B[5~') return;
-            if (s === '\x1B[6~') return;
+            if (isSuppressedKey(s, SWALLOW_EDIT_ALT)) return;
             if (s === '\x1B' || data === 0x1B) this._quit();
             return;
         }
@@ -337,13 +329,9 @@ class OthelloCmd extends CmdBase {
     onCancel() {
         this._quit();
     }
-
-
-    static get commandName() { return META.commandName; }
-    static get help() { return META.help; }
-    static get menu() { return META.menu; }
-    static get usage() { return META.usage; }
 }
+
+defineMetaGetters(OthelloCmd, META);
 
 // Keep the command as the state owner and preserve class-method descriptors.
 installMethods(OthelloCmd, renderMethods);

@@ -161,7 +161,6 @@ export const loopMixin = {
         if (!pos) { this._gameTimer = setTimeout(() => this._continueGame(), 100); return; }
         this._callEffectOverlay = callEffectOverlay(text, { x: pos.x, y: pos.y, owner: this });
         term.addOverlay(this._callEffectOverlay);
-        for (let r = pos.y; r < pos.y + this._callEffectOverlay.h; r++) term.markRowDirty(r);
         this._render();
         this._callEffectTimer = setTimeout(() => {
             this._removeCallEffect();
@@ -195,7 +194,6 @@ export const loopMixin = {
     _removeCallEffect() {
         if (this._callEffectOverlay) {
             term.removeOverlay(this._callEffectOverlay);
-            for (let r = this._callEffectOverlay.y; r < this._callEffectOverlay.y + this._callEffectOverlay.h; r++) term.markRowDirty(r);
             this._callEffectOverlay = null;
         }
         if (this._callEffectTimer) {

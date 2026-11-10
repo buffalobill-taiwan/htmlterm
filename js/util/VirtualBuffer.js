@@ -51,6 +51,26 @@ export class VirtualBuffer {
         }
     }
 
+    /** Fill every cell with the same immutable cell reference. */
+    fill(cell) {
+        for (let r = 0; r < this.height; r++) {
+            const row = this._buffer[r];
+            for (let c = 0; c < this.width; c++) row[c] = cell;
+        }
+    }
+
+    /** Per-row copies trimmed at the last non-null cell. */
+    snapshotRows() {
+        const snapshot = [];
+        for (let r = 0; r < this.height; r++) {
+            const row = this._buffer[r];
+            let end = row.length;
+            while (end > 0 && row[end - 1] === null) end--;
+            snapshot.push(row.slice(0, end));
+        }
+        return snapshot;
+    }
+
     clearChildren() {
         this._children.length = 0;
     }
@@ -103,6 +123,16 @@ export class VirtualBuffer {
     addChildSlot() {
         const slot = { vb: null, x: 0, y: 0, active: false };
         this._children.push(slot);
+        return slot;
+    }
+
+    /** Allocate a child slot already bound to a buffer and position. */
+    attach(vb, x, y, active = true) {
+        const slot = this.addChildSlot();
+        slot.vb = vb;
+        slot.x = x;
+        slot.y = y;
+        slot.active = active;
         return slot;
     }
 

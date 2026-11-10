@@ -44,28 +44,13 @@ const renderMethods = {
             this._boardVB = new VirtualBuffer(BOARD_W, BOARD_H);
             this._sidebarVB = new VirtualBuffer(SIDEBAR_W, SIDEBAR_H);
 
-            this._rootSlotBoard = this._rootVB.addChildSlot();
-            this._rootSlotBoard.vb = this._boardVB;
-            this._rootSlotBoard.x = BOARD_X;
-            this._rootSlotBoard.y = BOARD_Y;
-            this._rootSlotBoard.active = true;
-
-            this._rootSlotSidebar = this._rootVB.addChildSlot();
-            this._rootSlotSidebar.vb = this._sidebarVB;
-            this._rootSlotSidebar.x = SIDEBAR_X;
-            this._rootSlotSidebar.y = SIDEBAR_Y;
-            this._rootSlotSidebar.active = true;
-
+            this._rootSlotBoard = this._rootVB.attach(this._boardVB, BOARD_X, BOARD_Y);
+            this._rootSlotSidebar = this._rootVB.attach(this._sidebarVB, SIDEBAR_X, SIDEBAR_Y);
             this._rootSlotWin = this._rootVB.addChildSlot();
-            this._rootSlotWin.active = false;
-
             this._rootSlotPause = this._rootVB.addChildSlot();
-            this._rootSlotPause.active = false;
 
-            this._rootSlotCao = this._rootVB.addChildSlot();
-            this._rootSlotCao.active = false;
             this._caoVB = new VirtualBuffer(4, 2);
-            this._rootSlotCao.vb = this._caoVB;
+            this._rootSlotCao = this._rootVB.attach(this._caoVB, 0, 0, false);
         }
 
         if (!this._pals) {
