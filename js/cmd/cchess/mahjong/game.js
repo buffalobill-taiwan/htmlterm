@@ -7,7 +7,7 @@ import { callEffectOverlay } from '../../../util/call-effect.js';
 import { CHARS } from '../engine/constants.js';
 import { WINDS, createRound, actor, legalActions, applyAction, publicView } from './rules.js';
 import { chooseAction } from './ai.js';
-import { startRecycleAnimation, startShuffleAnimation, startTileFlight } from './animation.js';
+import { startRoundResetAnimation, startTileFlight } from './animation.js';
 import { BACK, BACK_CONT, dealOrder, discardPosition, handPosition, tilePositions, wallPosition } from './layout.js';
 
 const RULES = [
@@ -175,7 +175,7 @@ export const mahjongMethods = {
             scores: previous.scores, round: previous.round + 1,
         });
         this._stopAsync();
-        this._mahjongTransition = { mode: 'recycle' };
+        this._mahjongTransition = { mode: 'collect' };
         this._mahjongAnimating = true;
         this._render();
         const pieces = tilePositions(previous);
@@ -184,13 +184,17 @@ export const mahjongMethods = {
             return;
         }
         const epoch = this._epoch;
-        this._cancelAnimation = startRecycleAnimation(this, pieces, () => {
+        this._cancelAnimation = startRoundResetAnimation(this, pieces, mode => {
+            if (epoch !== this._epoch || this._mahjong !== previous) return;
+            this._mahjongTransition = { mode };
+            this._render();
+        }, () => {
             this._cancelAnimation = null;
             if (epoch !== this._epoch || this._mahjong !== previous) return;
-            this._mahjongTransition = { mode: 'shuffle' };
+            this._mahjongTransition = { mode: 'pause' };
             this._render();
-            this._cancelAnimation = startShuffleAnimation(this, () => {
-                this._cancelAnimation = null;
+            this._mahjongTimer = setTimeout(() => {
+                this._mahjongTimer = null;
                 if (epoch !== this._epoch || this._mahjong !== previous) return;
                 this._mahjong = next;
                 this._mahjongInitial = structuredClone(next);
@@ -199,7 +203,7 @@ export const mahjongMethods = {
                 this._completed = false;
                 this._mahjongTransition = null;
                 this._beginMahjongDeal();
-            });
+            }, 500);
         });
     },
 

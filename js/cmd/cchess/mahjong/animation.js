@@ -5,8 +5,10 @@ import { BACK, BACK_CONT, wallPosition } from './layout.js';
 
 const TABLE_H = 22;
 const FLIGHT_MS = 180;
-const RECYCLE_MS = 600;
-const SHUFFLE_MS = 3000;
+const COLLECT_MS = 1000;
+const SHUFFLE_MS = 1000;
+const SETTLE_MS = 500;
+const WALL_MIN_X = 15, WALL_MAX_X = 36, WALL_MIN_Y = 6, WALL_MAX_Y = 9;
 const getBackCell = (row, col) => row === 0 ? col === 0 ? BACK : col === 1 ? BACK_CONT : null : null;
 
 export function startTileFlight(cmd, cells, from, to, onComplete, duration = FLIGHT_MS) {
@@ -35,33 +37,44 @@ export function startTileFlight(cmd, cells, from, to, onComplete, duration = FLI
     return () => { cancelled = true; manager.stop(finish); };
 }
 
-function wallTarget(index) {
-    return wallPosition(index);
+function randomWallPoint() {
+    return {
+        x: WALL_MIN_X + Math.random() * (WALL_MAX_X - WALL_MIN_X),
+        y: WALL_MIN_Y + Math.random() * (WALL_MAX_Y - WALL_MIN_Y),
+    };
 }
 
-export function startRecycleAnimation(cmd, pieces, onComplete) {
-    return startSwarm(cmd, pieces.map((piece, index) => {
-        const target = wallTarget(index);
-        return {
-            x: piece.from.x, y: piece.from.y,
-            fromX: piece.from.x, fromY: piece.from.y,
-            toX: target.x, toY: target.y,
-        };
-    }), RECYCLE_MS, false, onComplete);
+function isInWall(point) {
+    return point.x >= WALL_MIN_X && point.x <= WALL_MAX_X &&
+        point.y >= WALL_MIN_Y && point.y <= WALL_MAX_Y;
 }
 
-export function startShuffleAnimation(cmd, onComplete) {
-    const positions = Array.from({ length: 32 }, (_, index) => {
-        const position = wallTarget(index);
+function moveInWall(position) {
+    position.x += position.vx;
+    position.y += position.vy;
+    if (position.x < WALL_MIN_X || position.x > WALL_MAX_X) {
+        position.x = Math.max(WALL_MIN_X, Math.min(WALL_MAX_X, position.x));
+        position.vx = -position.vx;
+    }
+    if (position.y < WALL_MIN_Y || position.y > WALL_MAX_Y) {
+        position.y = Math.max(WALL_MIN_Y, Math.min(WALL_MAX_Y, position.y));
+        position.vy = -position.vy;
+    }
+}
+
+export function startRoundResetAnimation(cmd, pieces, onPhase, onComplete) {
+    const positions = pieces.map((piece, index) => {
+        const from = piece.from, collectTo = randomWallPoint(), settled = wallPosition(index);
+        const distance = Math.max(Math.abs(collectTo.x - from.x), Math.abs(collectTo.y - from.y));
+        const arrived = isInWall(from);
         return {
-            x: position.x, y: position.y,
-            fromX: position.x, fromY: position.y, toX: position.x, toY: position.y,
+            x: from.x, y: from.y, fromX: from.x, fromY: from.y,
+            collectX: collectTo.x, collectY: collectTo.y,
+            collectMs: arrived ? 0 : Math.max(240, distance * 20),
+            arrived, vx: (Math.random() - 0.5) * 0.36, vy: (Math.random() - 0.5) * 0.2,
+            settleX: from.x, settleY: from.y, settledX: settled.x, settledY: settled.y,
         };
     });
-    return startSwarm(cmd, positions, SHUFFLE_MS, true, onComplete);
-}
-
-function startSwarm(cmd, positions, duration, shuffle, onComplete) {
     const manager = new RAFAnimationManager(cmd, {
         x: positions[0].x, y: positions[0].y, w: 2, h: 1, hideCursor: false, holdBusy: false,
     });
@@ -71,7 +84,7 @@ function startSwarm(cmd, positions, duration, shuffle, onComplete) {
         x: position.x, y: position.y, w: 2, h: 1, owner: null, getCell: getBackCell,
     }));
 
-    let start = null, nextHop = 0, completed = false, cancelled = false;
+    let start = null, phase = 0, nextHop = 0, completed = false, cancelled = false;
     const finish = () => { if (completed && !cancelled) onComplete(); };
     const cleanup = () => {
         for (let index = 1; index < overlays.length; index++) term.removeOverlay(overlays[index]);
@@ -80,31 +93,49 @@ function startSwarm(cmd, positions, duration, shuffle, onComplete) {
     };
     manager.start(ts => {
         if (start === null) start = ts;
-        if (shuffle && ts >= nextHop) {
-            for (const position of positions) {
-                position.toX = 15 + Math.random() * 21;
-                position.toY = 6 + Math.random() * 3;
-            }
-            nextHop = ts + 90;
+        const elapsed = ts - start;
+        if (phase === 0 && elapsed >= COLLECT_MS) {
+            phase = 1;
+            nextHop = ts;
+            onPhase('shuffle');
         }
-        const progress = Math.min(1, (ts - start) / duration);
+        if (phase === 1 && elapsed >= COLLECT_MS + SHUFFLE_MS) {
+            phase = 2;
+            for (const position of positions) {
+                position.settleX = position.x;
+                position.settleY = position.y;
+            }
+            onPhase('settle');
+        }
+        if (phase < 2 && ts >= nextHop) {
+            const maxX = phase === 0 ? 0.22 : 0.45;
+            const maxY = phase === 0 ? 0.12 : 0.22;
+            for (const position of positions) {
+                position.vx = Math.max(-maxX, Math.min(maxX, position.vx + (Math.random() - 0.5) * maxX));
+                position.vy = Math.max(-maxY, Math.min(maxY, position.vy + (Math.random() - 0.5) * maxY));
+            }
+            nextHop = ts + 180;
+        }
+        const settleProgress = Math.min(1, Math.max(0, (elapsed - COLLECT_MS - SHUFFLE_MS) / SETTLE_MS));
         for (let index = 0; index < positions.length; index++) {
             const position = positions[index];
-            if (shuffle) {
-                position.x += (position.toX - position.x) * 0.12;
-                position.y += (position.toY - position.y) * 0.12;
-            } else {
-                position.x = position.fromX + (position.toX - position.fromX) * progress;
-                position.y = position.fromY + (position.toY - position.fromY) * progress;
+            if (phase === 0 && !position.arrived) {
+                const progress = Math.min(1, elapsed / position.collectMs);
+                position.x = position.fromX + (position.collectX - position.fromX) * progress;
+                position.y = position.fromY + (position.collectY - position.fromY) * progress;
+                if (progress === 1) position.arrived = true;
+            }
+            if (position.arrived && phase < 2) {
+                moveInWall(position);
+            } else if (phase === 2) {
+                position.x = position.settleX + (position.settledX - position.settleX) * settleProgress;
+                position.y = position.settleY + (position.settledY - position.settleY) * settleProgress;
             }
         }
-        if (progress === 1) {
+        if (elapsed >= COLLECT_MS + SHUFFLE_MS + SETTLE_MS) {
             for (let index = 0; index < positions.length; index++) {
-                const target = wallTarget(index);
-                positions[index].x = target.x;
-                positions[index].y = target.y;
-                positions[index].toX = target.x;
-                positions[index].toY = target.y;
+                positions[index].x = positions[index].settledX;
+                positions[index].y = positions[index].settledY;
             }
             completed = true;
         }

@@ -7,7 +7,7 @@ import { BACK, BACK_CONT, dealOrder, discardPosition, handPosition, tilePosition
 import { mahjongRenderMethods } from '../js/cmd/cchess/mahjong/render.js';
 import { renderMethods } from '../js/cmd/cchess/render.js';
 import { Renderer } from '../js/terminal/Renderer.js';
-import { startShuffleAnimation } from '../js/cmd/cchess/mahjong/animation.js';
+import { startRoundResetAnimation } from '../js/cmd/cchess/mahjong/animation.js';
 import { setSystem } from '../js/system/sys.js';
 import { mulberry32 } from '../js/util/random.js';
 
@@ -107,6 +107,12 @@ test('mahjong renderer draws discards in the shifted pool', () => {
         applyAction(state, { type: 'discard', id: tile.id });
         cmd._renderMahjong();
         assert.equal(rendered[13][15].width, 2);
+        cmd._mahjongTransition = { mode: 'pause' };
+        cmd._renderMahjong();
+        for (let i = 0; i < 32; i++) {
+            const position = wallPosition(i);
+            assert.equal(rendered[position.y][position.x].width, 2);
+        }
     } finally {
         setSystem(null);
     }
@@ -149,18 +155,21 @@ test('wide overlays preserve the exposed half of static wide glyphs', () => {
     }
 });
 
-test('mahjong shuffle uses 32 independently composited tile overlays', () => {
+test('mahjong round reset collects, shuffles and settles 32 independent tile overlays', () => {
     const rafDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'requestAnimationFrame');
     const cancelDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'cancelAnimationFrame');
+    const random = Math.random;
     const scheduled = new Map(), overlays = [];
     const cleanups = new Set();
-    let rafId = 0, timestamp = 0, completed = false, cancel;
+    let rafId = 0, timestamp = 0, firstFrameAt = null, completedAt = null, cancel;
+    const phases = [], phasePositions = {};
     globalThis.requestAnimationFrame = callback => {
         const id = ++rafId;
         scheduled.set(id, callback);
         return id;
     };
     globalThis.cancelAnimationFrame = id => scheduled.delete(id);
+    Math.random = mulberry32(123);
     setSystem({ term: {
         addOverlay: overlay => overlays.push(overlay),
         removeOverlay: overlay => overlays.splice(overlays.indexOf(overlay), 1),
@@ -171,19 +180,36 @@ test('mahjong shuffle uses 32 independently composited tile overlays', () => {
             executionGuard: () => () => true,
             addCleanup: fn => { cleanups.add(fn); return () => cleanups.delete(fn); },
         };
-        cancel = startShuffleAnimation(cmd, () => { completed = true; });
+        const state = createRound({ deck: newDeck(mulberry32(91)) });
+        cancel = startRoundResetAnimation(cmd, tilePositions(state), mode => {
+            phases.push({ mode, at: timestamp });
+            phasePositions[mode] = overlays.map(({ x, y }) => [x, y]);
+        }, () => { completedAt = timestamp; });
         assert.equal(overlays.length, 32);
         assert.ok(overlays.every(overlay => overlay.w === 2 && overlay.h === 1));
-        for (let frame = 0; scheduled.size && frame < 220; frame++) {
+        const overlayRefs = [...overlays];
+        for (let frame = 0; scheduled.size && frame < 200; frame++) {
             const [id, callback] = scheduled.entries().next().value;
             scheduled.delete(id);
             callback(timestamp += 16);
+            if (firstFrameAt === null) firstFrameAt = timestamp;
         }
-        assert.equal(completed, true);
+        assert.deepEqual(phases.map(({ mode }) => mode), ['shuffle', 'settle']);
+        assert.ok(phases[0].at - firstFrameAt >= 1000 && phases[0].at - firstFrameAt < 1020);
+        assert.ok(phases[1].at - firstFrameAt >= 2000 && phases[1].at - firstFrameAt < 2020);
+        assert.ok(completedAt - firstFrameAt >= 2500 && completedAt - firstFrameAt < 2520);
+        assert.ok(phasePositions.shuffle.every(([x, y]) => x >= 15 && x <= 36 && y >= 6 && y <= 9));
+        assert.ok(phasePositions.settle.some(([x, y], i) =>
+            x !== phasePositions.shuffle[i][0] || y !== phasePositions.shuffle[i][1]));
+        assert.ok(overlayRefs.every((overlay, i) => {
+            const target = wallPosition(i);
+            return overlay.x === target.x && overlay.y === target.y;
+        }));
         assert.equal(overlays.length, 0);
     } finally {
         cancel?.();
         setSystem(null);
+        Math.random = random;
         if (rafDescriptor) Object.defineProperty(globalThis, 'requestAnimationFrame', rafDescriptor);
         else delete globalThis.requestAnimationFrame;
         if (cancelDescriptor) Object.defineProperty(globalThis, 'cancelAnimationFrame', cancelDescriptor);

@@ -18,9 +18,11 @@ the other players' four pieces fly into their hands in deal order, leaving the
 15 undrawn backs in the wall. Draws take the wall's last tile (the visible
 lower-right back) and fly into the active hand; discards fly from the hand into
 the central pool. The discard label and pool sit two rows below their former
-positions. On Enter after settlement, all 32
-pieces turn into green backs and fly to the wall; a 3-second random shuffle
-precedes the next deal. Each moving glyph uses its own buffer overlay so the
+positions. On Enter after settlement, all 32 pieces turn into green backs.
+Over one second, they gather in the wall while pieces already there begin to
+move; a second of full-table shuffling follows, then they settle into the
+ordered 32-back wall over 500ms. The wall remains displayed for 500ms before
+the next deal. Each moving glyph uses its own buffer overlay so the
 renderer can clip overlaps between wide `⬤` characters without redraw jitter.
 Gameplay input is paused during these animations, but restart, setup, rules and
 exit controls can interrupt them.

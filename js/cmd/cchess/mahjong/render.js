@@ -82,8 +82,8 @@ export const mahjongRenderMethods = {
             }
         }
         vb.writeStr(5, Math.floor((TABLE_W - bufWidth('餘牌')) / 2), fg(244)('餘牌'));
-        const wallCount = deal ? deal.wallCount : state.wall.length;
-        if (!transition) for (let i = 0; i < wallCount; i++) {
+        const wallCount = transition?.mode === 'pause' ? 32 : deal ? deal.wallCount : state.wall.length;
+        if (!transition || transition.mode === 'pause') for (let i = 0; i < wallCount; i++) {
             const row = WALL_Y + Math.floor(i / WALL_COLS), col = DISCARD_X + (i % WALL_COLS) * 3;
             vb.setCell(row, col, BACK);
             vb.setCell(row, col + 1, BACK_CONT);
@@ -95,7 +95,12 @@ export const mahjongRenderMethods = {
                 tile, tile.id === state.pending?.tile.id ? 22 : 0);
         });
         let message = state.last;
-        if (transition) message = transition.mode === 'recycle' ? '棋子收回餘牌區…' : '洗牌中…';
+        if (transition) message = ({
+            collect: '棋子收回餘牌區…',
+            shuffle: '洗牌中…',
+            settle: '整理餘牌…',
+            pause: '即將發牌…',
+        })[transition.mode] || '棋子移動中…';
         else if (deal) message = '發牌中…';
         else if (flight) message = '棋子移動中…';
         else if (done) {
