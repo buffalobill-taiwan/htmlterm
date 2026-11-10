@@ -109,6 +109,33 @@ the overlay and suppresses the completion callback; frame cleanup also stops
 the animation. The board and score are refreshed at transition boundaries,
 not on every animation frame.
 
+## Chinese-chess mahjong tile animation
+
+`cchess/mahjong/animation.js` uses `RAFAnimationManager` for deal, draw, and
+discard flights, plus the 32-piece round-reset sequence. The game state remains
+authoritative: a flight is drawn as a separate green-back or face overlay, and
+the board is refreshed at its boundaries rather than changing the logical tile
+position every frame. Round reset similarly leaves the settled round intact
+until the animation and short pause finish.
+
+The reset converts every moving piece visually to a green `⬤`, with one
+two-column overlay per glyph. The phases use elapsed rAF time, not a fixed
+number of frames: pieces travel to random points in the wall area for 1s;
+already-arrived pieces move there while others are still arriving. All pieces
+then wander within that area for 1s, move to their ordered wall slots over
+500ms, and remain displayed for another 500ms before dealing begins. Delayed
+frames therefore advance the sequence according to elapsed time. Each frame
+updates overlay coordinates and dirties the table rows; cleanup removes all
+overlays synchronously and suppresses completion on cancellation.
+
+Because `⬤` is wide, the reset must preserve partially covered glyphs during
+compositing. A single sparse overlay can make coverage and continuation-cell
+ownership ambiguous; separate glyph overlays let `Renderer._blendOverlays()`
+clip each overlap and retain the visible half of any underlying wide glyph.
+This prevents static wall pieces from appearing to flicker as moving pieces
+cross them. See the [overlay compositor notes](architecture.md#overlay-compositing)
+and [mahjong layout/behavior](cchess-upstream.md#chess-mahjong).
+
 ## FreeCell automatic collection
 
 New games and restarts keep the complete opening board. The first successful

@@ -85,6 +85,17 @@ partial overlay update must do the same; `markAllDirty()` is reserved for
 global changes such as a resize or a viewOffset change. Because an overlay
 marks rows itself, do not combine overlay updates with a blanket dirty pass.
 
+Wide overlay cells need special care when they cross other wide glyphs. A
+two-column glyph is stored as a `width: 2` leading cell and a `width: 0`
+continuation cell; compositing only one column can otherwise erase the exposed
+half of the glyph underneath. `Renderer._blendOverlays()` clips both the
+overlaid glyph and any newly exposed half of an underlying glyph, using
+`_clipLeft`/`_clipRight`, so each span paints the correct half. For moving
+multi-glyph sprites, give each glyph its own overlay rather than one sparse
+overlay: independent bounds and per-glyph blending keep overlap resolution
+unambiguous. The Chinese-chess mahjong reset animation is a concrete example;
+see [Chinese chess integration](cchess-upstream.md#chess-mahjong).
+
 ## Shell and frames
 
 `SystemManager` is a singleton. Command code imports `system` or `term` from

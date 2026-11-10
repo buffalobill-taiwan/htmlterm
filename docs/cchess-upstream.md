@@ -22,10 +22,32 @@ positions. On Enter after settlement, all 32 pieces turn into green backs.
 Over one second, they gather in the wall while pieces already there begin to
 move; a second of full-table shuffling follows, then they settle into the
 ordered 32-back wall over 500ms. The wall remains displayed for 500ms before
-the next deal. Each moving glyph uses its own buffer overlay so the
-renderer can clip overlaps between wide `⬤` characters without redraw jitter.
-Gameplay input is paused during these animations, but restart, setup, rules and
-exit controls can interrupt them.
+the next deal. Each moving piece is a separate two-column overlay, composited
+over the unchanged board state. Deal, draw, and discard use the same overlay
+flight approach; a moving piece is hidden from the board until its flight ends,
+when the game re-renders from the committed state.
+
+The observed screen jitter was not caused by the glyph's width calculation.
+It came from overlay composition at cell boundaries: `⬤` occupies a leading
+cell (`width: 2`) plus a continuation cell (`width: 0`). When a moving wide
+overlay covered just one half of a stationary wide glyph, the old compositor
+could replace the covered cell without preserving the other, still-visible
+half. As the overlay moved, that half alternated between complete and clipped
+renderings and appeared to flicker. `Renderer._blendOverlays()` now marks
+overlaid halves and preserves exposed halves of underlying wide cells with
+`_clipLeft`/`_clipRight`, so spans clip the original glyph rather than redraw a
+malformed half. Keeping each moving back on its own overlay also makes overlap
+coverage explicit instead of combining many wide glyphs in one sparse buffer.
+
+`startRoundResetAnimation()` uses one rAF timeline with elapsed-time phase
+boundaries: 1s collection (pieces already in the wall start wandering
+immediately), 1s of all pieces shuffling within the wall bounds, 500ms settling
+to the ordered wall slots, then a 500ms pause before the next deal. The
+transition is visual only until completion; the next round replaces the old
+state after the pause. `RAFAnimationManager` cancellation removes the moving
+overlays and prevents late completion callbacks, while the round timer is
+cleared by the command's async cleanup. Gameplay input is paused during these
+animations, but restart, setup, rules and exit controls can interrupt them.
 All discards share one central pool in discard order, eight per row without
 seat labels. Claimed chi tiles leave the pool; remaining tiles keep their
 relative order.
