@@ -273,6 +273,17 @@ export class Renderer {
                         modified = true;
                     }
                     if (ovCell.width === 2) {
+                        const prev = baseRow[c];
+                        if (prev && prev.width === 0 && c > 0) {
+                            const leftCell = baseRow[c - 1];
+                            if (leftCell && leftCell.width >= 2) {
+                                baseRow[c - 1] = { ...leftCell, width: 1, _clipRight: true };
+                            }
+                        }
+                        const rightCell = baseRow[c + 1];
+                        if (rightCell && rightCell.width >= 2 && c + 2 < baseRow.length) {
+                            baseRow[c + 2] = { ...rightCell, width: 1, _clipLeft: true };
+                        }
                         baseRow[c] = { ...ovCell, width: 1, _clipRight: true };
                         if (c + 1 < baseRow.length) {
                             baseRow[c + 1] = { ...ovCell, width: 1, _clipLeft: true };

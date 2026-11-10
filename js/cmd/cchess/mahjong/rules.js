@@ -109,7 +109,7 @@ export function applyAction(state, action) {
     } else if (action.type === 'draw') {
         if (!state.wall.length) { finish(state); return; }
         sortHand(p.hand);
-        const tile = state.wall.shift();
+        const tile = state.wall.pop();
         p.hand.push(tile); state.drawn = tile.id;
         state.phase = 'self'; state.last = `${WINDS[seat]}家摸牌`;
     } else if (action.type === 'discard') {

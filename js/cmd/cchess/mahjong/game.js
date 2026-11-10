@@ -7,6 +7,8 @@ import { callEffectOverlay } from '../../../util/call-effect.js';
 import { CHARS } from '../engine/constants.js';
 import { WINDS, createRound, actor, legalActions, applyAction, publicView } from './rules.js';
 import { chooseAction } from './ai.js';
+import { startRecycleAnimation, startShuffleAnimation, startTileFlight } from './animation.js';
+import { BACK, BACK_CONT, dealOrder, discardPosition, handPosition, tilePositions, wallPosition } from './layout.js';
 
 const RULES = [
     '32 子四人玩法：莊家五張，其餘四張，摸一張、打一張。',
@@ -26,9 +28,22 @@ const RULES = [
 export const mahjongMethods = {
     _applyMahjongAction(action) {
         const state = this._mahjong, seat = actor(state);
+        const tile = action.type === 'draw' ? state.wall[state.wall.length - 1]
+            : action.type === 'discard' ? state.players[seat].hand.find(item => item.id === action.id) : null;
+        const from = action.type === 'draw' && tile ? wallPosition(state.wall.length - 1)
+            : action.type === 'discard' && tile ? handPosition(state, seat, tile.id) : null;
         const text = action.type === 'chi' ? '吃牌'
             : action.type === 'win' ? state.phase === 'self' ? '自摸' : '胡牌' : null;
         applyAction(state, action);
+        if (tile && from) {
+            const to = action.type === 'draw' ? handPosition(state, seat, tile.id)
+                : discardPosition(state.discards.length - 1);
+            if (action.type === 'draw' && seat === state.human) {
+                this._mahjongCursor = Math.max(0, state.players[state.human].hand.length - 1);
+            } else if (action.type === 'discard' && seat === state.human) this._mahjongCursor = 0;
+            this._animateMahjongFlight(state, tile, from, to, action.type === 'draw');
+            return;
+        }
         if (text) {
             this._render();
             const relative = (seat - state.human + 4) % 4;
@@ -46,6 +61,22 @@ export const mahjongMethods = {
             }, 500);
         }
         this._mahjongPump();
+    },
+
+    _animateMahjongFlight(state, tile, from, to, isDraw) {
+        this._mahjongAnimating = true;
+        this._mahjongFlight = { tileId: tile.id };
+        this._render();
+        const cells = isDraw ? [BACK, BACK_CONT] : this._pieceCells.get(`${tile.color}:${tile.type}:0`);
+        const epoch = this._epoch;
+        this._cancelAnimation = startTileFlight(this, cells, from, to, () => {
+            this._cancelAnimation = null;
+            if (epoch !== this._epoch || this._mahjong !== state) return;
+            this._mahjongFlight = null;
+            this._mahjongAnimating = false;
+            this._render();
+            this._mahjongPump();
+        });
     },
 
     _removeMahjongCallEffect() {
@@ -102,19 +133,85 @@ export const mahjongMethods = {
         this._mahjongCursor = 0;
         this._mahjongError = null;
         this._completed = false;
-        this._mahjongPump();
+        this._beginMahjongDeal();
+    },
+
+    _beginMahjongDeal() {
+        const state = this._mahjong, queue = dealOrder(state);
+        this._mahjongDeal = { wallCount: 32, landedIds: new Set() };
+        this._mahjongAnimating = true;
+        this._render();
+        this._dealMahjongTile(queue, 0);
+    },
+
+    _dealMahjongTile(queue, index) {
+        if (index >= queue.length) {
+            this._mahjongDeal = null;
+            this._mahjongAnimating = false;
+            this._render();
+            this._mahjongPump();
+            return;
+        }
+        const state = this._mahjong, deal = this._mahjongDeal;
+        const { seat, tile } = queue[index];
+        const from = wallPosition(deal.wallCount - 1);
+        deal.wallCount--;
+        const to = handPosition(state, seat, tile.id);
+        this._render();
+        const epoch = this._epoch;
+        this._cancelAnimation = startTileFlight(this, [BACK, BACK_CONT], from, to, () => {
+            this._cancelAnimation = null;
+            if (epoch !== this._epoch || this._mahjong !== state) return;
+            deal.landedIds.add(tile.id);
+            this._render();
+            this._dealMahjongTile(queue, index + 1);
+        });
+    },
+
+    _startNextMahjongRound() {
+        const previous = this._mahjong;
+        const next = createRound({
+            dealer: previous.result.nextDealer, human: previous.human,
+            scores: previous.scores, round: previous.round + 1,
+        });
+        this._stopAsync();
+        this._mahjongTransition = { mode: 'recycle' };
+        this._mahjongAnimating = true;
+        this._render();
+        const pieces = tilePositions(previous);
+        if (pieces.length !== 32) {
+            this._mahjongFail(new Error('象棋麻將：回收棋子數量錯誤'));
+            return;
+        }
+        const epoch = this._epoch;
+        this._cancelAnimation = startRecycleAnimation(this, pieces, () => {
+            this._cancelAnimation = null;
+            if (epoch !== this._epoch || this._mahjong !== previous) return;
+            this._mahjongTransition = { mode: 'shuffle' };
+            this._render();
+            this._cancelAnimation = startShuffleAnimation(this, () => {
+                this._cancelAnimation = null;
+                if (epoch !== this._epoch || this._mahjong !== previous) return;
+                this._mahjong = next;
+                this._mahjongInitial = structuredClone(next);
+                this._mahjongCursor = 0;
+                this._mahjongError = null;
+                this._completed = false;
+                this._mahjongTransition = null;
+                this._beginMahjongDeal();
+            });
+        });
     },
 
     _mahjongPump() {
-        if (!this._mahjong || this._dialog || this._mahjongTimer || this._mahjongError) return;
+        if (!this._mahjong || this._dialog || this._mahjongTimer || this._mahjongError || this._mahjongAnimating) return;
         try {
             const state = this._mahjong;
             // Non-decisions do not need a prompt or a computer delay.
             if (state.phase === 'self' && legalActions(state).length === 1) applyAction(state, { type: 'pass' });
             if (state.phase === 'draw' && state.turn === state.human) {
-                applyAction(state, { type: 'draw' });
-                this._mahjongCursor = Math.max(0, state.players[state.human].hand.length - 1);
-                this._mahjongPump(); return;
+                this._applyMahjongAction({ type: 'draw' });
+                return;
             }
             this._completed = state.phase === 'done';
             this._render();
@@ -192,10 +289,9 @@ export const mahjongMethods = {
         }
         const state = this._mahjong;
         if (!state || this._mahjongError || this._mahjongCallOverlay) return;
+        if (this._mahjongAnimating) return;
         if (state.phase === 'done') {
-            if (code === 13 || code === 10) this._startMahjongRound(createRound({
-                dealer: state.result.nextDealer, human: state.human, scores: state.scores, round: state.round + 1,
-            }));
+            if (code === 13 || code === 10) this._startNextMahjongRound();
             return;
         }
         if (state.phase !== 'discard' || state.turn !== state.human) return;
@@ -208,9 +304,7 @@ export const mahjongMethods = {
         // All other CSI/editing sequences are ignored, never interpreted as Escape.
         if (code === 27) return;
         if (code === 13 || code === 10) {
-            applyAction(state, { type: 'discard', id: hand[this._mahjongCursor].id });
-            this._mahjongCursor = 0;
-            this._mahjongPump();
+            this._applyMahjongAction({ type: 'discard', id: hand[this._mahjongCursor].id });
         }
     },
 };

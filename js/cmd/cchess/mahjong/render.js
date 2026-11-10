@@ -4,18 +4,13 @@ import { bufWidth } from '../../../util/display-width.js';
 import { wrapDialogText } from '../../../dialog/text.js';
 import { term } from '../../../system/sys.js';
 import { WINDS, actor } from './rules.js';
+import {
+    BACK, BACK_CONT, TABLE_W, SEAT_W, HAND_X, DRAWN_X, DISCARD_X,
+    DISCARD_Y, DISCARD_LABEL_Y, DISCARD_COLS, WALL_Y, WALL_COLS, POSITIONS,
+} from './layout.js';
 
-const BACK = makeCell('⬤', 10, 0, false, 2);
-const BACK_CONT = makeCell(' ', 10, 0, false, 0);
-const TABLE_W = 54, SEAT_W = 24, INFO_X = 56, INFO_W = 24;
-const HAND_X = 4, DRAWN_X = 13;
-const DISCARD_X = 15, DISCARD_Y = 11, DISCARD_COLS = 8;
-const WALL_Y = 6;
+const INFO_X = 56, INFO_W = 24;
 const DIVIDER = makeCell('│', 244, 0, false, 1);
-const POSITIONS = [
-    { x: 28, y: 17, label: '玩家' }, { x: 28, y: 2, label: '下家' },
-    { x: 2, y: 2, label: '對家' }, { x: 2, y: 17, label: '上家' },
-];
 
 function clip(text, width) {
     let result = '', used = 0;
@@ -34,6 +29,8 @@ function info(vb, row, text, paint = fg(244)) {
 export const mahjongRenderMethods = {
     _renderMahjong() {
         const vb = this._rootVB, state = this._mahjong;
+        const deal = this._mahjongDeal, flight = this._mahjongFlight;
+        const transition = this._mahjongTransition;
         for (const row of vb._buffer) row.fill(_blankCell);
         for (let y = 0; y < 22; y++) vb.setCell(y, TABLE_W, DIVIDER);
         info(vb, 0, '象棋麻將', text => bold(cyan(text)));
@@ -63,30 +60,45 @@ export const mahjongRenderMethods = {
             p.hand.forEach((tile, i) => {
                 const slot = tile.id === state.drawn ? DRAWN_X : handIndex++ * 3;
                 const offset = x + HAND_X + slot;
-                if (relative === 0 || done) {
+                if (transition) return;
+                if (deal) {
+                    if (deal.landedIds.has(tile.id)) {
+                        vb.setCell(y + 1, offset, BACK);
+                        vb.setCell(y + 1, offset + 1, BACK_CONT);
+                    }
+                } else if (flight?.tileId === tile.id) {
+                    return;
+                } else if (relative === 0 || done) {
                     const selected = relative === 0 && state.phase === 'discard' && state.turn === state.human && i === this._mahjongCursor;
                     this._putPiece(vb, y + 1, offset, tile, selected ? 24 : done && tile.id === state.result.tile ? 22 : 0);
                 } else {
                     vb.setCell(y + 1, offset, BACK); vb.setCell(y + 1, offset + 1, BACK_CONT);
                 }
             });
-            if (p.melds.length) {
+            if (!transition && p.melds.length) {
                 const meldX = x + Math.floor((SEAT_W - (3 + p.melds[0].length * 3 - 1)) / 2);
                 vb.writeStr(y + 2, meldX, fg(244)('吃'));
                 p.melds[0].forEach((tile, i) => this._putPiece(vb, y + 2, meldX + 3 + i * 3, tile, 0));
             }
         }
         vb.writeStr(5, Math.floor((TABLE_W - bufWidth('餘牌')) / 2), fg(244)('餘牌'));
-        for (let i = 0; i < state.wall.length; i++) {
-            const row = WALL_Y + Math.floor(i / DISCARD_COLS), col = DISCARD_X + (i % DISCARD_COLS) * 3;
+        const wallCount = deal ? deal.wallCount : state.wall.length;
+        if (!transition) for (let i = 0; i < wallCount; i++) {
+            const row = WALL_Y + Math.floor(i / WALL_COLS), col = DISCARD_X + (i % WALL_COLS) * 3;
             vb.setCell(row, col, BACK);
             vb.setCell(row, col + 1, BACK_CONT);
         }
-        vb.writeStr(9, Math.floor((TABLE_W - bufWidth('棄牌')) / 2), fg(244)('棄牌'));
-        state.discards.forEach((tile, i) => this._putPiece(vb, DISCARD_Y + Math.floor(i / DISCARD_COLS), DISCARD_X + (i % DISCARD_COLS) * 3,
-            tile, tile.id === state.pending?.tile.id ? 22 : 0));
+        vb.writeStr(DISCARD_LABEL_Y, Math.floor((TABLE_W - bufWidth('棄牌')) / 2), fg(244)('棄牌'));
+        if (!transition) state.discards.forEach((tile, i) => {
+            if (flight?.tileId === tile.id) return;
+            this._putPiece(vb, DISCARD_Y + Math.floor(i / DISCARD_COLS), DISCARD_X + (i % DISCARD_COLS) * 3,
+                tile, tile.id === state.pending?.tile.id ? 22 : 0);
+        });
         let message = state.last;
-        if (done) {
+        if (transition) message = transition.mode === 'recycle' ? '棋子收回餘牌區…' : '洗牌中…';
+        else if (deal) message = '發牌中…';
+        else if (flight) message = '棋子移動中…';
+        else if (done) {
             const result = state.result;
             message = result.winner === null ? '牌堆已空，流局' : `${WINDS[result.winner]}家${result.source === null ? '自摸' : '胡牌，' + WINDS[result.source] + '家放槍'}`;
             message += `\n下一局：${WINDS[result.nextDealer]}家做莊\nEnter 開始下一局`;

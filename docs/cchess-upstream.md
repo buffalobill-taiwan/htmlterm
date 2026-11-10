@@ -12,11 +12,21 @@ The table occupies the left 54 columns, with a separate information panel on
 the right. The human sits at bottom right, the next seat at top right, the
 opposite seat at top left, and the preceding seat at bottom left. Each hand is
 centered within its corner; hidden pieces use green `⬤` glyphs. The information
-panel holds difficulty, round, dealer, scores and status/results. Remaining
-wall tiles appear as green backs in the center above the discard pool, eight
-per row.
-All discards share one central pool in discard order, eight per row without seat labels.
-Claimed chi tiles leave the pool; remaining tiles keep their relative order.
+panel holds difficulty, round, dealer, scores and status/results. At the start
+of a hand, 32 green backs appear in the wall area; the dealer's five pieces and
+the other players' four pieces fly into their hands in deal order, leaving the
+15 undrawn backs in the wall. Draws take the wall's last tile (the visible
+lower-right back) and fly into the active hand; discards fly from the hand into
+the central pool. The discard label and pool sit two rows below their former
+positions. On Enter after settlement, all 32
+pieces turn into green backs and fly to the wall; a 3-second random shuffle
+precedes the next deal. Each moving glyph uses its own buffer overlay so the
+renderer can clip overlaps between wide `⬤` characters without redraw jitter.
+Gameplay input is paused during these animations, but restart, setup, rules and
+exit controls can interrupt them.
+All discards share one central pool in discard order, eight per row without
+seat labels. Claimed chi tiles leave the pool; remaining tiles keep their
+relative order.
 The rules retain the original discarder for chi and win claims.
 
 The dealer receives five pieces and everyone else four. A winning hand is one

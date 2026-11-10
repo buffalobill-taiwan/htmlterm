@@ -3,6 +3,12 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { newDeck, createRound, isWinning, chiChoices, actor, legalActions, applyAction, publicView, SUPPLY } from '../js/cmd/cchess/mahjong/rules.js';
 import { chooseAction } from '../js/cmd/cchess/mahjong/ai.js';
+import { BACK, BACK_CONT, dealOrder, discardPosition, handPosition, tilePositions, wallPosition } from '../js/cmd/cchess/mahjong/layout.js';
+import { mahjongRenderMethods } from '../js/cmd/cchess/mahjong/render.js';
+import { renderMethods } from '../js/cmd/cchess/render.js';
+import { Renderer } from '../js/terminal/Renderer.js';
+import { startShuffleAnimation } from '../js/cmd/cchess/mahjong/animation.js';
+import { setSystem } from '../js/system/sys.js';
 import { mulberry32 } from '../js/util/random.js';
 
 const tiles = kinds => kinds.map((kind, id) => ({ kind, id }));
@@ -49,6 +55,139 @@ test('deck, four seats, initial dealer and round snapshots', () => {
         discard(state, state.players[0].hand[0].kind);
         assert.notDeepEqual(state, snapshot);
         conservation(state);
+    }
+});
+
+test('mahjong deal queue and animation positions cover every tile', () => {
+    const state = createRound({ dealer: 2, human: 1, deck: newDeck(mulberry32(42)) });
+    const queue = dealOrder(state);
+    assert.equal(queue.length, 17);
+    assert.deepEqual(queue.reduce((counts, item) => {
+        counts[item.seat]++;
+        return counts;
+    }, [0,0,0,0]), [4,4,5,4]);
+    assert.equal(queue.at(-1).tile.id, state.drawn);
+    assert.equal(new Set(queue.map(item => item.tile.id)).size, 17);
+    assert.ok(queue.every(item => handPosition(state, item.seat, item.tile.id)));
+
+    const positions = tilePositions(state);
+    assert.equal(positions.length, 32);
+    assert.equal(new Set(positions.map(item => item.tile.id)).size, 32);
+    assert.equal(discardPosition(0).y, 13);
+    assert.equal(wallPosition(31).y, 9);
+});
+
+test('draws consume the last tile at the wall tail', () => {
+    const state = createRound({ deck: newDeck(mulberry32(84)) });
+    state.turn = (state.dealer + 1) % 4;
+    state.phase = 'draw';
+    const wallLength = state.wall.length;
+    const last = state.wall[wallLength - 1];
+    assert.deepEqual(wallPosition(wallLength - 1), { x: 33, y: 7 });
+
+    applyAction(state, { type: 'draw' });
+    assert.equal(state.players[state.turn].hand.at(-1).id, last.id);
+    assert.equal(state.wall.length, wallLength - 1);
+    assert.ok(!state.wall.some(tile => tile.id === last.id));
+});
+
+test('mahjong renderer draws discards in the shifted pool', () => {
+    let rendered;
+    setSystem({ term: { writeVB: vb => { rendered = vb.render(); } } });
+    try {
+        const cmd = Object.assign({
+            _mahjong: createRound({ deck: newDeck(mulberry32(77)) }),
+            _mahjongDifficulty: 'medium',
+            _mahjongCursor: 0,
+        }, renderMethods, mahjongRenderMethods);
+        cmd._initVBs();
+        const state = cmd._mahjong;
+        applyAction(state, { type: 'pass' });
+        const tile = state.players[state.turn].hand[0];
+        applyAction(state, { type: 'discard', id: tile.id });
+        cmd._renderMahjong();
+        assert.equal(rendered[13][15].width, 2);
+    } finally {
+        setSystem(null);
+    }
+});
+
+test('terminal overlay compositor clips overlapping wide mahjong backs', () => {
+    assert.equal(BACK.width, 2);
+    assert.equal(BACK_CONT.width, 0);
+    const cells = [BACK, BACK_CONT];
+    const overlays = [10, 11].map(x => ({
+        x, y: 0, w: 2, h: 1, getCell: (row, col) => row === 0 ? cells[col] ?? null : null,
+    }));
+    const renderer = { screen: { overlays }, _blendRow: null };
+    const baseRow = Array.from({ length: 80 }, () => ({ ch: ' ', width: 1 }));
+    const blended = Renderer.prototype._blendOverlays.call(renderer, 0, baseRow);
+    assert.equal(blended[10]._clipRight, true);
+    assert.equal(blended[11]._clipRight, true);
+    assert.equal(blended[12]._clipLeft, true);
+    assert.equal(baseRow[10].width, 1);
+});
+
+test('wide overlays preserve the exposed half of static wide glyphs', () => {
+    const cells = [BACK, BACK_CONT];
+    for (const [overlayX, baseX, clippedX, clippedSide] of [
+        [11, 10, 10, '_clipRight'],
+        [10, 11, 12, '_clipLeft'],
+    ]) {
+        const row = Array.from({ length: 80 }, () => ({ ch: ' ', width: 1 }));
+        row[baseX] = BACK;
+        row[baseX + 1] = BACK_CONT;
+        const renderer = {
+            screen: { overlays: [{
+                x: overlayX, y: 0, w: 2, h: 1,
+                getCell: (r, c) => r === 0 ? cells[c] ?? null : null,
+            }] },
+            _blendRow: null,
+        };
+        const result = Renderer.prototype._blendOverlays.call(renderer, 0, row);
+        assert.equal(result[clippedX][clippedSide], true);
+    }
+});
+
+test('mahjong shuffle uses 32 independently composited tile overlays', () => {
+    const rafDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'requestAnimationFrame');
+    const cancelDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'cancelAnimationFrame');
+    const scheduled = new Map(), overlays = [];
+    const cleanups = new Set();
+    let rafId = 0, timestamp = 0, completed = false, cancel;
+    globalThis.requestAnimationFrame = callback => {
+        const id = ++rafId;
+        scheduled.set(id, callback);
+        return id;
+    };
+    globalThis.cancelAnimationFrame = id => scheduled.delete(id);
+    setSystem({ term: {
+        addOverlay: overlay => overlays.push(overlay),
+        removeOverlay: overlay => overlays.splice(overlays.indexOf(overlay), 1),
+        markRowDirty() {},
+    } });
+    try {
+        const cmd = {
+            executionGuard: () => () => true,
+            addCleanup: fn => { cleanups.add(fn); return () => cleanups.delete(fn); },
+        };
+        cancel = startShuffleAnimation(cmd, () => { completed = true; });
+        assert.equal(overlays.length, 32);
+        assert.ok(overlays.every(overlay => overlay.w === 2 && overlay.h === 1));
+        for (let frame = 0; scheduled.size && frame < 220; frame++) {
+            const [id, callback] = scheduled.entries().next().value;
+            scheduled.delete(id);
+            callback(timestamp += 16);
+        }
+        assert.equal(completed, true);
+        assert.equal(overlays.length, 0);
+    } finally {
+        cancel?.();
+        setSystem(null);
+        if (rafDescriptor) Object.defineProperty(globalThis, 'requestAnimationFrame', rafDescriptor);
+        else delete globalThis.requestAnimationFrame;
+        if (cancelDescriptor) Object.defineProperty(globalThis, 'cancelAnimationFrame', cancelDescriptor);
+        else delete globalThis.cancelAnimationFrame;
     }
 });
 
@@ -110,6 +249,7 @@ test('passing all wins allows downstream chi, no draw; one physical copy', () =>
     assert.equal(state.players[0].discards.length, 0);
     assert.equal(state.players[1].hand.length, 2);
     assert.equal(state.players[1].melds.length, 1);
+    assert.equal(tilePositions(state).length, 32);
     assert.throws(() => applyAction(state, { type: 'draw' }), /非法/);
     conservation(state);
 });
@@ -191,6 +331,10 @@ test('seeded complete games terminate, conserve tiles and keep scores zero-sum',
             for (const player of state.players) assert.ok(player.melds.length <= 1);
         }
         assert.equal(state.scores.reduce((a,b) => a+b), 0);
+        const positions = tilePositions(state);
+        assert.equal(positions.length, 32);
+        assert.equal(new Set(positions.map(item => item.tile.id)).size, 32);
+        assert.ok(positions.every(({ from }) => from && from.x >= 0 && from.x < 54 && from.y >= 0 && from.y < 22));
         state.result.winner === null ? draws++ : wins++;
     }
     assert.ok(wins > 0 && draws > 0);
