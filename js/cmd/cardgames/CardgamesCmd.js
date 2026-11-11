@@ -10,6 +10,7 @@ import { flipCard, dealCard } from './animation.js';
 import { score, natural, outcome, shuffledDeck } from './blackjack.js';
 import { FreeCellGame } from './freecell/FreeCellGame.js';
 import { HoldemGame } from './holdem/HoldemGame.js';
+import { CaptureGame } from './capture/CaptureGame.js';
 import { parseSeed } from '../../util/random.js';
 const META = GAME_META.cardgames;
 const DECK = { x: 53, y: 8 };
@@ -18,9 +19,10 @@ export class CardgamesCmd extends CmdBase {
     execute(args) {
         const p = this.parseArgs(args);
         if (p.hasHelp) return this.showHelp();
-        const valid = !p.rest.length || (p.rest[0] === 'regicide' && p.rest.length === 1) || (p.rest[0] === 'holdem' && p.rest.length === 1) ||
+        const valid = !p.rest.length || (p.rest[0] === 'capture' && p.rest.length === 1) ||
+            (p.rest[0] === 'regicide' && p.rest.length === 1) || (p.rest[0] === 'holdem' && p.rest.length === 1) ||
             (p.rest[0] === 'freecell' && p.rest.length <= 2 && (p.rest.length === 1 || parseSeed(p.rest[1]) !== null));
-        if (args.some(a => a.startsWith('-')) || !valid) return this.error('Usage: cardgames [regicide | holdem | freecell [seed]]');
+        if (args.some(a => a.startsWith('-')) || !valid) return this.error('Usage: cardgames [capture | regicide | holdem | freecell [seed]]');
         this.open();
         this._stats = { win: 0, loss: 0, draw: 0 };
         this._anims = new Set();
@@ -30,12 +32,19 @@ export class CardgamesCmd extends CmdBase {
             this._stopAnims();
             this._disposeGames();
         });
-        if (p.rest[0] === 'regicide') this._startRegicide();
+        if (p.rest[0] === 'capture') this._startCapture();
+        else if (p.rest[0] === 'regicide') this._startRegicide();
         else if (p.rest[0] === 'holdem') this._startHoldem();
         else if (p.rest.length) this._startFreeCell(p.rest.length === 2 ? Number(p.rest[1]) : undefined);
         else this._menu();
     }
     _startRegicide() { this._regicide = new RegicideGame(this); this._regicide.start(); }
+    _startCapture() {
+        this._stopAnims();
+        this._disposeGames();
+        this._capture = new CaptureGame(this);
+        this._capture.start();
+    }
     _startHoldem() {
         this._stopAnims();
         this._disposeGames();
@@ -51,6 +60,7 @@ export class CardgamesCmd extends CmdBase {
         this._regicide?.dispose(); this._regicide = null;
         this._holdem?.dispose(); this._holdem = null;
         this._freecell?.dispose(); this._freecell = null;
+        this._capture?.dispose(); this._capture = null;
     }
     handleMouse(type, info) { return this._freecell?.handleMouse(type, info) || false; }
     _menu() {
@@ -67,10 +77,12 @@ export class CardgamesCmd extends CmdBase {
                 { label: 'FreeCell', description: '新接龍' },
                 { label: 'Texas Hold’em', description: '德州撲克' },
                 { label: 'Regicide', description: '弒君者' },
+                { label: 'Card Capture', description: '牌張捕獲' },
             ],
             onSelect: index => {
                 this._dialog = null;
-                if (index === 3) this._startRegicide();
+                if (index === 4) this._startCapture();
+                else if (index === 3) this._startRegicide();
                 else if (index === 2) this._startHoldem();
                 else if (index === 1) this._startFreeCell();
                 else this._deal();
@@ -193,6 +205,7 @@ export class CardgamesCmd extends CmdBase {
         term.writeVB(vb);
     }
     _onKey(data) {
+        if (this._capture) return this._capture.key(data);
         if (this._regicide) return this._regicide.key(data);
         if (this._holdem) return this._holdem.key(data);
         if (this._freecell) return this._freecell.key(data);

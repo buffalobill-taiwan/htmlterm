@@ -1,6 +1,59 @@
 import assert from 'node:assert/strict';
 import { score, natural, outcome, shuffledDeck } from '../js/cmd/cardgames/blackjack.js';
 import { cardBuffer, cardFlipFrames } from '../js/cmd/cardgames/cards.js';
+import { createGame, dealInitialEnemyRow, returnInitialCombatants, compactEnemyRow, refillEnemyRow,
+    beginRound, discardFromHand, drawToFour, captureValue, capture, yieldToEnemy, sacrifice,
+    outcome as captureOutcome, hasSafeAction } from '../js/cmd/cardgames/capture/rules.js';
+import { CaptureGame } from '../js/cmd/cardgames/capture/CaptureGame.js';
+import { CaptureView, ENEMY_DECK, ENEMY_CAPTURE, PERSONAL_DECK, PERSONAL_DISCARD,
+    enemyPosition, handPosition } from '../js/cmd/cardgames/capture/view.js';
+import { CardgamesCmd } from '../js/cmd/cardgames/CardgamesCmd.js';
+import { getSystem, setSystem } from '../js/system/sys.js';
+assert.ok(CardgamesCmd.usage.includes('capture'));
+assert.ok(CardgamesCmd.help.includes('Card Capture'));
+assert.equal(ENEMY_DECK.y, 2);
+assert.equal(ENEMY_CAPTURE.y, 2);
+assert.equal(PERSONAL_DECK.y, 12);
+assert.equal(PERSONAL_DISCARD.y, 12);
+assert.equal(new CaptureView().vb.height, 24);
+assert.deepEqual([0, 1, 2, 3].map(enemyPosition), [
+    { x: 52, y: 4 }, { x: 39, y: 4 }, { x: 26, y: 4 }, { x: 13, y: 4 },
+]);
+assert.deepEqual([0, 1, 2, 3].map(handPosition), [
+    { x: 13, y: 14 }, { x: 26, y: 14 }, { x: 39, y: 14 }, { x: 52, y: 14 },
+]);
+const previousSystem = getSystem();
+let renderedView;
+setSystem({ term: { writeVB: vb => { renderedView = vb; } } });
+const markerView = new CaptureView();
+const markerGame = {
+    state: {
+        round: 1, enemyDeck: [], enemyCapture: [], personalDeck: [], personalDiscard: [],
+        enemyRow: [5, 6, 7, 8].map(rank => ({ suit: 0, rank })),
+        hand: [2, 3, 4, 2].map(rank => ({ suit: 0, rank })),
+    },
+    hiddenRow: new Set(), hiddenHand: new Set(), marked: new Set([1]), selection: new Set(),
+    phase: 'discard', focus: 'hand', handCursor: 0, rowCursor: 0, animating: false,
+    result: null, status: '', instructions: () => '',
+};
+markerView.draw(markerGame);
+const markerText = (row, col) => Array.from({ length: 5 }, (_, i) => renderedView.getCell(row, col + i)?.ch ?? ' ').join('');
+assert.equal(markerText(17, 13), '>[ ] ');
+assert.equal(markerText(17, 26), ' [X] ');
+assert.equal(markerText(7, 52), '     ');
+markerGame.phase = 'capture';
+markerGame.focus = 'row';
+markerView.draw(markerGame);
+assert.equal(markerText(7, 52), '>[ ] ');
+assert.equal(markerText(17, 13), '     ');
+markerGame.animating = true;
+markerView.draw(markerGame);
+assert.equal(markerText(7, 52), '     ');
+markerGame.animating = false;
+markerGame.state.personalDiscard = [{ suit: 0, rank: 3 }];
+markerView.draw(markerGame);
+assert.equal(markerText(15, 72), '     ');
+setSystem(previousSystem);
 const hand = ranks => ranks.map(rank => ({ suit: 0, rank }));
 assert.equal(score(hand([1, 1, 9])), 21);
 assert.equal(score(hand([1, 6, 10])), 17);
@@ -41,3 +94,181 @@ for (const card of deck) {
     }
 }
 console.log('Cached flip frames and wide-rank slices passed');
+
+const captureGame = createGame(() => 0.5);
+assert.equal(captureGame.personalDeck.length, 14);
+assert.equal(captureGame.personalDeck.filter(card => card.rank === 0).length, 2);
+for (const rank of [2, 3, 4])
+    assert.equal(captureGame.personalDeck.filter(card => card.rank === rank).length, 4);
+assert.equal(captureGame.enemyDeck.length, 40);
+assert.deepEqual(captureGame.enemyRow, [null, null, null, null]);
+assert.equal(captureGame.round, 0);
+const cardsInGame = [
+    ...captureGame.personalDeck, ...captureGame.personalDiscard, ...captureGame.hand,
+    ...captureGame.enemyDeck, ...captureGame.enemyRow.filter(Boolean), ...captureGame.enemyCapture,
+];
+assert.equal(cardsInGame.length, 54);
+assert.equal(new Set(cardsInGame).size, 54);
+
+const initialDeal = {
+    enemyDeck: [{ suit: 3, rank: 13 }, { suit: 2, rank: 7 }, { suit: 1, rank: 11 }, { suit: 0, rank: 4 }],
+    enemyRow: [null, null, null, null],
+};
+assert.deepEqual(dealInitialEnemyRow(initialDeal).map(move => move.index), [0, 1, 2, 3]);
+assert.equal(initialDeal.enemyDeck.length, 0);
+const returned = returnInitialCombatants(initialDeal);
+assert.deepEqual(returned.map(move => move.index), [1, 3]);
+assert.equal(initialDeal.enemyDeck.length, 2);
+assert.deepEqual(initialDeal.enemyRow.map(card => card?.rank ?? null), [4, null, 7, null]);
+
+const target = { suit: 2, rank: 7 };
+const playerState = {
+    hand: [{ suit: 2, rank: 3 }, { suit: -1, rank: 0 }, { suit: 2, rank: 4 }, { suit: 1, rank: 2 }],
+    personalDeck: [], personalDiscard: [], enemyDeck: [],
+    enemyRow: [null, target, null, null], enemyCapture: [],
+};
+assert.equal(captureValue(playerState, [0, 1], target), 7);
+assert.equal(captureValue(playerState, [0, 3], target), null);
+assert.equal(captureValue({ ...playerState, hand: [{ suit: -1, rank: 0 }] }, [0], target), null);
+assert.equal(captureValue({ hand: [{ suit: 2, rank: 1 }] }, [0], target), 14);
+assert.equal(captureValue({ hand: [{ suit: 2, rank: 12 }] }, [0], target), 12);
+assert.equal(capture(playerState, 1, [0, 1]), true);
+assert.equal(playerState.enemyRow[1], null);
+assert.equal(playerState.hand.length, 2);
+assert.equal(playerState.personalDiscard.length, 3);
+assert.ok(playerState.personalDiscard.includes(target));
+
+const cyclingState = {
+    hand: [{ suit: 0, rank: 2 }],
+    personalDeck: [],
+    personalDiscard: [{ suit: 1, rank: 3 }, { suit: 2, rank: 4 }],
+};
+assert.equal(discardFromHand(cyclingState, [0, 0]), false);
+assert.equal(cyclingState.hand.length, 1);
+assert.equal(discardFromHand(cyclingState, [0]), true);
+const drawResult = drawToFour(cyclingState, () => 0);
+assert.equal(cyclingState.hand.length, 3);
+assert.equal(cyclingState.personalDiscard.length, 0);
+assert.equal(drawResult.recycled.length, 3);
+assert.equal(drawResult.recycledDeck.length, 3);
+assert.equal(drawResult.drawn.length, 3);
+
+const yieldState = {
+    hand: [{ suit: 0, rank: 2 }],
+    enemyDeck: [],
+    enemyRow: [{ suit: 3, rank: 11 }, null, null, null],
+    enemyCapture: [],
+};
+assert.equal(yieldToEnemy(yieldState, 0), true);
+assert.equal(captureOutcome(yieldState), 'loss');
+
+const sacrificeTarget = { suit: 1, rank: 5 };
+const sacrificeState = {
+    hand: [{ suit: 0, rank: 3 }, { suit: -1, rank: 0 }, { suit: 0, rank: 12 }],
+    enemyRow: [sacrificeTarget, null, null, null],
+    enemyDeck: [], enemyCapture: [],
+};
+assert.equal(sacrifice(sacrificeState, 0, [0, 2]), false);
+assert.equal(sacrifice(sacrificeState, 0, [0, 1]), true);
+assert.equal(sacrificeState.enemyDeck[0], sacrificeTarget);
+assert.equal(sacrificeState.hand.length, 1);
+assert.equal(sacrificeState.enemyCapture.length, 2);
+assert.equal(hasSafeAction({
+    hand: [{ suit: 0, rank: 2 }],
+    enemyRow: [{ suit: 0, rank: 3 }, null, null, null],
+}), true);
+assert.equal(hasSafeAction({
+    hand: [{ suit: 0, rank: 2 }],
+    enemyRow: [{ suit: 0, rank: 11 }, null, null, null],
+}), false);
+assert.equal(captureOutcome({ enemyDeck: [], enemyRow: [null, null, null, null], enemyCapture: [] }), 'win');
+assert.equal(captureOutcome({ enemyDeck: [], enemyRow: [null, null, null, null], enemyCapture: [{ suit: 2, rank: 1 }] }), 'loss');
+const refillOne = { suit: 2, rank: 7 }, refillTwo = { suit: 3, rank: 8 };
+const roundState = {
+    round: 1,
+    enemyRow: [null, { suit: 0, rank: 3 }, null, { suit: 1, rank: 6 }],
+    enemyDeck: [refillOne, refillTwo],
+};
+const roundTransition = beginRound(roundState);
+assert.deepEqual(roundState.enemyRow, [
+    { suit: 0, rank: 3 }, { suit: 1, rank: 6 }, refillOne, refillTwo,
+]);
+assert.equal(roundState.round, 2);
+assert.deepEqual(roundTransition.moves, [
+    { card: roundState.enemyRow[0], fromIndex: 1, toIndex: 0 },
+    { card: roundState.enemyRow[1], fromIndex: 3, toIndex: 1 },
+]);
+assert.deepEqual(roundTransition.arrivals, [
+    { card: refillTwo, index: 3 }, { card: refillOne, index: 2 },
+]);
+
+const sparseRow = {
+    enemyRow: [null, { suit: 0, rank: 3 }, null, { suit: 1, rank: 6 }],
+    enemyDeck: [refillOne, refillTwo],
+};
+assert.deepEqual(compactEnemyRow(sparseRow), [
+    { card: sparseRow.enemyRow[0], fromIndex: 1, toIndex: 0 },
+    { card: sparseRow.enemyRow[1], fromIndex: 3, toIndex: 1 },
+]);
+assert.deepEqual(refillEnemyRow(sparseRow), [
+    { card: refillTwo, index: 3 }, { card: refillOne, index: 2 },
+]);
+console.log('Card Capture deck, actions, and win/loss rules passed');
+
+const fakeCommand = { _quit() {}, _menu() {} };
+const captureController = new CaptureGame(fakeCommand);
+captureController.view.draw = () => {};
+const flightBatches = [];
+const slideBatches = [];
+captureController.runFlights = (moves, { onStart, onLand, done }) => {
+    flightBatches.push(moves);
+    moves.forEach((move, index) => {
+        onStart(move, index);
+        onLand(move, index);
+    });
+    captureController.animating = false;
+    done();
+};
+captureController.animateSlide = (moves, _area, done) => {
+    slideBatches.push(moves);
+    done();
+};
+captureController.start();
+assert.equal(captureController.state.hand.length, 4);
+assert.equal(captureController.state.round, 1);
+assert.equal(captureController.state.enemyRow.filter(Boolean).length, 4);
+assert.equal(captureController.phase, 'discard');
+captureController.phase = 'capture';
+captureController.focus = 'row';
+captureController.key('\x1b[D');
+assert.equal(captureController.rowCursor, 1);
+captureController.key('\x1b[C');
+assert.equal(captureController.rowCursor, 0);
+flightBatches.length = 0;
+slideBatches.length = 0;
+captureController.state = {
+    round: 1, personalDeck: [{ suit: 0, rank: 4 }], personalDiscard: [],
+    hand: [{ suit: 0, rank: 3 }, { suit: 1, rank: 2 }],
+    enemyDeck: [], enemyRow: [{ suit: 0, rank: 3 }, null, null, null], enemyCapture: [],
+};
+captureController.phase = 'discard';
+captureController.key('\x1b[C');
+assert.equal(captureController.handCursor, 1);
+captureController.key('\x1b[D');
+assert.equal(captureController.handCursor, 0);
+captureController.key(' ');
+captureController.key('\r');
+assert.equal(captureController.phase, 'capture');
+assert.deepEqual(captureController.state.hand.map(card => card.rank), [2, 4, 3]);
+assert.equal(flightBatches[0].length, 1);
+assert.equal(slideBatches.length, 1);
+assert.equal(flightBatches[1].length, 1);
+assert.equal(flightBatches[2].length, 2);
+captureController.key('c');
+captureController.key('ArrowRight');
+captureController.key(' ');
+captureController.key('\r');
+assert.equal(captureController.result, 'win');
+assert.equal(flightBatches[3].length, 2);
+captureController.dispose();
+console.log('Card Capture keyboard flow passed');

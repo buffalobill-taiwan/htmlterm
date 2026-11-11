@@ -136,7 +136,7 @@ more than once.
 | `help` | Show command list; `help <cmd>` for details and usage |
 | `klotski` | Play Klotski 華容道 sliding-block puzzle (11 fayaa layouts) |
 | `jpmj` | Play Japanese Mahjong (14-tile riichi style, 6 AI personalities, riichi/dora/honba) |
-| `cardgames` | Play Blackjack, FreeCell, or six-player Texas Hold’em |
+| `cardgames` | Play Blackjack, FreeCell, Texas Hold’em, Regicide, or Card Capture |
 | `memory` | Play a card-matching Memory game (flip to find matching pairs, three difficulty levels) |
 | `menu` | Open command menu dialog |
 | `mbti` | MBTI personality test (interactive) |
@@ -208,7 +208,7 @@ one-based `(x,y)` coordinates. See [Maze reproduction](docs/development.md#maze-
 
 ### Card games
 
-Run `cardgames` to choose Blackjack, FreeCell, or Texas Hold’em. In Blackjack, arrows select Hit/Stand; Enter confirms or
+Run `cardgames` to choose Blackjack, FreeCell, Texas Hold’em, Regicide, or Card Capture. In Blackjack, arrows select Hit/Stand; Enter confirms or
 starts the next round. N returns to the game menu; Q/Escape or Ctrl+C quits. Each round
 uses a freshly shuffled 52-card deck. Aces count as 1 or 11; the dealer stands
 on all 17s, including soft 17. Two-card Blackjack beats other 21s. There is no
@@ -219,6 +219,22 @@ except `10`; the shared renderer also supports jokers (` 〠`), unused here.
 Blackjack hits and the dealer's hole-card reveal use a left-to-right flip, like
 Memory (40ms per column). Dealer draws are shown one at a time. During a flip,
 Hit/Stand is locked; N, Q/Escape and Ctrl+C still cancel immediately.
+
+Card Capture also opens directly with `cardgames capture`. The solo game uses a
+personal deck of all 2s, 3s, 4s and two jokers against the remaining 40 cards.
+Each turn, discard any unwanted hand cards, draw up to four, then choose one
+action: spend same-suit cards worth at least the selected enemy card to capture
+it, let the first enemy card and one hand card be removed, or sacrifice two
+non-face cards to send an enemy card to the bottom of its deck. If an Ace or
+face card enters the enemy's removal pile, you lose immediately. You win by
+clearing the enemy deck and row without losing. Aces are worth 14; J/Q/K are
+worth 11/12/13.
+During the discard phase, arrows select cards, Space marks discards, and Enter
+continues. During capture, C selects a card to capture, Y yields the first enemy
+card, and S starts a sacrifice; arrows and Space select the required cards.
+Enter confirms each step; Escape cancels a selection, N returns to the menu,
+and Q exits. Dealing, discarding, drawing, capture, sacrifice, recycling, and
+enemy-row shifts all animate the moving cards.
 
 Texas Hold’em opens directly with `cardgames holdem`. Play no-limit Hold’em against
 five computer players: each starts with 1,000 chips, with fixed 5/10 blinds and no
