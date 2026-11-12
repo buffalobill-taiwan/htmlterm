@@ -2,7 +2,7 @@ import { term } from '../../../system/sys.js';
 import { VirtualBuffer } from '../../../util/VirtualBuffer.js';
 import { displayWidth, isWide } from '../../../util/display-width.js';
 import { makeCell } from '../../../util/sgr.js';
-import { cardBuffer, drawCardStack, stampCard } from '../cards.js';
+import { cardBuffer, cardBufferVariant, drawCardStack, stampCard } from '../cards.js';
 import { RANKS, SUITS } from '../deck.js';
 import { playerCardZones } from './rules.js';
 
@@ -154,7 +154,18 @@ export class CaptureView {
         for (let i = 0; i < state.enemyRow.length; i++) {
             const card = state.enemyRow[i];
             const { x, y } = enemyPosition(i);
-            if (card && !game.hiddenRow.has(i)) stampCard(vb, cardBuffer(card), x, y);
+            const targetIndex = game.action === 'yield' ? 0 : game.rowCursor;
+            const highlightTarget = game.phase === 'capture' && game.focus === 'hand' &&
+                i === targetIndex;
+            const face = cardBuffer(card);
+            const displayedFace = card && highlightTarget
+                ? cardBufferVariant(face, 'action-target', buffer => {
+                    for (let row = 0; row < buffer.height; row++)
+                        for (let col = 0; col < buffer.width; col++)
+                            buffer.setCell(row, col, { ...buffer.getCell(row, col), bg: 3 });
+                })
+                : face;
+            if (card && !game.hiddenRow.has(i)) stampCard(vb, displayedFace, x, y);
             else this.drawEmpty(vb, x, 4);
             if (card && game.phase === 'capture' && game.focus === 'row' &&
                 !game.animating && !game.result) {

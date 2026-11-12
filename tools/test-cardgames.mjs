@@ -34,7 +34,7 @@ const markerGame = {
     },
     hiddenRow: new Set(), hiddenHand: new Set(), marked: new Set([1]), selection: new Set(),
     actionAvailability: { capture: true, sacrifice: false, yield: true },
-    phase: 'discard', focus: 'hand', handCursor: 0, rowCursor: 0, animating: false,
+    phase: 'discard', focus: 'hand', action: 'capture', handCursor: 0, rowCursor: 0, animating: false,
     result: null, status: '選擇要棄掉的手牌；可不棄牌。', instructions: () => 'TEST',
 };
 markerView.draw(markerGame);
@@ -102,9 +102,32 @@ assert.ok(optionText(19, 4, 76).includes('移入敵方移除堆的玩家牌（2�
 assert.ok(optionText(22, 0, 80).includes('Enter 新局'));
 markerGame.phase = 'capture';
 markerGame.focus = 'row';
+markerGame.rowCursor = 0;
 markerView.draw(markerGame);
 assert.equal(markerText(7, 52), '>[ ] ');
 assert.equal(markerText(17, 13), '     ');
+markerGame.rowCursor = 1;
+markerView.draw(markerGame);
+assert.equal(markerText(7, 52), ' [ ] ');
+assert.equal(markerText(7, 39), '>[ ] ');
+assert.notEqual(renderedView.getCell(5, 40).bg, 3);
+markerGame.focus = 'hand';
+markerView.draw(markerGame);
+assert.equal(renderedView.getCell(5, 40).bg, 3);
+assert.notEqual(renderedView.getCell(5, 53).bg, 3);
+markerGame.action = 'sacrifice';
+markerView.draw(markerGame);
+assert.equal(renderedView.getCell(5, 40).bg, 3);
+markerGame.action = 'yield';
+markerView.draw(markerGame);
+assert.equal(renderedView.getCell(5, 53).bg, 3);
+assert.notEqual(renderedView.getCell(5, 40).bg, 3);
+markerGame.phase = 'actionOptions';
+markerView.draw(markerGame);
+assert.notEqual(renderedView.getCell(5, 53).bg, 3);
+markerGame.phase = 'capture';
+markerGame.action = 'capture';
+markerGame.focus = 'row';
 markerGame.animating = true;
 markerView.draw(markerGame);
 assert.equal(markerText(7, 52), '     ');
