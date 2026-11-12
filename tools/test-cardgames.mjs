@@ -3,7 +3,7 @@ import { score, natural, outcome, shuffledDeck } from '../js/cmd/cardgames/black
 import { cardBuffer, cardFlipFrames } from '../js/cmd/cardgames/cards.js';
 import { createGame, dealInitialEnemyRow, returnInitialCombatants, compactEnemyRow, refillEnemyRow,
     beginRound, discardFromHand, drawToFour, captureValue, capture, yieldToEnemy, sacrifice,
-    outcome as captureOutcome, hasSafeAction, actionAvailability } from '../js/cmd/cardgames/capture/rules.js';
+    outcome as captureOutcome, hasSafeAction, actionAvailability, playerCardZones } from '../js/cmd/cardgames/capture/rules.js';
 import { CaptureGame } from '../js/cmd/cardgames/capture/CaptureGame.js';
 import { CaptureView, ENEMY_DECK, ENEMY_CAPTURE, PERSONAL_DECK, PERSONAL_DISCARD,
     ACTION_OPTIONS, ACTION_OPTION_LAYOUT, enemyPosition, handPosition } from '../js/cmd/cardgames/capture/view.js';
@@ -71,6 +71,35 @@ assert.equal(renderedView.getCell(19, 8).bg, 0);
 assert.equal(renderedView.getCell(8, 22).ch, 'G');
 assert.equal(renderedView.getCell(8, 22).clipScale, 4);
 assert.ok(optionText(22, 0, 80).includes('TEST'));
+const personalCards = [];
+for (let suit = 0; suit < 4; suit++)
+    for (let rank = 2; rank <= 4; rank++) personalCards.push({ suit, rank });
+personalCards.push({ suit: -1, rank: 0 }, { suit: -1, rank: 0 });
+const summaryState = {
+    round: 7,
+    hand: personalCards.slice(0, 2),
+    personalDeck: personalCards.slice(2, 7),
+    personalDiscard: personalCards.slice(7, 12),
+    enemyCapture: [...personalCards.slice(12), { suit: 0, rank: 5 }],
+    enemyDeck: [], enemyRow: [null, null, null, null],
+};
+const cardZones = playerCardZones(summaryState);
+assert.deepEqual(cardZones.map(zone => zone.cards.length), [2, 5, 5, 2]);
+assert.equal(cardZones.reduce((count, zone) => count + zone.cards.length, 0), 14);
+const summaryView = new CaptureView();
+summaryView.draw({
+    state: summaryState, phase: 'winSummary',
+    actionCounts: { captures: 4, sacrifices: 2, yields: 3 },
+    instructions: () => '',
+});
+assert.ok(optionText(1, 0, 80).includes('Card Capture — 勝利結算'));
+assert.ok(optionText(4, 4, 30).includes('回合數：7'));
+assert.ok(optionText(6, 4, 76).includes('捕獲次數：4'));
+assert.ok(optionText(10, 4, 76).includes('手牌（2）'));
+assert.ok(optionText(11, 4, 76).includes('♠２'));
+assert.ok(optionText(20, 4, 76).includes('小丑'));
+assert.ok(optionText(19, 4, 76).includes('移入敵方移除堆的玩家牌（2）'));
+assert.ok(optionText(22, 0, 80).includes('Enter 新局'));
 markerGame.phase = 'capture';
 markerGame.focus = 'row';
 markerView.draw(markerGame);
@@ -463,8 +492,12 @@ captureController.key('\x1b[C');
 captureController.key(' ');
 captureController.key('\r');
 assert.equal(captureController.result, 'win');
+assert.equal(captureController.phase, 'winSummary');
+assert.deepEqual(captureController.actionCounts, { captures: 1, sacrifices: 0, yields: 0 });
 assert.equal(flightBatches[3].length, 2);
-captureController.result = null;
+captureController.key('\r');
+assert.equal(captureController.phase, 'discard');
+assert.deepEqual(captureController.actionCounts, { captures: 0, sacrifices: 0, yields: 0 });
 const continuingState = {
     round: captureController.state.round, personalDeck: [], personalDiscard: [],
     hand: [{ suit: 0, rank: 2 }], enemyDeck: [],
@@ -486,5 +519,20 @@ assert.equal(captureController.focus, 'hand');
 captureController.key(' ');
 captureController.key('\r');
 assert.equal(captureController.result, 'loss');
+assert.equal(captureController.actionCounts.yields, 1);
+captureController.result = null;
+captureController.phase = 'capture';
+captureController.state = {
+    round: 2, personalDeck: [], personalDiscard: [],
+    hand: [{ suit: 0, rank: 2 }, { suit: 1, rank: 3 }],
+    enemyDeck: [], enemyRow: [{ suit: 2, rank: 5 }, null, null, null], enemyCapture: [],
+};
+captureController.action = 'sacrifice';
+captureController.selection = new Set([0, 1]);
+const animateBanner = captureController.animateBanner;
+captureController.animateBanner = () => {};
+captureController.performSacrifice();
+captureController.animateBanner = animateBanner;
+assert.deepEqual(captureController.actionCounts, { captures: 1, sacrifices: 1, yields: 1 });
 captureController.dispose();
 console.log('Card Capture action selector and keyboard flow passed');

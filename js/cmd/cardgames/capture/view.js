@@ -3,6 +3,8 @@ import { VirtualBuffer } from '../../../util/VirtualBuffer.js';
 import { displayWidth, isWide } from '../../../util/display-width.js';
 import { makeCell } from '../../../util/sgr.js';
 import { cardBuffer, drawCardStack, stampCard } from '../cards.js';
+import { RANKS, SUITS } from '../deck.js';
+import { playerCardZones } from './rules.js';
 
 export const CARD_X = [13, 26, 39, 52];
 export const ENEMY_DECK = { x: 2, y: 2 };
@@ -101,6 +103,30 @@ function drawBuffer(vb, buffer, x, y) {
             vb.setCell(y + row, x + col, buffer.getCell(row, col));
 }
 
+function drawVictorySummary(vb, game) {
+    const { state, actionCounts } = game;
+    vb.centerRow(1, 'Card Capture — 勝利結算');
+    vb.writeStr(4, 4, `回合數：${state.round}`);
+    vb.writeStr(6, 4,
+        `捕獲次數：${actionCounts.captures}　犧牲次數：${actionCounts.sacrifices}　投降次數：${actionCounts.yields}`);
+    vb.writeStr(8, 4, '玩家牌組內容（最終去向）');
+
+    const labels = {
+        hand: '手牌',
+        deck: '抽牌堆',
+        discard: '棄牌堆',
+        enemyRemoval: '移入敵方移除堆的玩家牌',
+    };
+    playerCardZones(state).forEach(({ key, cards }, index) => {
+        const row = 10 + index * 3;
+        const cardsText = cards.map(card =>
+            card.rank === 0 ? '小丑' : `${SUITS[card.suit]}${RANKS[card.rank]}`).join('　');
+        vb.writeStr(row, 4, `${labels[key]}（${cards.length}）`);
+        vb.writeStr(row + 1, 4, cardsText || '無');
+    });
+    vb.centerRow(22, 'Enter 新局　N 選單　Q/Esc 離開');
+}
+
 export function drawBanner(vb, text, x = Math.floor((vb.width - bannerBuffer(text).width) / 2), y = 9) {
     const banner = bannerBuffer(text);
     drawBuffer(vb, banner, x, y);
@@ -115,6 +141,12 @@ export class CaptureView {
         const vb = this.vb;
         const state = game.visualState || game.state;
         for (let row = 0; row < vb.height; row++) vb.writeStr(row, 0, ' '.repeat(vb.width));
+
+        if (game.phase === 'winSummary') {
+            drawVictorySummary(vb, game);
+            term.writeVB(vb);
+            return;
+        }
 
         vb.centerRow(0, '\x1B[1;36mCard Capture\x1B[0m');
 

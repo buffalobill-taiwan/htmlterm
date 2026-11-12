@@ -236,6 +236,9 @@ Then choose the required cards with the arrows and Space. Escape returns to the
 action choices. If no action is available, all options darken before the ×4
 GAME OVER message; Enter starts a new game. At the game-over prompt, N returns
 to the menu and Q exits.
+After a win, a Regicide-style settlement screen shows rounds played, capture,
+sacrifice and yield counts, and the final zones of all 14 player cards. Enter
+starts a new game; N returns to the menu and Q/Escape exits.
 Dealing, discarding, drawing, capture, sacrifice, recycling, and enemy-row
 shifts all animate the moving cards. A centered ×2「遊戲開始」banner holds for
 0.5 seconds, then slides into the enemy phase. Each phase transition takes

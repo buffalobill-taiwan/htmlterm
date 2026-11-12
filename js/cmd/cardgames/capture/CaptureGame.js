@@ -49,6 +49,7 @@ export class CaptureGame {
         this.visualState = null;
         this.phase = 'discard';
         this.result = null;
+        this.actionCounts = { captures: 0, sacrifices: 0, yields: 0 };
         this.status = '';
         this.handCursor = 0;
         this.rowCursor = 0;
@@ -78,6 +79,7 @@ export class CaptureGame {
         this.visualState = copyState(this.state);
         this.phase = 'transition';
         this.result = null;
+        this.actionCounts = { captures: 0, sacrifices: 0, yields: 0 };
         this.status = '';
         this.bannerText = '遊戲開始';
         this.handCursor = 0;
@@ -604,10 +606,13 @@ export class CaptureGame {
         this.hiddenHand.clear();
         this.hiddenRow.clear();
         this.selection.clear();
+        if (this.action === 'capture') this.actionCounts.captures++;
+        else if (this.action === 'sacrifice') this.actionCounts.sacrifices++;
+        else if (this.action === 'yield') this.actionCounts.yields++;
         const result = outcome(state);
         if (result) {
             this.result = result;
-            this.phase = 'result';
+            this.phase = result === 'win' ? 'winSummary' : 'result';
             this.status = result === 'win' ? '敵方牌堆與隊列已清空！' : '人頭牌進入敵方移除堆，遊戲結束。';
             this.draw();
             return;
@@ -691,6 +696,12 @@ export class CaptureGame {
         const key = data === '\x1B' ? 'Escape' :
             data === '\x1B[A' ? 'ArrowUp' : data === '\x1B[B' ? 'ArrowDown' :
                 data === '\x1B[C' ? 'ArrowRight' : data === '\x1B[D' ? 'ArrowLeft' : data;
+        if (this.phase === 'winSummary') {
+            if (key === '\r' || key === '\n') this.start();
+            else if (key.toLowerCase() === 'n') this.cmd._menu();
+            else if (key.toLowerCase() === 'q' || key === 'Escape') this.cmd._quit();
+            return;
+        }
         if (this.phase === 'gameOver') return;
         if (this.phase === 'gameOverPrompt') {
             if (key === '\r' || key === '\n') this.start();

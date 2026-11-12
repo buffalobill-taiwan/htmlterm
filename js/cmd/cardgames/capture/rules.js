@@ -3,6 +3,7 @@ import { createDeck } from '../deck.js';
 const isCombatant = card => card && (card.rank === 1 || card.rank >= 11);
 const valueOf = rank => rank === 1 ? 14 : rank;
 const isSafeCost = card => card.rank === 0 || (card.rank >= 2 && card.rank <= 10);
+const isPersonalCard = card => card && (card.rank === 0 || (card.rank >= 2 && card.rank <= 4));
 
 function shuffle(cards, random) {
     for (let i = cards.length - 1; i > 0; i--) {
@@ -208,4 +209,13 @@ export function outcome(state) {
 
 export function hasSafeAction(state) {
     return Object.values(actionAvailability(state)).some(Boolean);
+}
+
+export function playerCardZones(state) {
+    return [
+        { key: 'hand', cards: state.hand },
+        { key: 'deck', cards: state.personalDeck },
+        { key: 'discard', cards: state.personalDiscard },
+        { key: 'enemyRemoval', cards: state.enemyCapture.filter(isPersonalCard) },
+    ];
 }
