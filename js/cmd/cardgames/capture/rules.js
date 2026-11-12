@@ -176,6 +176,30 @@ export function sacrifice(state, rowIndex, handIndices) {
     return true;
 }
 
+export function actionAvailability(state) {
+    let captureAvailable = false;
+    for (let rowIndex = 0; rowIndex < state.enemyRow.length && !captureAvailable; rowIndex++) {
+        const target = state.enemyRow[rowIndex];
+        if (!target) continue;
+        for (let mask = 1; mask < (1 << state.hand.length); mask++) {
+            const indices = [];
+            for (let i = 0; i < state.hand.length; i++) if (mask & (1 << i)) indices.push(i);
+            const value = captureValue(state, indices, target);
+            if (value !== null && value >= valueOf(target.rank)) {
+                captureAvailable = true;
+                break;
+            }
+        }
+    }
+
+    return {
+        capture: captureAvailable,
+        sacrifice: state.hand.filter(isSafeCost).length >= 2 && state.enemyRow.some(Boolean),
+        yield: !!state.enemyRow[0] && !isCombatant(state.enemyRow[0]) &&
+            state.hand.some(card => !isCombatant(card)),
+    };
+}
+
 export function outcome(state) {
     if (state.enemyCapture.some(isCombatant)) return 'loss';
     if (!state.enemyDeck.length && state.enemyRow.every(card => !card)) return 'win';
@@ -183,20 +207,5 @@ export function outcome(state) {
 }
 
 export function hasSafeAction(state) {
-    for (let rowIndex = 0; rowIndex < state.enemyRow.length; rowIndex++) {
-        const target = state.enemyRow[rowIndex];
-        if (!target) continue;
-        for (let mask = 1; mask < (1 << state.hand.length); mask++) {
-            const indices = [];
-            for (let i = 0; i < state.hand.length; i++) if (mask & (1 << i)) indices.push(i);
-            const value = captureValue(state, indices, target);
-            if (value !== null && value >= valueOf(target.rank)) return true;
-        }
-    }
-
-    if (state.enemyRow[0] && !isCombatant(state.enemyRow[0]) &&
-        state.hand.some(card => !isCombatant(card))) return true;
-
-    const safeCards = state.hand.filter(isSafeCost).length;
-    return safeCards >= 2 && state.enemyRow.some(Boolean);
+    return Object.values(actionAvailability(state)).some(Boolean);
 }

@@ -6,11 +6,11 @@ import { VirtualBuffer, _blankCell } from '../../../util/VirtualBuffer.js';
 import { markDirtyRows } from '../../../util/drag.js';
 import {
     createGame, dealInitialEnemyRow, returnInitialCombatants, compactEnemyRow, refillEnemyRow,
-    discardFromHand, drawToFour, capture, yieldToEnemy, sacrifice, outcome, hasSafeAction,
+    discardFromHand, drawToFour, capture, yieldToEnemy, sacrifice, outcome, actionAvailability,
 } from './rules.js';
 import {
     CaptureView, CARD_X, ENEMY_DECK, ENEMY_CAPTURE, PERSONAL_DECK, PERSONAL_DISCARD,
-    ACTION_OPTIONS, enemyPosition, handPosition, deckBottom, drawBanner,
+    ACTION_OPTIONS, ACTION_OPTION_LAYOUT, enemyPosition, handPosition, deckBottom, drawBanner,
 } from './view.js';
 
 const rowArea = { x: CARD_X[0], y: 4, w: CARD_X[3] - CARD_X[0] + 5, h: 3 };
@@ -21,6 +21,13 @@ const BANNER_DURATION = 500;
 const BANNER_HOLD = 500;
 const BANNER_CENTER_X = 32;
 const BANNER_TRAVEL = 48;
+const GAME_OVER_HOLD = 800;
+const GAME_OVER_DURATION = 2000;
+const BLACK_CELL = Object.freeze({
+    ch: ' ', fg: 0, bg: 0, bold: false, dim: false, italic: false,
+    underline: false, blink: false, inverse: false, conceal: false,
+    crossedOut: false, width: 1,
+});
 
 function copyState(state) {
     return {
@@ -48,6 +55,7 @@ export class CaptureGame {
         this.focus = 'row';
         this.action = 'capture';
         this.actionCursor = 0;
+        this.actionAvailability = { capture: false, sacrifice: false, yield: false };
         this.marked = new Set();
         this.selection = new Set();
         this.hiddenHand = new Set();
@@ -58,6 +66,7 @@ export class CaptureGame {
         this.animating = false;
         this.bannerText = '';
         this.cancelBanner = null;
+        this.cancelGameOver = null;
         this.disposed = false;
         this.initialHandDealt = false;
     }
@@ -392,29 +401,104 @@ export class CaptureGame {
     }
 
     enterActionPhase(state) {
+        this.actionAvailability = actionAvailability(state);
+        const firstAvailable = ACTION_OPTIONS.findIndex(option => this.actionAvailability[option.action]);
+        if (firstAvailable < 0) {
+            this.startGameOverEffect();
+            return;
+        }
         this.phase = 'actionOptions';
         this.action = 'capture';
-        this.actionCursor = 0;
+        this.actionCursor = firstAvailable;
         this.focus = 'row';
         this.selection.clear();
         this.handCursor = Math.min(this.handCursor, Math.max(0, state.hand.length - 1));
-        if (!hasSafeAction(state)) {
-            this.result = 'loss';
-            this.phase = 'result';
-            this.status = '沒有安全行動，遊戲結束。';
-        } else {
-            this.status = '';
-        }
+        this.status = '';
         this.draw();
     }
 
     selectAction() {
-        this.action = ACTION_OPTIONS[this.actionCursor].action;
+        const selected = ACTION_OPTIONS[this.actionCursor];
+        if (!selected || !this.actionAvailability[selected.action]) return;
+        this.action = selected.action;
         this.phase = 'capture';
         this.focus = this.action === 'yield' ? 'hand' : 'row';
         this.selection.clear();
         this.status = '';
         this.draw();
+    }
+
+    startGameOverEffect() {
+        this.phase = 'gameOver';
+        this.result = 'loss';
+        this.animating = true;
+        this.status = '';
+        this.draw();
+
+        const { x: positions, y, width, height } = ACTION_OPTION_LAYOUT;
+        const cells = [];
+        for (const x of positions)
+            for (let row = y; row < y + height; row++)
+                for (let col = x; col < x + width; col++) cells.push({ row, col });
+        for (let i = cells.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [cells[i], cells[j]] = [cells[j], cells[i]];
+        }
+
+        const scratch = new VirtualBuffer(80, 24);
+        const rowChanged = new Uint8Array(height);
+        const batch = this.batch;
+        const active = () => !this.disposed && batch === this.batch;
+        let start = null, blackened = 0, complete = false;
+        const manager = startBufferAnimation(this.cmd,
+            (row, col) => scratch.getCell(row, col),
+            timestamp => {
+                if (start === null) start = timestamp;
+                const elapsed = timestamp - start;
+                if (elapsed < GAME_OVER_HOLD) return false;
+
+                const progress = Math.min(1, (elapsed - GAME_OVER_HOLD) / GAME_OVER_DURATION);
+                const nextCount = Math.floor(progress * cells.length);
+                rowChanged.fill(0);
+                while (blackened < nextCount) {
+                    const cell = cells[blackened++];
+                    scratch.setCell(cell.row, cell.col, BLACK_CELL);
+                    rowChanged[cell.row - y] = 1;
+                }
+                for (let row = 0; row < height; row++)
+                    if (rowChanged[row]) markDirtyRows(term, y + row, 1);
+
+                if (progress >= 1) {
+                    complete = true;
+                    return true;
+                }
+                return false;
+            }, {
+                x: 0, y: 0, w: 80, h: 24,
+                hideCursor: false, holdBusy: false,
+                onCleanup: () => {
+                    if (this.cancelGameOver === cancel) this.cancelGameOver = null;
+                    if (!complete || !active()) return;
+                    this.animating = false;
+                    this.phase = 'gameOverPrompt';
+                    this.draw();
+                },
+            });
+        const cancel = () => manager.stop();
+        this.cancelGameOver = cancel;
+    }
+
+    moveActionCursor(direction) {
+        let next = this.actionCursor;
+        while (true) {
+            next += direction;
+            if (next < 0 || next >= ACTION_OPTIONS.length) return;
+            if (this.actionAvailability[ACTION_OPTIONS[next].action]) {
+                this.actionCursor = next;
+                this.draw();
+                return;
+            }
+        }
     }
 
     performCapture() {
@@ -590,6 +674,8 @@ export class CaptureGame {
         this.batch++;
         this.cancelBanner?.();
         this.cancelBanner = null;
+        this.cancelGameOver?.();
+        this.cancelGameOver = null;
         for (const cancel of this.anims) cancel();
         this.anims.clear();
         this.cancelSlide?.();
@@ -605,6 +691,13 @@ export class CaptureGame {
         const key = data === '\x1B' ? 'Escape' :
             data === '\x1B[A' ? 'ArrowUp' : data === '\x1B[B' ? 'ArrowDown' :
                 data === '\x1B[C' ? 'ArrowRight' : data === '\x1B[D' ? 'ArrowLeft' : data;
+        if (this.phase === 'gameOver') return;
+        if (this.phase === 'gameOverPrompt') {
+            if (key === '\r' || key === '\n') this.start();
+            else if (key.toLowerCase() === 'n') this.cmd._menu();
+            else if (key.toLowerCase() === 'q' || key === 'Escape') this.cmd._quit();
+            return;
+        }
         if (key.toLowerCase() === 'q') return this.cmd._quit();
         if (key.toLowerCase() === 'n') return this.cmd._menu();
         if (key === 'Escape') {
@@ -639,13 +732,9 @@ export class CaptureGame {
         }
 
         if (this.phase === 'actionOptions') {
-            if (key === 'ArrowLeft') {
-                this.actionCursor = Math.max(0, this.actionCursor - 1);
-                this.draw();
-            } else if (key === 'ArrowRight') {
-                this.actionCursor = Math.min(ACTION_OPTIONS.length - 1, this.actionCursor + 1);
-                this.draw();
-            } else if (key === '\r' || key === '\n') this.selectAction();
+            if (key === 'ArrowLeft') this.moveActionCursor(-1);
+            else if (key === 'ArrowRight') this.moveActionCursor(1);
+            else if (key === '\r' || key === '\n') this.selectAction();
             return;
         }
 
@@ -714,6 +803,8 @@ export class CaptureGame {
     }
 
     instructions() {
+        if (this.phase === 'gameOver') return '遊戲結束中…';
+        if (this.phase === 'gameOverPrompt') return '按 Enter 開始新遊戲';
         if (this.animating) return '卡牌移動中…';
         if (this.phase === 'result') return 'R 重玩　N 回選單　Q 離開';
         if (this.phase === 'discard') return '方向鍵選牌　Space 標記棄牌　Enter 確認（可不棄牌）';

@@ -16,9 +16,9 @@ export const ACTION_OPTIONS = [
     { action: 'sacrifice', label: '犧牲', description: '犧牲兩張換任一張' },
     { action: 'yield', label: '投降', description: '一張投降敵最右張' },
 ];
-const ACTION_OPTION_X = [8, 30, 52];
-const ACTION_OPTION_Y = 18;
-const ACTION_OPTION_WIDTH = 20;
+export const ACTION_OPTION_LAYOUT = Object.freeze({
+    x: Object.freeze([8, 30, 52]), y: 18, width: 20, height: 4,
+});
 export const deckBottom = (pile, count) => ({
     x: pile.x,
     y: pile.y + Math.min(3, Math.max(0, count - 1)),
@@ -26,24 +26,26 @@ export const deckBottom = (pile, count) => ({
 
 const BANNER_SCALE = 2;
 const bannerCache = new Map();
+const gameOverCache = new Map();
 const bannerAttr = {
     fg: 6, bg: 0, bold: true, dim: false, italic: false, underline: false,
     blink: false, inverse: false, conceal: false, crossedOut: false,
 };
+const gameOverAttr = { ...bannerAttr, fg: 9, bold: true };
 
-function bannerBuffer(text) {
-    if (bannerCache.has(text)) return bannerCache.get(text);
+function scaledTextBuffer(text, scale, attr, cache) {
+    if (cache.has(text)) return cache.get(text);
     let width = 0;
-    for (const ch of text) width += (isWide(ch) ? 2 : 1) * BANNER_SCALE;
-    const vb = new VirtualBuffer(width, BANNER_SCALE);
+    for (const ch of text) width += (isWide(ch) ? 2 : 1) * scale;
+    const vb = new VirtualBuffer(width, scale);
     let x = 0;
     for (const ch of text) {
-        const glyphWidth = (isWide(ch) ? 2 : 1) * BANNER_SCALE;
+        const glyphWidth = (isWide(ch) ? 2 : 1) * scale;
         for (let col = 0; col < glyphWidth; col++) {
-            for (let row = 0; row < BANNER_SCALE; row++) {
-                const cell = makeCell(ch, bannerAttr, 1);
+            for (let row = 0; row < scale; row++) {
+                const cell = makeCell(ch, attr, 1);
                 cell.clip = true;
-                cell.clipScale = BANNER_SCALE;
+                cell.clipScale = scale;
                 cell.clipOffX = -col;
                 cell.clipOffY = -row;
                 vb.setCell(row, x + col, Object.freeze(cell));
@@ -51,35 +53,57 @@ function bannerBuffer(text) {
         }
         x += glyphWidth;
     }
-    bannerCache.set(text, vb);
+    cache.set(text, vb);
     return vb;
 }
 
-function drawActionOptions(vb, selectedIndex) {
-    const innerWidth = ACTION_OPTION_WIDTH - 2;
+function bannerBuffer(text) {
+    return scaledTextBuffer(text, BANNER_SCALE, bannerAttr, bannerCache);
+}
+
+function drawActionOptions(vb, selectedIndex, availability, blackout = false) {
+    const { x: positions, y, width, height } = ACTION_OPTION_LAYOUT;
+    const innerWidth = width - 2;
     for (let index = 0; index < ACTION_OPTIONS.length; index++) {
         const { label, description } = ACTION_OPTIONS[index];
-        const x = ACTION_OPTION_X[index];
-        const selected = index === selectedIndex;
-        const style = selected ? '\x1B[38;5;15;48;5;24m' : '';
-        const reset = selected ? '\x1B[0m' : '';
+        const x = positions[index];
+        if (blackout) {
+            for (let row = 0; row < height; row++)
+                vb.writeStr(y + row, x, '\x1B[38;5;0;48;5;0m' + ' '.repeat(width) + '\x1B[0m');
+            continue;
+        }
+        const available = availability[ACTION_OPTIONS[index].action];
+        const selected = available && index === selectedIndex;
+        const style = !available ? '\x1B[38;5;15;48;5;52m' :
+            selected ? '\x1B[38;5;15;48;5;24m' : '';
+        const reset = style ? '\x1B[0m' : '';
         const center = text => {
             const padding = Math.max(0, innerWidth - displayWidth(text));
             const left = Math.floor(padding / 2);
             return ' '.repeat(left) + text + ' '.repeat(padding - left);
         };
-        vb.writeStr(ACTION_OPTION_Y, x, style + '╔' + '═'.repeat(innerWidth) + '╗' + reset);
-        vb.writeStr(ACTION_OPTION_Y + 1, x, style + '║' + center(label) + '║' + reset);
-        vb.writeStr(ACTION_OPTION_Y + 2, x, style + '║' + center(description) + '║' + reset);
-        vb.writeStr(ACTION_OPTION_Y + 3, x, style + '╚' + '═'.repeat(innerWidth) + '╝' + reset);
+        vb.writeStr(y, x, style + '╔' + '═'.repeat(innerWidth) + '╗' + reset);
+        vb.writeStr(y + 1, x, style + '║' + center(label) + '║' + reset);
+        vb.writeStr(y + 2, x, style + '║' + center(description) + '║' + reset);
+        vb.writeStr(y + 3, x, style + '╚' + '═'.repeat(innerWidth) + '╝' + reset);
     }
+}
+
+function drawGameOver(vb) {
+    const banner = scaledTextBuffer('GAME OVER', 4, gameOverAttr, gameOverCache);
+    drawBuffer(vb, banner, Math.floor((vb.width - banner.width) / 2),
+        Math.floor((vb.height - banner.height) / 2) - 2);
+}
+
+function drawBuffer(vb, buffer, x, y) {
+    for (let row = 0; row < buffer.height; row++)
+        for (let col = 0; col < buffer.width; col++)
+            vb.setCell(y + row, x + col, buffer.getCell(row, col));
 }
 
 export function drawBanner(vb, text, x = Math.floor((vb.width - bannerBuffer(text).width) / 2), y = 9) {
     const banner = bannerBuffer(text);
-    for (let row = 0; row < banner.height; row++)
-        for (let col = 0; col < banner.width; col++)
-            vb.setCell(y + row, x + col, banner.getCell(row, col));
+    drawBuffer(vb, banner, x, y);
 }
 
 export class CaptureView {
@@ -127,14 +151,21 @@ export class CaptureView {
         }
         this.drawPile(vb, state.personalDiscard.length, PERSONAL_DISCARD.x, PERSONAL_DISCARD.y);
 
-        if (game.phase === 'actionOptions') drawActionOptions(vb, game.actionCursor);
+        if (game.phase === 'actionOptions' || game.phase === 'gameOver')
+            drawActionOptions(vb, game.actionCursor, game.actionAvailability);
+        else if (game.phase === 'gameOverPrompt')
+            drawActionOptions(vb, -1, game.actionAvailability, true);
         vb.writeStr(8, 0, '='.repeat(80));
         vb.writeStr(11, 0, '='.repeat(80));
+        if (game.phase === 'gameOverPrompt') vb.writeStr(11, 0, ' '.repeat(80));
         if (game.bannerText) drawBanner(vb, game.bannerText);
+        if (game.phase === 'gameOverPrompt') drawGameOver(vb);
         vb.centerRow(22, game.instructions());
-        const controls = game.phase === 'actionOptions' || game.phase === 'result'
-            ? 'R 重玩　N 選單　Q 離開'
-            : '←→ 移動　Space 標記牌　Enter 確認　R 重玩　N 選單　Q 離開';
+        let controls = '←→ 移動　Space 標記牌　Enter 確認　R 重玩　N 選單　Q 離開';
+        if (game.phase === 'gameOver') controls = '';
+        else if (game.phase === 'gameOverPrompt') controls = 'Enter 新遊戲　N 選單　Q 離開';
+        else if (game.phase === 'actionOptions' || game.phase === 'result')
+            controls = 'R 重玩　N 選單　Q 離開';
         vb.centerRow(23, controls);
         term.writeVB(vb);
     }

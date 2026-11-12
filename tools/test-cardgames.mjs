@@ -3,10 +3,10 @@ import { score, natural, outcome, shuffledDeck } from '../js/cmd/cardgames/black
 import { cardBuffer, cardFlipFrames } from '../js/cmd/cardgames/cards.js';
 import { createGame, dealInitialEnemyRow, returnInitialCombatants, compactEnemyRow, refillEnemyRow,
     beginRound, discardFromHand, drawToFour, captureValue, capture, yieldToEnemy, sacrifice,
-    outcome as captureOutcome, hasSafeAction } from '../js/cmd/cardgames/capture/rules.js';
+    outcome as captureOutcome, hasSafeAction, actionAvailability } from '../js/cmd/cardgames/capture/rules.js';
 import { CaptureGame } from '../js/cmd/cardgames/capture/CaptureGame.js';
 import { CaptureView, ENEMY_DECK, ENEMY_CAPTURE, PERSONAL_DECK, PERSONAL_DISCARD,
-    ACTION_OPTIONS, enemyPosition, handPosition } from '../js/cmd/cardgames/capture/view.js';
+    ACTION_OPTIONS, ACTION_OPTION_LAYOUT, enemyPosition, handPosition } from '../js/cmd/cardgames/capture/view.js';
 import { CardgamesCmd } from '../js/cmd/cardgames/CardgamesCmd.js';
 import { getSystem, setSystem } from '../js/system/sys.js';
 assert.ok(CardgamesCmd.usage.includes('capture'));
@@ -33,6 +33,7 @@ const markerGame = {
         hand: [2, 3, 4, 2].map(rank => ({ suit: 0, rank })),
     },
     hiddenRow: new Set(), hiddenHand: new Set(), marked: new Set([1]), selection: new Set(),
+    actionAvailability: { capture: true, sacrifice: false, yield: true },
     phase: 'discard', focus: 'hand', handCursor: 0, rowCursor: 0, animating: false,
     result: null, status: '選擇要棄掉的手牌；可不棄牌。', instructions: () => 'TEST',
 };
@@ -46,7 +47,7 @@ assert.equal(markerText(17, 26), ' [X] ');
 assert.equal(markerText(7, 52), '     ');
 assert.equal(renderedView.getCell(22, 38).ch, 'T');
 markerGame.phase = 'actionOptions';
-markerGame.actionCursor = 1;
+markerGame.actionCursor = 0;
 markerView.draw(markerGame);
 const optionLine = (row, col, width) =>
     Array.from({ length: width }, (_, i) => renderedView.getCell(row, col + i)?.ch ?? ' ').join('');
@@ -56,10 +57,20 @@ const optionText = (row, col, width) =>
 assert.equal(ACTION_OPTIONS.length, 3);
 assert.equal(optionLine(18, 30, 20), `╔${'═'.repeat(18)}╗`);
 assert.equal(optionLine(21, 30, 20), `╚${'═'.repeat(18)}╝`);
-assert.equal(renderedView.getCell(19, 30).bg, 24);
-assert.notEqual(renderedView.getCell(19, 8).bg, 24);
+assert.equal(renderedView.getCell(19, 8).bg, 24);
+assert.equal(renderedView.getCell(19, 30).bg, 52);
 assert.ok(optionText(20, 30, 20).includes('犧牲兩張換任一張'));
 assert.ok(optionText(23, 0, 80).includes('R 重玩'));
+markerGame.actionAvailability = { capture: false, sacrifice: false, yield: false };
+markerGame.phase = 'gameOver';
+markerView.draw(markerGame);
+assert.equal(renderedView.getCell(19, 8).bg, 52);
+markerGame.phase = 'gameOverPrompt';
+markerView.draw(markerGame);
+assert.equal(renderedView.getCell(19, 8).bg, 0);
+assert.equal(renderedView.getCell(8, 22).ch, 'G');
+assert.equal(renderedView.getCell(8, 22).clipScale, 4);
+assert.ok(optionText(22, 0, 80).includes('TEST'));
 markerGame.phase = 'capture';
 markerGame.focus = 'row';
 markerView.draw(markerGame);
@@ -122,6 +133,74 @@ assert.equal(bannerCompleted, true);
 assert.equal(bannerController.bannerText, '敵方階段');
 assert.equal(bannerOverlays.size, 0);
 bannerController.dispose();
+const unavailableChoiceController = new CaptureGame({
+    _quit() {}, _menu() {},
+});
+unavailableChoiceController.view.draw = () => {};
+unavailableChoiceController.state = {
+    round: 1, personalDeck: [], personalDiscard: [],
+    hand: [{ suit: 0, rank: 2 }], enemyDeck: [],
+    enemyRow: [{ suit: 1, rank: 5 }, null, null, null], enemyCapture: [],
+};
+unavailableChoiceController.enterActionPhase(unavailableChoiceController.state);
+assert.deepEqual(unavailableChoiceController.actionAvailability,
+    { capture: false, sacrifice: false, yield: true });
+assert.equal(unavailableChoiceController.actionCursor, 2);
+unavailableChoiceController.key('\x1b[D');
+assert.equal(unavailableChoiceController.actionCursor, 2);
+unavailableChoiceController.actionCursor = 0;
+unavailableChoiceController.selectAction();
+assert.equal(unavailableChoiceController.phase, 'actionOptions');
+unavailableChoiceController.actionCursor = 2;
+unavailableChoiceController.key('\r');
+assert.equal(unavailableChoiceController.action, 'yield');
+unavailableChoiceController.key('\x1B');
+assert.equal(unavailableChoiceController.phase, 'actionOptions');
+unavailableChoiceController.dispose();
+
+let quitDuringGameOver = 0;
+const gameOverController = new CaptureGame({
+    _quit() { quitDuringGameOver++; }, _menu() {},
+    executionGuard: () => () => true,
+    addCleanup: () => () => {},
+});
+gameOverController.view.draw = () => {};
+gameOverController.state = {
+    round: 1, personalDeck: [], personalDiscard: [],
+    hand: [{ suit: -1, rank: 0 }], enemyDeck: [],
+    enemyRow: [{ suit: 0, rank: 11 }, null, null, null], enemyCapture: [],
+};
+gameOverController.enterActionPhase(gameOverController.state);
+assert.equal(gameOverController.phase, 'gameOver');
+assert.deepEqual(gameOverController.actionAvailability,
+    { capture: false, sacrifice: false, yield: false });
+assert.equal(bannerOverlays.size, 1);
+gameOverController.key('q');
+gameOverController.key('\x1B');
+assert.equal(quitDuringGameOver, 0);
+const gameOverOverlay = [...bannerOverlays][0];
+const blackCellCount = () => ACTION_OPTION_LAYOUT.x.reduce((total, x) => {
+    for (let row = ACTION_OPTION_LAYOUT.y; row < ACTION_OPTION_LAYOUT.y + ACTION_OPTION_LAYOUT.height; row++)
+        for (let col = x; col < x + ACTION_OPTION_LAYOUT.width; col++)
+            if (gameOverOverlay.getCell(row, col)?.bg === 0) total++;
+    return total;
+}, 0);
+advanceFrame(0);
+advanceFrame(16);
+advanceFrame(815);
+assert.equal(blackCellCount(), 0);
+advanceFrame(816);
+assert.equal(blackCellCount(), 0);
+advanceFrame(1816);
+assert.equal(blackCellCount(), 120);
+advanceFrame(2816);
+assert.equal(blackCellCount(), 240);
+assert.equal(gameOverController.phase, 'gameOverPrompt');
+gameOverController.key('\x1b[C');
+assert.equal(gameOverController.phase, 'gameOverPrompt');
+gameOverController.key('\r');
+assert.equal(gameOverController.phase, 'transition');
+gameOverController.dispose();
 if (originalRequestAnimationFrame === undefined) delete globalThis.requestAnimationFrame;
 else globalThis.requestAnimationFrame = originalRequestAnimationFrame;
 if (originalCancelAnimationFrame === undefined) delete globalThis.cancelAnimationFrame;
@@ -254,6 +333,14 @@ assert.equal(hasSafeAction({
     hand: [{ suit: 0, rank: 2 }],
     enemyRow: [{ suit: 0, rank: 11 }, null, null, null],
 }), false);
+assert.deepEqual(actionAvailability({
+    hand: [{ suit: 0, rank: 2 }],
+    enemyRow: [{ suit: 1, rank: 5 }, null, null, null],
+}), { capture: false, sacrifice: false, yield: true });
+assert.deepEqual(actionAvailability({
+    hand: [{ suit: -1, rank: 0 }],
+    enemyRow: [{ suit: 0, rank: 11 }, null, null, null],
+}), { capture: false, sacrifice: false, yield: false });
 assert.equal(captureOutcome({ enemyDeck: [], enemyRow: [null, null, null, null], enemyCapture: [] }), 'win');
 assert.equal(captureOutcome({ enemyDeck: [], enemyRow: [null, null, null, null], enemyCapture: [{ suit: 2, rank: 1 }] }), 'loss');
 const refillOne = { suit: 2, rank: 7 }, refillTwo = { suit: 3, rank: 8 };
