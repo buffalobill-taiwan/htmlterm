@@ -484,7 +484,7 @@ assert.equal(captureController.state.enemyRow.filter(Boolean).length, 4);
 assert.equal(captureController.phase, 'discard');
 assert.deepEqual(bannerTransitions, [
     { text: '敵方階段', holdMs: 500 },
-    { text: '棄牌階段', holdMs: 0 },
+    { text: '抽棄階段', holdMs: 0 },
 ]);
 captureController.phase = 'capture';
 captureController.focus = 'row';
@@ -553,7 +553,7 @@ const continuingState = {
     enemyRow: [{ suit: 1, rank: 5 }, null, null, null], enemyCapture: [],
 };
 captureController.finishAction(continuingState);
-assert.deepEqual(bannerTransitions.slice(-2).map(transition => transition.text), ['敵方階段', '棄牌階段']);
+assert.deepEqual(bannerTransitions.slice(-2).map(transition => transition.text), ['敵方階段', '抽棄階段']);
 assert.equal(captureController.phase, 'discard');
 captureController.state = {
     round: captureController.state.round, personalDeck: [], personalDiscard: [],

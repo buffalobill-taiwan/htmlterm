@@ -259,7 +259,7 @@ export class CaptureGame {
     }
 
     enterDiscardStage() {
-        this.animateBanner('棄牌階段', () => this.beginPlayerTurn());
+        this.animateBanner('抽棄階段', () => this.beginPlayerTurn());
     }
 
     beginPlayerTurn() {
