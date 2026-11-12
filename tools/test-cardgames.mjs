@@ -6,7 +6,8 @@ import { createGame, dealInitialEnemyRow, returnInitialCombatants, compactEnemyR
     outcome as captureOutcome, hasSafeAction, actionAvailability, playerCardZones } from '../js/cmd/cardgames/capture/rules.js';
 import { CaptureGame } from '../js/cmd/cardgames/capture/CaptureGame.js';
 import { CaptureView, ENEMY_DECK, ENEMY_CAPTURE, PERSONAL_DECK, PERSONAL_DISCARD,
-    ACTION_OPTIONS, ACTION_OPTION_LAYOUT, enemyPosition, handPosition } from '../js/cmd/cardgames/capture/view.js';
+    ACTION_OPTIONS, ACTION_OPTION_LAYOUT, TARGET_CARDS, targetCardKey,
+    enemyPosition, handPosition } from '../js/cmd/cardgames/capture/view.js';
 import { CardgamesCmd } from '../js/cmd/cardgames/CardgamesCmd.js';
 import { getSystem, setSystem } from '../js/system/sys.js';
 assert.ok(CardgamesCmd.usage.includes('capture'));
@@ -33,11 +34,35 @@ const markerGame = {
         hand: [2, 3, 4, 2].map(rank => ({ suit: 0, rank })),
     },
     hiddenRow: new Set(), hiddenHand: new Set(), marked: new Set([1]), selection: new Set(),
+    capturedTargets: new Set(),
     actionAvailability: { capture: true, sacrifice: false, yield: true },
     phase: 'discard', focus: 'hand', action: 'capture', handCursor: 0, rowCursor: 0, animating: false,
     result: null, status: '選擇要棄掉的手牌；可不棄牌。', instructions: () => 'TEST',
 };
 markerView.draw(markerGame);
+assert.equal(renderedView.getCell(0, 0).ch, 'C');
+assert.equal(TARGET_CARDS.length, 16);
+assert.deepEqual(TARGET_CARDS.slice(0, 4).map(({ suit, rank }) => `${suit}:${rank}`),
+    ['0:11', '0:12', '0:13', '0:1']);
+assert.deepEqual(TARGET_CARDS.slice(-4).map(({ suit, rank }) => `${suit}:${rank}`),
+    ['3:11', '3:12', '3:13', '3:1']);
+assert.equal(renderedView.getCell(0, 32).ch, '♠');
+assert.equal(renderedView.getCell(0, 32).fg, 8);
+assert.equal(renderedView.getCell(0, 33).ch, 'Ｊ');
+assert.equal(renderedView.getCell(0, 33).fg, 8);
+assert.equal(renderedView.getCell(0, 35).ch, '♠');
+assert.equal(renderedView.getCell(0, 41).ch, '♠');
+assert.equal(renderedView.getCell(0, 44).ch, '♥');
+assert.equal(renderedView.getCell(0, 77).ch, '♣');
+assert.equal(renderedView.getCell(0, 77).fg, 8);
+markerGame.capturedTargets.add(targetCardKey(TARGET_CARDS[0]));
+markerGame.capturedTargets.add(targetCardKey(TARGET_CARDS[4]));
+markerGame.capturedTargets.add(targetCardKey(TARGET_CARDS.at(-1)));
+markerView.draw(markerGame);
+assert.equal(renderedView.getCell(0, 32).fg, 15);
+assert.equal(renderedView.getCell(0, 44).fg, 9);
+assert.equal(renderedView.getCell(0, 77).fg, 15);
+markerGame.capturedTargets.clear();
 const markerText = (row, col) => Array.from({ length: 5 }, (_, i) => renderedView.getCell(row, col + i)?.ch ?? ' ').join('');
 assert.equal(Array.from({ length: 80 }, (_, i) => renderedView.getCell(8, i)?.ch).join(''), '='.repeat(80));
 assert.equal(Array.from({ length: 80 }, (_, i) => renderedView.getCell(11, i)?.ch).join(''), '='.repeat(80));
@@ -517,6 +542,7 @@ captureController.key('\r');
 assert.equal(captureController.result, 'win');
 assert.equal(captureController.phase, 'winSummary');
 assert.deepEqual(captureController.actionCounts, { captures: 1, sacrifices: 0, yields: 0 });
+assert.equal(captureController.capturedTargets.size, 0);
 assert.equal(flightBatches[3].length, 2);
 captureController.key('\r');
 assert.equal(captureController.phase, 'discard');
@@ -559,3 +585,31 @@ captureController.animateBanner = animateBanner;
 assert.deepEqual(captureController.actionCounts, { captures: 1, sacrifices: 1, yields: 1 });
 captureController.dispose();
 console.log('Card Capture action selector and keyboard flow passed');
+
+const rosterController = new CaptureGame(fakeCommand);
+rosterController.view.draw = () => {};
+rosterController.state = {
+    round: 1, personalDeck: [], personalDiscard: [],
+    hand: [{ suit: 0, rank: 2 }, { suit: 0, rank: 3 }, { suit: 0, rank: 4 }, { suit: 0, rank: 4 }],
+    enemyDeck: [], enemyRow: [{ suit: 0, rank: 11 }, null, null, null], enemyCapture: [],
+};
+rosterController.phase = 'capture';
+rosterController.action = 'capture';
+rosterController.selection = new Set([0, 1, 2, 3]);
+rosterController.runFlights = (moves, { onStart, onLand, done }) => {
+    moves.forEach((move, index) => {
+        onStart(move, index);
+        onLand(move, index);
+    });
+    done();
+};
+rosterController.performCapture();
+assert.deepEqual([...rosterController.capturedTargets], ['0:11']);
+rosterController.stopAnimations = () => {};
+rosterController.startEnemyPhase = () => {};
+rosterController.animateBanner = (_text, done) => done();
+rosterController.capturedTargets.add('1:12');
+rosterController.start();
+assert.equal(rosterController.capturedTargets.size, 0);
+rosterController.dispose();
+console.log('Card Capture target roster tracking passed');

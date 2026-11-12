@@ -228,7 +228,9 @@ it, let the first enemy card and one hand card be removed, or sacrifice two
 non-face cards to send an enemy card to the bottom of its deck. If an Ace or
 face card enters the enemy's removal pile, you lose immediately. You win by
 clearing the enemy deck and row without losing. Aces are worth 14; J/Q/K are
-worth 11/12/13.
+worth 11/12/13. The first row shows all 16 enemy targets grouped by suit
+(J/Q/K/A) in gray;
+captured targets turn white for spades/clubs and red for hearts/diamonds.
 During the discard phase, arrows select cards, Space marks discards, and Enter
 continues. At the start of the action phase, Left/Right selects 捕獲, 犧牲, or
 投降; unavailable actions are dark red and skipped by selection. Enter confirms.

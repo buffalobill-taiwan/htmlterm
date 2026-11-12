@@ -10,7 +10,8 @@ import {
 } from './rules.js';
 import {
     CaptureView, CARD_X, ENEMY_DECK, ENEMY_CAPTURE, PERSONAL_DECK, PERSONAL_DISCARD,
-    ACTION_OPTIONS, ACTION_OPTION_LAYOUT, enemyPosition, handPosition, deckBottom, drawBanner,
+    ACTION_OPTIONS, ACTION_OPTION_LAYOUT, targetCardKey,
+    enemyPosition, handPosition, deckBottom, drawBanner,
 } from './view.js';
 
 const rowArea = { x: CARD_X[0], y: 4, w: CARD_X[3] - CARD_X[0] + 5, h: 3 };
@@ -50,6 +51,7 @@ export class CaptureGame {
         this.phase = 'discard';
         this.result = null;
         this.actionCounts = { captures: 0, sacrifices: 0, yields: 0 };
+        this.capturedTargets = new Set();
         this.status = '';
         this.handCursor = 0;
         this.rowCursor = 0;
@@ -80,6 +82,7 @@ export class CaptureGame {
         this.phase = 'transition';
         this.result = null;
         this.actionCounts = { captures: 0, sacrifices: 0, yields: 0 };
+        this.capturedTargets.clear();
         this.status = '';
         this.bannerText = '遊戲開始';
         this.handCursor = 0;
@@ -513,6 +516,8 @@ export class CaptureGame {
             return;
         }
         const targetCard = this.state.enemyRow[this.rowCursor];
+        if (targetCard.rank === 1 || targetCard.rank >= 11)
+            this.capturedTargets.add(targetCardKey(targetCard));
         const moves = [{
             card: targetCard, index: this.rowCursor,
             from: enemyPosition(this.rowCursor), to: PERSONAL_DISCARD,

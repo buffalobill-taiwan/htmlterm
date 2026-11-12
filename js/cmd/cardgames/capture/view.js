@@ -21,6 +21,9 @@ export const ACTION_OPTIONS = [
 export const ACTION_OPTION_LAYOUT = Object.freeze({
     x: Object.freeze([8, 30, 52]), y: 18, width: 20, height: 4,
 });
+export const TARGET_CARDS = Object.freeze(Array.from({ length: 4 }, (_, suit) =>
+    [11, 12, 13, 1].map(rank => Object.freeze({ suit, rank }))).flat());
+export const targetCardKey = card => `${card.suit}:${card.rank}`;
 export const deckBottom = (pile, count) => ({
     x: pile.x,
     y: pile.y + Math.min(3, Math.max(0, count - 1)),
@@ -127,6 +130,16 @@ function drawVictorySummary(vb, game) {
     vb.centerRow(22, 'Enter 新局　N 選單　Q/Esc 離開');
 }
 
+function drawTargetRoster(vb, capturedTargets) {
+    let col = 32;
+    for (const card of TARGET_CARDS) {
+        const captured = capturedTargets?.has(targetCardKey(card));
+        const fg = captured ? (card.suit === 1 || card.suit === 2 ? 9 : 15) : 8;
+        vb.writeStr(0, col, `\x1B[38;5;${fg}m${SUITS[card.suit]}${RANKS[card.rank]}\x1B[0m`);
+        col += 3;
+    }
+}
+
 export function drawBanner(vb, text, x = Math.floor((vb.width - bannerBuffer(text).width) / 2), y = 9) {
     const banner = bannerBuffer(text);
     drawBuffer(vb, banner, x, y);
@@ -148,7 +161,8 @@ export class CaptureView {
             return;
         }
 
-        vb.centerRow(0, '\x1B[1;36mCard Capture\x1B[0m');
+        vb.writeStr(0, 0, '\x1B[1;36mCard Capture\x1B[0m');
+        drawTargetRoster(vb, game.capturedTargets);
 
         this.drawPile(vb, state.enemyDeck.length, ENEMY_DECK.x, ENEMY_DECK.y);
         for (let i = 0; i < state.enemyRow.length; i++) {
