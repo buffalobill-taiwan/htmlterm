@@ -541,6 +541,7 @@ export class CaptureGame {
     }
 
     performYield() {
+        if (!this.clampHandCursor()) return;
         const handIndex = this.selection.size ? [...this.selection][0] : this.handCursor;
         const next = copyState(this.state);
         if (!yieldToEnemy(next, handIndex)) {
@@ -737,7 +738,7 @@ export class CaptureGame {
 
         if (this.phase === 'discard') {
             if (key === '\r' || key === '\n') return this.commitDiscard();
-            if (key === ' ' && this.state.hand.length) {
+            if (key === ' ' && this.clampHandCursor()) {
                 if (this.marked.has(this.handCursor)) this.marked.delete(this.handCursor);
                 else this.marked.add(this.handCursor);
                 this.draw();
@@ -756,7 +757,7 @@ export class CaptureGame {
 
         if (this.action === 'yield') {
             if (key === '\t' || key === 'ArrowUp' || key === 'ArrowDown') return;
-            if (key === ' ' && this.state.hand.length) {
+            if (key === ' ' && this.clampHandCursor()) {
                 if (this.selection.has(this.handCursor)) this.selection.clear();
                 else {
                     this.selection.clear();
@@ -780,7 +781,7 @@ export class CaptureGame {
             this.draw();
             return;
         }
-        if (key === ' ' && this.focus === 'hand' && this.state.hand.length) {
+        if (key === ' ' && this.focus === 'hand' && this.clampHandCursor()) {
             if (this.selection.has(this.handCursor)) this.selection.delete(this.handCursor);
             else this.selection.add(this.handCursor);
             this.draw();
@@ -805,10 +806,17 @@ export class CaptureGame {
 
     moveHand(key) {
         if (!this.state.hand.length) return;
-        if (key === 'ArrowLeft' || key === 'h') this.handCursor = Math.max(0, this.handCursor - 1);
-        else if (key === 'ArrowRight' || key === 'l') this.handCursor = Math.min(this.state.hand.length - 1, this.handCursor + 1);
+        const lastIndex = this.state.hand.length - 1;
+        if (key === 'ArrowLeft' || key === 'h') this.handCursor = Math.max(0, Math.min(lastIndex, this.handCursor - 1));
+        else if (key === 'ArrowRight' || key === 'l') this.handCursor = Math.min(lastIndex, this.handCursor + 1);
         else return;
         this.draw();
+    }
+
+    clampHandCursor() {
+        if (!this.state.hand.length) return false;
+        this.handCursor = Math.max(0, Math.min(this.state.hand.length - 1, this.handCursor));
+        return true;
     }
 
     moveRow(key) {
