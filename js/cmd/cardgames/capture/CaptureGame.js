@@ -1,16 +1,26 @@
 import { dealCard, staggerFlights } from '../animation.js';
 import { slideCards } from './animation.js';
+import { startBufferAnimation } from '../../../system/RAFAnimationHelper.js';
+import { term } from '../../../system/sys.js';
+import { VirtualBuffer, _blankCell } from '../../../util/VirtualBuffer.js';
+import { markDirtyRows } from '../../../util/drag.js';
 import {
     createGame, dealInitialEnemyRow, returnInitialCombatants, compactEnemyRow, refillEnemyRow,
     discardFromHand, drawToFour, capture, yieldToEnemy, sacrifice, outcome, hasSafeAction,
 } from './rules.js';
 import {
     CaptureView, CARD_X, ENEMY_DECK, ENEMY_CAPTURE, PERSONAL_DECK, PERSONAL_DISCARD,
-    enemyPosition, handPosition, deckBottom,
+    ACTION_OPTIONS, enemyPosition, handPosition, deckBottom, drawBanner,
 } from './view.js';
 
 const rowArea = { x: CARD_X[0], y: 4, w: CARD_X[3] - CARD_X[0] + 5, h: 3 };
 const handArea = { x: CARD_X[0], y: 14, w: CARD_X[3] - CARD_X[0] + 5, h: 3 };
+const BANNER_Y = 9;
+const BANNER_HEIGHT = 2;
+const BANNER_DURATION = 500;
+const BANNER_HOLD = 500;
+const BANNER_CENTER_X = 32;
+const BANNER_TRAVEL = 48;
 
 function copyState(state) {
     return {
@@ -37,6 +47,7 @@ export class CaptureGame {
         this.rowCursor = 0;
         this.focus = 'row';
         this.action = 'capture';
+        this.actionCursor = 0;
         this.marked = new Set();
         this.selection = new Set();
         this.hiddenHand = new Set();
@@ -45,6 +56,8 @@ export class CaptureGame {
         this.cancelSlide = null;
         this.batch = 0;
         this.animating = false;
+        this.bannerText = '';
+        this.cancelBanner = null;
         this.disposed = false;
         this.initialHandDealt = false;
     }
@@ -54,17 +67,29 @@ export class CaptureGame {
         this.disposed = false;
         this.state = createGame();
         this.visualState = copyState(this.state);
-        this.phase = 'discard';
+        this.phase = 'transition';
         this.result = null;
-        this.status = '發牌中…';
+        this.status = '';
+        this.bannerText = '遊戲開始';
         this.handCursor = 0;
         this.rowCursor = 0;
         this.focus = 'row';
         this.action = 'capture';
+        this.actionCursor = 0;
         this.marked.clear();
         this.selection.clear();
         this.initialHandDealt = false;
 
+        this.animateBanner('敵方階段', () => this.startEnemyPhase(true), BANNER_HOLD);
+    }
+
+    startEnemyPhase(initial = false) {
+        this.phase = 'enemy';
+        this.status = '敵方階段…';
+        if (!initial) {
+            this.advanceRound();
+            return;
+        }
         const next = copyState(this.state);
         const dealt = dealInitialEnemyRow(next);
         this.runFlights(dealt.map(({ card, index }) => ({
@@ -78,6 +103,61 @@ export class CaptureGame {
                 this.returnSetupCombatants();
             },
         });
+    }
+
+    animateBanner(nextText, done, holdMs = 0) {
+        const fromText = this.bannerText;
+        const batch = this.batch;
+        const active = () => !this.disposed && batch === this.batch;
+        const scratch = new VirtualBuffer(80, BANNER_HEIGHT);
+        let start = null, complete = false;
+        const render = (progress, holding = false) => {
+            scratch.fill(_blankCell);
+            if (holding) {
+                drawBanner(scratch, fromText, BANNER_CENTER_X, 0);
+            } else {
+                const shift = Math.round(BANNER_TRAVEL * progress);
+                drawBanner(scratch, fromText, BANNER_CENTER_X - shift, 0);
+                drawBanner(scratch, nextText, 80 - shift, 0);
+            }
+            markDirtyRows(term, BANNER_Y, BANNER_HEIGHT);
+        };
+        render(0, holdMs > 0);
+
+        this.phase = 'transition';
+        this.animating = true;
+        this.status = '';
+        this.draw();
+        const manager = startBufferAnimation(this.cmd,
+            (row, col) => scratch.getCell(row, col) || _blankCell,
+            ts => {
+                if (start === null) start = ts;
+                const elapsed = ts - start;
+                if (elapsed < holdMs) {
+                    render(0, true);
+                    return false;
+                }
+                const progress = Math.min(1, (elapsed - holdMs) / BANNER_DURATION);
+                render(progress);
+                if (progress >= 1) {
+                    complete = true;
+                    return true;
+                }
+                return false;
+            }, {
+                x: 0, y: BANNER_Y, w: 80, h: BANNER_HEIGHT,
+                hideCursor: false, holdBusy: false,
+                onCleanup: () => {
+                    if (this.cancelBanner === cancel) this.cancelBanner = null;
+                    if (!complete || !active()) return;
+                    this.bannerText = nextText;
+                    this.animating = false;
+                    this.draw();
+                    done();
+                },
+            });
+        const cancel = () => manager.stop();
+        this.cancelBanner = cancel;
     }
 
     returnSetupCombatants() {
@@ -145,7 +225,7 @@ export class CaptureGame {
         const arrivals = refillEnemyRow(next);
         if (!arrivals.length) {
             this.state = next;
-            this.beginPlayerTurn();
+            this.enterDiscardStage();
             return;
         }
 
@@ -159,9 +239,13 @@ export class CaptureGame {
             done: () => {
                 this.state = next;
                 this.visualState = null;
-                this.beginPlayerTurn();
+                this.enterDiscardStage();
             },
         });
+    }
+
+    enterDiscardStage() {
+        this.animateBanner('棄牌階段', () => this.beginPlayerTurn());
     }
 
     beginPlayerTurn() {
@@ -304,8 +388,13 @@ export class CaptureGame {
         this.visualState = null;
         this.hiddenHand.clear();
         this.hiddenRow.clear();
-        this.phase = 'capture';
+        this.animateBanner('行動階段', () => this.enterActionPhase(state));
+    }
+
+    enterActionPhase(state) {
+        this.phase = 'actionOptions';
         this.action = 'capture';
+        this.actionCursor = 0;
         this.focus = 'row';
         this.selection.clear();
         this.handCursor = Math.min(this.handCursor, Math.max(0, state.hand.length - 1));
@@ -314,8 +403,17 @@ export class CaptureGame {
             this.phase = 'result';
             this.status = '沒有安全行動，遊戲結束。';
         } else {
-            this.status = '選擇捕捉、犧牲，或投降。';
+            this.status = '';
         }
+        this.draw();
+    }
+
+    selectAction() {
+        this.action = ACTION_OPTIONS[this.actionCursor].action;
+        this.phase = 'capture';
+        this.focus = this.action === 'yield' ? 'hand' : 'row';
+        this.selection.clear();
+        this.status = '';
         this.draw();
     }
 
@@ -430,7 +528,7 @@ export class CaptureGame {
             this.draw();
             return;
         }
-        this.advanceRound();
+        this.animateBanner('敵方階段', () => this.startEnemyPhase());
     }
 
     runFlights(moves, { onStart = () => {}, onLand = () => {}, done = () => {} }) {
@@ -490,6 +588,8 @@ export class CaptureGame {
 
     stopAnimations() {
         this.batch++;
+        this.cancelBanner?.();
+        this.cancelBanner = null;
         for (const cancel of this.anims) cancel();
         this.anims.clear();
         this.cancelSlide?.();
@@ -514,11 +614,11 @@ export class CaptureGame {
                 this.marked.clear();
                 this.status = '已取消棄牌選擇。';
                 this.draw();
-            } else if (this.phase === 'capture' && (this.selection.size || this.action !== 'capture')) {
+            } else if (this.phase === 'capture') {
                 this.selection.clear();
-                this.action = 'capture';
+                this.phase = 'actionOptions';
                 this.focus = 'row';
-                this.status = '已取消目前選擇。';
+                this.status = '';
                 this.draw();
             } else this.cmd._quit();
             return;
@@ -538,20 +638,33 @@ export class CaptureGame {
             return;
         }
 
-        if (key.toLowerCase() === 'c') {
-            this.action = 'capture';
-            this.focus = 'hand';
-            this.draw();
+        if (this.phase === 'actionOptions') {
+            if (key === 'ArrowLeft') {
+                this.actionCursor = Math.max(0, this.actionCursor - 1);
+                this.draw();
+            } else if (key === 'ArrowRight') {
+                this.actionCursor = Math.min(ACTION_OPTIONS.length - 1, this.actionCursor + 1);
+                this.draw();
+            } else if (key === '\r' || key === '\n') this.selectAction();
             return;
         }
-        if (key.toLowerCase() === 's') {
-            this.action = 'sacrifice';
-            this.focus = 'hand';
-            this.selection.clear();
-            this.draw();
+
+        if (this.action === 'yield') {
+            if (key === '\t' || key === 'ArrowUp' || key === 'ArrowDown') return;
+            if (key === ' ' && this.state.hand.length) {
+                if (this.selection.has(this.handCursor)) this.selection.clear();
+                else {
+                    this.selection.clear();
+                    this.selection.add(this.handCursor);
+                }
+                this.draw();
+                return;
+            }
+            if (key === '\r' || key === '\n') return this.performYield();
+            this.moveHand(key);
             return;
         }
-        if (key.toLowerCase() === 'y') return this.performYield();
+
         if (key === '\t') {
             this.focus = this.focus === 'row' ? 'hand' : 'row';
             this.draw();
@@ -573,7 +686,7 @@ export class CaptureGame {
                 this.focus = 'hand';
                 this.draw();
             } else if (this.action === 'capture') this.performCapture();
-            else this.performSacrifice();
+            else if (this.action === 'sacrifice') this.performSacrifice();
             return;
         }
         if (key === 'ArrowUp' || key === 'ArrowDown') {
@@ -604,8 +717,12 @@ export class CaptureGame {
         if (this.animating) return '卡牌移動中…';
         if (this.phase === 'result') return 'R 重玩　N 回選單　Q 離開';
         if (this.phase === 'discard') return '方向鍵選牌　Space 標記棄牌　Enter 確認（可不棄牌）';
-        const action = this.action === 'capture' ? '捕捉' : '犧牲';
-        return `${this.focus === 'row' ? '選敵牌' : '選手牌'}｜${action}：Space 標記，Enter 執行　C 捕捉　S 犧牲　Y 投降`;
+        if (this.phase === 'actionOptions') return '←→ 選擇行動　Enter 確認';
+        if (this.action === 'yield') return '選手牌｜Space 標記，Enter 投降　Esc 返回行動選擇';
+        const action = this.action === 'capture' ? '捕獲' : '犧牲';
+        const selection = this.focus === 'row' ? '選敵牌' : '選手牌';
+        const confirmation = this.focus === 'row' ? 'Enter 選手牌' : 'Enter 執行';
+        return `${selection}｜${action}：Space 標記，${confirmation}　Esc 返回行動選擇`;
     }
 
     draw() {

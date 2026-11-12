@@ -230,11 +230,13 @@ face card enters the enemy's removal pile, you lose immediately. You win by
 clearing the enemy deck and row without losing. Aces are worth 14; J/Q/K are
 worth 11/12/13.
 During the discard phase, arrows select cards, Space marks discards, and Enter
-continues. During capture, C selects a card to capture, Y yields the first enemy
-card, and S starts a sacrifice; arrows and Space select the required cards.
-Enter confirms each step; Escape cancels a selection, N returns to the menu,
-and Q exits. Dealing, discarding, drawing, capture, sacrifice, recycling, and
-enemy-row shifts all animate the moving cards.
+continues. At the start of the action phase, Left/Right selects 捕獲, 犧牲, or
+投降; Enter confirms. Then choose the required cards with the arrows and Space.
+Escape returns to the action choices, N returns to the menu, and Q exits.
+Dealing, discarding, drawing, capture, sacrifice, recycling, and enemy-row
+shifts all animate the moving cards. A centered ×2「遊戲開始」banner holds for
+0.5 seconds, then slides into the enemy phase. Each phase transition takes
+0.5 seconds; its card animations or controls begin only after its banner settles.
 
 Texas Hold’em opens directly with `cardgames holdem`. Play no-limit Hold’em against
 five computer players: each starts with 1,000 chips, with fixed 5/10 blinds and no
