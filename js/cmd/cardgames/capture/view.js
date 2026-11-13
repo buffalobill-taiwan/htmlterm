@@ -166,6 +166,9 @@ export class CaptureView {
 
         vb.writeStr(0, 0, '\x1B[1;36mCard Capture\x1B[0m');
         drawTargetRoster(vb, game.capturedTargets);
+        vb.writeStr(8, 0, '='.repeat(80));
+        vb.writeStr(11, 0, '='.repeat(80));
+        if (game.phase === 'gameOverPrompt') vb.writeStr(11, 0, ' '.repeat(80));
 
         this.drawPile(vb, state.enemyDeck.length, ENEMY_DECK.x, ENEMY_DECK.y);
         for (let i = 0; i < state.enemyRow.length; i++) {
@@ -236,9 +239,6 @@ export class CaptureView {
             drawActionOptions(vb, game.actionCursor, game.actionAvailability);
         else if (game.phase === 'gameOverPrompt')
             drawActionOptions(vb, -1, game.actionAvailability, true);
-        vb.writeStr(8, 0, '='.repeat(80));
-        vb.writeStr(11, 0, '='.repeat(80));
-        if (game.phase === 'gameOverPrompt') vb.writeStr(11, 0, ' '.repeat(80));
         for (const move of game.captureFan || [])
             stampCard(vb, cardBuffer(move.card), move.x, move.y);
         if (game.bannerText) drawBanner(vb, game.bannerText);
