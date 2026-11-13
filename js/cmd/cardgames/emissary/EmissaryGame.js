@@ -817,8 +817,6 @@ export class EmissaryGame {
             remaining.length
                 ? `下一個王國的手牌已抽好；剩餘王國：${remaining.join('、')}。`
                 : '所有王國都已訪問。',
-            '',
-            'Enter / Esc 繼續。',
         ].join('\n');
         this.dialog = this.cmd.openDialog(ShowDialog, 'emissary-kingdom', {
             title: `王國 ${result.slot} 已征服`,
