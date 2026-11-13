@@ -434,8 +434,7 @@ export class RegicideGame {
             }
             return;
         }
-        if (data === '\x1b' || /^[qQ]$/.test(data)) return this.ask('離開遊戲？', () => this.cmd._quit());
-        if (/^[nN]$/.test(data)) return this.ask('返回選單？', () => this.cmd._menu());
+        if (data === '\x1b' || /^[qQ]$/.test(data)) return this.cmd._confirmQuit();
         if (this.dealing || this.sorting) return;
         if (/^[hH]$/.test(data)) {
             this.dialog = this.cmd.openDialog(ShowDialog, null, {

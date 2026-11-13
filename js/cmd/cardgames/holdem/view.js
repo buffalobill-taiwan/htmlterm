@@ -100,7 +100,7 @@ export class HoldemView {
         this.centered(20, game.status || (s.phase === 'between' ? '準備發下一輪公共牌…' : ''));
         this.centered(21, game.actions.map((a, i) => (i === game.choice ? '\x1B[7m' : '') + ' ' + a.label + ' ' + RESET).join('   '));
         this.row(22, game.effect || game.dealing ? '' : s.phase === 'result' ? '                   Enter 下一手    R 查看結算' : actor === 0 ? '                     ← → 選擇    Enter 確認' : '');
-        this.row(23, ' N 遊戲選單                                                  Q / Esc 離開');
+        this.row(23, ' Q / Esc 離開（可選回選單）');
         // Recompose only changed rows, including any card slots on those rows.
         for (const y of this.dirty) {
             const row = this.output;

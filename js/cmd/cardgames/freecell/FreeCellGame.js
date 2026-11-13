@@ -25,12 +25,12 @@ export class FreeCellGame {
         this.status = '正在生成並驗證可解牌局…'; this.draw();
         let worker;
         try { worker = new Worker(new URL('./worker.js', import.meta.url), { type: 'module' }); }
-        catch { this.status = '無法啟動生成器；M 返回選單'; this.draw(); return; }
+        catch { this.status = '無法啟動生成器；Q/Esc 開啟離開選項'; this.draw(); return; }
         this.worker = worker;
         const fail = () => {
             if (this.worker !== worker) return;
             worker.terminate(); this.worker = null;
-            this.status = '生成失敗，請按 N 更換種子或 M 返回選單'; this.draw();
+            this.status = '生成失敗，按 N 更換種子或 Q/Esc 開啟離開選項'; this.draw();
         };
         worker.onerror = fail;
         worker.onmessage = ({ data }) => {
@@ -171,8 +171,7 @@ export class FreeCellGame {
             if (this.drag || this.selected) { this.cancelDrag(); this.selected = null; this.status = '已取消選牌'; this.draw(); return; }
             if (data === ' ') return;
         }
-        if (/^[qQ]$/.test(data) || data === '\x1B') return this.confirm(() => this.cmd._quit());
-        if (/^[mM]$/.test(data)) return this.confirm(() => this.cmd._menu());
+        if (/^[qQ]$/.test(data) || data === '\x1B') return this.cmd._confirmQuit();
         if (/^[nN]$/.test(data)) return this.confirm(() => this.askSeed());
         if (!this.state || this.drag) return;
         if (/^[rR]$/.test(data)) return this.confirm(() => this.restart());

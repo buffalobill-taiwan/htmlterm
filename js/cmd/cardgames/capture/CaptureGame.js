@@ -704,22 +704,19 @@ export class CaptureGame {
                 data === '\x1B[C' ? 'ArrowRight' : data === '\x1B[D' ? 'ArrowLeft' : data;
         if (this.phase === 'winSummary') {
             if (key === '\r' || key === '\n') this.start();
-            else if (key.toLowerCase() === 'n') this.cmd._menu();
-            else if (key.toLowerCase() === 'q' || key === 'Escape') this.cmd._quit();
+            else if (key.toLowerCase() === 'q' || key === 'Escape') this.cmd._confirmQuit();
             return;
         }
         if (this.phase === 'gameOver') return;
         if (this.phase === 'gameOverPrompt') {
             if (key === '\r' || key === '\n') this.start();
-            else if (key.toLowerCase() === 'n') this.cmd._menu();
-            else if (key.toLowerCase() === 'q' || key === 'Escape') this.cmd._quit();
+            else if (key.toLowerCase() === 'q' || key === 'Escape') this.cmd._confirmQuit();
             return;
         }
-        if (key.toLowerCase() === 'q') return this.cmd._quit();
-        if (key.toLowerCase() === 'n') return this.cmd._menu();
+        if (key.toLowerCase() === 'q') return this.cmd._confirmQuit();
         if (key === 'Escape') {
             if (this.animating) {
-                this.cmd._quit();
+                this.cmd._confirmQuit();
             } else if (this.phase === 'discard' && this.marked.size) {
                 this.marked.clear();
                 this.status = '已取消棄牌選擇。';
@@ -730,7 +727,7 @@ export class CaptureGame {
                 this.focus = 'row';
                 this.status = '';
                 this.draw();
-            } else this.cmd._quit();
+            } else this.cmd._confirmQuit();
             return;
         }
         if (this.animating || this.phase === 'result') return;
@@ -830,7 +827,7 @@ export class CaptureGame {
         if (this.phase === 'gameOver') return '遊戲結束中…';
         if (this.phase === 'gameOverPrompt') return '按 Enter 開始新遊戲';
         if (this.animating) return '卡牌移動中…';
-        if (this.phase === 'result') return 'R 重玩　N 回選單　Q 離開';
+        if (this.phase === 'result') return 'R 重玩　Q/Esc 離開／選單';
         if (this.phase === 'discard') return '方向鍵選牌　Space 標記棄牌　Enter 確認（可不棄牌）';
         if (this.phase === 'actionOptions') return '←→ 選擇行動　Enter 確認';
         if (this.action === 'yield') return '選手牌｜Space 標記，Enter 投降　Esc 返回行動選擇';

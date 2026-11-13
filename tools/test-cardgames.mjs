@@ -8,7 +8,11 @@ import { CaptureGame } from '../js/cmd/cardgames/capture/CaptureGame.js';
 import { CaptureView, ENEMY_DECK, ENEMY_CAPTURE, PERSONAL_DECK, PERSONAL_DISCARD,
     ACTION_OPTIONS, ACTION_OPTION_LAYOUT, TARGET_CARDS, targetCardKey,
     enemyPosition, handPosition } from '../js/cmd/cardgames/capture/view.js';
+import { FreeCellGame } from '../js/cmd/cardgames/freecell/FreeCellGame.js';
+import { HoldemGame } from '../js/cmd/cardgames/holdem/HoldemGame.js';
+import { RegicideGame } from '../js/cmd/cardgames/regicide/RegicideGame.js';
 import { CardgamesCmd } from '../js/cmd/cardgames/CardgamesCmd.js';
+import { SelectDialog } from '../js/dialog/SelectDialog.js';
 import { getSystem, setSystem } from '../js/system/sys.js';
 assert.ok(CardgamesCmd.usage.includes('capture'));
 assert.ok(CardgamesCmd.help.includes('Card Capture'));
@@ -23,6 +27,96 @@ assert.deepEqual([0, 1, 2, 3].map(enemyPosition), [
 assert.deepEqual([0, 1, 2, 3].map(handPosition), [
     { x: 13, y: 14 }, { x: 26, y: 14 }, { x: 39, y: 14 }, { x: 52, y: 14 },
 ]);
+
+let exitDialogOptions, confirmedExits = 0, menuReturns = 0;
+const exitCommand = {
+    _dialog: null,
+    openDialog(DialogClass, key, options) {
+        assert.equal(DialogClass, SelectDialog);
+        assert.equal(key, 'cardgames-quit-confirm');
+        exitDialogOptions = options;
+        return { close() {} };
+    },
+    _quit() { confirmedExits++; },
+    _menu() { menuReturns++; },
+};
+CardgamesCmd.prototype._confirmQuit.call(exitCommand);
+assert.equal(confirmedExits, 0);
+assert.equal(exitDialogOptions.selectedIndex, 0);
+assert.deepEqual(exitDialogOptions.options, ['繼續遊戲', '回選單', '離開遊戲']);
+exitDialogOptions.onCancel();
+assert.equal(exitCommand._dialog, null);
+assert.equal(confirmedExits, 0);
+CardgamesCmd.prototype._confirmQuit.call(exitCommand);
+const pendingExitDialog = exitCommand._dialog;
+CardgamesCmd.prototype._confirmQuit.call(exitCommand);
+assert.equal(exitCommand._dialog, pendingExitDialog);
+exitDialogOptions.onSelect(0);
+assert.equal(exitCommand._dialog, null);
+assert.equal(confirmedExits, 0);
+assert.equal(menuReturns, 0);
+CardgamesCmd.prototype._confirmQuit.call(exitCommand);
+exitDialogOptions.onSelect(1);
+assert.equal(exitCommand._dialog, null);
+assert.equal(menuReturns, 1);
+CardgamesCmd.prototype._confirmQuit.call(exitCommand);
+exitDialogOptions.onSelect(2);
+assert.equal(exitCommand._dialog, null);
+assert.equal(confirmedExits, 1);
+
+let exitPrompts = 0, directMenuCalls = 0, newFreeCellGames = 0;
+const exitRouteCommand = {
+    _confirmQuit() { exitPrompts++; },
+    _quit() { assert.fail('an in-game quit bypassed confirmation'); },
+    _menu() { directMenuCalls++; },
+};
+const cardgamesShell = Object.assign(Object.create(CardgamesCmd.prototype), {
+    _capture: null, _regicide: null, _holdem: null, _freecell: null, _phase: 'result',
+    _confirmQuit() { exitPrompts++; },
+    _deal() {},
+    _menu() { directMenuCalls++; },
+});
+cardgamesShell._onKey('q');
+cardgamesShell._onKey('\x1B');
+cardgamesShell._onKey('n');
+const freeCellExit = new FreeCellGame(exitRouteCommand);
+freeCellExit.history = [];
+freeCellExit.askSeed = () => { newFreeCellGames++; };
+freeCellExit.key('q');
+freeCellExit.key('\x1B');
+freeCellExit.key('m');
+freeCellExit.key('n');
+const holdemExit = Object.assign(Object.create(HoldemGame.prototype), { cmd: exitRouteCommand });
+holdemExit.key('q');
+holdemExit.key('\x1B');
+holdemExit.effect = true;
+holdemExit.key('n');
+const captureExit = new CaptureGame(exitRouteCommand);
+captureExit.state = { phase: 'attack' };
+captureExit.phase = 'winSummary';
+captureExit.key('n');
+captureExit.phase = 'gameOverPrompt';
+captureExit.key('n');
+captureExit.phase = 'winSummary';
+captureExit.key('q');
+captureExit.key('\x1B');
+captureExit.phase = 'discard';
+captureExit.animating = true;
+captureExit.key('n');
+captureExit.key('\x1B');
+captureExit.animating = false;
+captureExit.key('q');
+const regicideExit = Object.assign(Object.create(RegicideGame.prototype), {
+    cmd: exitRouteCommand, state: { phase: 'win' }, dealing: false, sorting: false, dialog: null,
+});
+regicideExit.key('n');
+regicideExit.key('q');
+regicideExit.key('\x1B');
+assert.equal(exitPrompts, 12);
+assert.equal(directMenuCalls, 0);
+assert.equal(newFreeCellGames, 1);
+captureExit.dispose();
+
 const previousSystem = getSystem();
 let renderedView;
 setSystem({ term: { writeVB: vb => { renderedView = vb; } } });

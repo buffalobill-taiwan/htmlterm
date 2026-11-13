@@ -443,7 +443,7 @@ function drawPreview(game) {
 function drawControls(game) {
     const { vb } = game.areas.controls;
     vb.clearCells();
-    vb.writeStr(0, 0, '←→ 移動  Space 選牌  Enter 確認  S 排序  J 小丑  H 規則  N 選單  Q/Esc 離開');
+    vb.writeStr(0, 0, '←→ 移動  Space 選牌  Enter 確認  S 排序  J 小丑  H 規則  Q/Esc 離開／選單');
 }
 
 export function draw(game) {
@@ -471,7 +471,7 @@ export function draw(game) {
             '攻擊次數：' + stats.attacks + '    小丑使用次數：' + stats.jesterUses,
         ];
         lines.forEach((line, i) => root.writeStr(10 + i * 2, 4, line));
-        root.centerRow(22, 'Enter 新局    N 選單    Q/Esc 離開');
+        root.centerRow(22, 'Enter 新局    Q/Esc 離開／選單');
         term.writeVB(root);
         return;
     }

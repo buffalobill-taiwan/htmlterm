@@ -201,7 +201,7 @@ export class CardgamesCmd extends CmdBase {
                 vb.centerRow(20, 'Enter 下一局（重新洗牌）');
             }
         }
-        vb.centerRow(22, 'N 遊戲選單   Q / Esc 離開   莊家 17 點停牌（含軟 17）');
+        vb.centerRow(22, 'Q / Esc 離開（可選回選單）   莊家 17 點停牌（含軟 17）');
         term.writeVB(vb);
     }
     _onKey(data) {
@@ -209,8 +209,7 @@ export class CardgamesCmd extends CmdBase {
         if (this._regicide) return this._regicide.key(data);
         if (this._holdem) return this._holdem.key(data);
         if (this._freecell) return this._freecell.key(data);
-        if (data === '\x1B' || /^[qQ]$/.test(data)) return this._quit();
-        if (/^[nN]$/.test(data)) return this._menu();
+        if (data === '\x1B' || /^[qQ]$/.test(data)) return this._confirmQuit();
         if (this._phase === 'result') {
             if (data === '\r' || data === '\n') this._deal();
             return;
@@ -234,6 +233,21 @@ export class CardgamesCmd extends CmdBase {
         if (this._dialog) { this._dialog.close(); this._dialog = null; }
         this.placeShellCursor(24);
         this.close();
+    }
+    _confirmQuit() {
+        if (this._dialog) return;
+        this._dialog = this.openDialog(SelectDialog, 'cardgames-quit-confirm', {
+            title: '離開遊戲？',
+            options: ['繼續遊戲', '回選單', '離開遊戲'],
+            selectedIndex: 0,
+            onSelect: index => {
+                this._dialog = null;
+                if (index === 1) this._menu();
+                else if (index === 2) this._quit();
+            },
+            onCancel: () => { this._dialog = null; },
+            onAbort: () => this._quit(),
+        });
     }
     onCancel() { this._quit(); super.onCancel(); }
 }

@@ -196,7 +196,7 @@ export class HoldemGame {
         this.removeEffect();
         clearTimeout(this.timer); this.timer = null; this.worker?.terminate(); this.worker = null;
         this.request++; this.failed = true;
-        this.status = '電腦計算失敗：Enter 重試，N 返回選單'; this.view.draw(this);
+        this.status = '電腦計算失敗：Enter 重試，Q/Esc 開啟離開選項'; this.view.draw(this);
     }
     raiseInput(error = '') {
         const l = legalActions(this.state);
@@ -279,8 +279,7 @@ export class HoldemGame {
         });
     }
     key(data) {
-        if (data === '\x1B' || /^[qQ]$/.test(data)) return this.cmd._quit();
-        if (/^[nN]$/.test(data)) return this.cmd._menu();
+        if (data === '\x1B' || /^[qQ]$/.test(data)) return this.cmd._confirmQuit();
         if (this.dealingHole && (data === '\r' || data === '\n' || data === ' ')) {
             this.finishHoleDeal();
             return;

@@ -127,7 +127,7 @@ function drawVictorySummary(vb, game) {
         vb.writeStr(row, 4, `${labels[key]}（${cards.length}）`);
         vb.writeStr(row + 1, 4, cardsText || '無');
     });
-    vb.centerRow(22, 'Enter 新局　N 選單　Q/Esc 離開');
+    vb.centerRow(22, 'Enter 新局　Q/Esc 離開／選單');
 }
 
 function drawTargetRoster(vb, capturedTargets) {
@@ -218,11 +218,11 @@ export class CaptureView {
         if (game.bannerText) drawBanner(vb, game.bannerText);
         if (game.phase === 'gameOverPrompt') drawGameOver(vb);
         vb.centerRow(22, game.instructions());
-        let controls = '←→ 移動　Space 標記牌　Enter 確認　R 重玩　N 選單　Q 離開';
+        let controls = '←→ 移動　Space 標記牌　Enter 確認　R 重玩　Q 離開／選單';
         if (game.phase === 'gameOver') controls = '';
-        else if (game.phase === 'gameOverPrompt') controls = 'Enter 新遊戲　N 選單　Q 離開';
+        else if (game.phase === 'gameOverPrompt') controls = 'Enter 新遊戲　Q 離開／選單';
         else if (game.phase === 'actionOptions' || game.phase === 'result')
-            controls = 'R 重玩　N 選單　Q 離開';
+            controls = 'R 重玩　Q 離開／選單';
         vb.centerRow(23, controls);
         term.writeVB(vb);
     }
