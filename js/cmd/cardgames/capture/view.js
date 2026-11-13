@@ -4,7 +4,7 @@ import { displayWidth, isWide } from '../../../util/display-width.js';
 import { makeCell } from '../../../util/sgr.js';
 import { cardBuffer, cardBufferVariant, drawCardStack, stampCard } from '../cards.js';
 import { RANKS, SUITS } from '../deck.js';
-import { playerCardZones } from './rules.js';
+import { canSelectCaptureCard, capturableRowIndices, playerCardZones } from './rules.js';
 
 export const CARD_X = [13, 26, 39, 52];
 export const ENEMY_DECK = { x: 2, y: 2 };
@@ -153,6 +153,9 @@ export class CaptureView {
     draw(game) {
         const vb = this.vb;
         const state = game.visualState || game.state;
+        const capturableRows = game.phase === 'capture' && game.action === 'capture'
+            ? new Set(capturableRowIndices(state))
+            : null;
         for (let row = 0; row < vb.height; row++) vb.writeStr(row, 0, ' '.repeat(vb.width));
 
         if (game.phase === 'winSummary') {
@@ -172,7 +175,15 @@ export class CaptureView {
             const highlightTarget = game.phase === 'capture' && game.focus === 'hand' &&
                 i === targetIndex;
             const face = cardBuffer(card);
-            const displayedFace = card && highlightTarget
+            const unavailableTarget = card && game.phase === 'capture' && game.action === 'capture' &&
+                game.focus === 'row' && !capturableRows.has(i);
+            const displayedFace = unavailableTarget
+                ? cardBufferVariant(face, 'capture-unavailable-target', buffer => {
+                    for (let row = 0; row < buffer.height; row++)
+                        for (let col = 0; col < buffer.width; col++)
+                            buffer.setCell(row, col, { ...buffer.getCell(row, col), bg: 8 });
+                })
+                : card && highlightTarget
                 ? cardBufferVariant(face, 'action-target', buffer => {
                     for (let row = 0; row < buffer.height; row++)
                         for (let col = 0; col < buffer.width; col++)
@@ -182,6 +193,7 @@ export class CaptureView {
             if (card && !game.hiddenRow.has(i)) stampCard(vb, displayedFace, x, y);
             else this.drawEmpty(vb, x, 4);
             if (card && game.phase === 'capture' && game.focus === 'row' &&
+                (!capturableRows || capturableRows.has(i)) &&
                 !game.animating && !game.result) {
                 const marker = (game.rowCursor === i ? '>' : ' ') + '[ ]';
                 vb.writeStr(y + 3, x, marker);
@@ -192,11 +204,23 @@ export class CaptureView {
         this.drawPile(vb, state.personalDeck.length, PERSONAL_DECK.x, PERSONAL_DECK.y);
         for (let i = 0; i < state.hand.length; i++) {
             const { x, y } = handPosition(i);
-            if (!game.hiddenHand.has(i)) stampCard(vb, cardBuffer(state.hand[i]), x, y);
+            const selectingCaptureCards = game.phase === 'capture' && game.action === 'capture' &&
+                game.focus === 'hand';
+            const canSelectCard = !selectingCaptureCards || canSelectCaptureCard(state, i, game.rowCursor);
+            const face = cardBuffer(state.hand[i]);
+            const displayedFace = selectingCaptureCards && !canSelectCard
+                ? cardBufferVariant(face, 'capture-unavailable-card', buffer => {
+                    for (let row = 0; row < buffer.height; row++)
+                        for (let col = 0; col < buffer.width; col++)
+                            buffer.setCell(row, col, { ...buffer.getCell(row, col), bg: 8 });
+                })
+                : face;
+            if (!game.hiddenHand.has(i)) stampCard(vb, displayedFace, x, y);
             else this.drawEmpty(vb, x, y);
             const selectingHand = game.phase === 'discard' ||
                 (game.phase === 'capture' && game.focus === 'hand');
-            if (selectingHand && !game.animating && !game.result) {
+            if (selectingHand && (!selectingCaptureCards || canSelectCard) &&
+                !game.animating && !game.result) {
                 const selected = game.phase === 'discard' ? game.marked.has(i) : game.selection.has(i);
                 const marker = (game.handCursor === i ? '>' : ' ') + `[${selected ? 'X' : ' '}]`;
                 vb.writeStr(y + 3, x, marker);
@@ -215,6 +239,8 @@ export class CaptureView {
         vb.writeStr(8, 0, '='.repeat(80));
         vb.writeStr(11, 0, '='.repeat(80));
         if (game.phase === 'gameOverPrompt') vb.writeStr(11, 0, ' '.repeat(80));
+        for (const move of game.captureFan || [])
+            stampCard(vb, cardBuffer(move.card), move.x, move.y);
         if (game.bannerText) drawBanner(vb, game.bannerText);
         if (game.phase === 'gameOverPrompt') drawGameOver(vb);
         vb.centerRow(22, game.instructions());

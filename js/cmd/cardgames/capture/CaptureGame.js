@@ -6,7 +6,8 @@ import { VirtualBuffer, _blankCell } from '../../../util/VirtualBuffer.js';
 import { markDirtyRows } from '../../../util/drag.js';
 import {
     createGame, dealInitialEnemyRow, returnInitialCombatants, compactEnemyRow, refillEnemyRow,
-    discardFromHand, drawToFour, capture, yieldToEnemy, sacrifice, outcome, actionAvailability,
+    discardFromHand, drawToFour, capture, capturableRowIndices, canSelectCaptureCard,
+    yieldToEnemy, sacrifice, outcome, actionAvailability,
 } from './rules.js';
 import {
     CaptureView, CARD_X, ENEMY_DECK, ENEMY_CAPTURE, PERSONAL_DECK, PERSONAL_DISCARD,
@@ -24,11 +25,15 @@ const BANNER_CENTER_X = 32;
 const BANNER_TRAVEL = 48;
 const GAME_OVER_HOLD = 800;
 const GAME_OVER_DURATION = 2000;
+const CAPTURE_CONTACT_HOLD = 300;
 const BLACK_CELL = Object.freeze({
     ch: ' ', fg: 0, bg: 0, bold: false, dim: false, italic: false,
     underline: false, blink: false, inverse: false, conceal: false,
     crossedOut: false, width: 1,
 });
+const CAPTURE_CONTACT_OFFSETS = [
+    { x: 0, y: 3 }, { x: -5, y: 0 }, { x: 5, y: 0 }, { x: 0, y: -3 },
+];
 
 function copyState(state) {
     return {
@@ -63,6 +68,7 @@ export class CaptureGame {
         this.selection = new Set();
         this.hiddenHand = new Set();
         this.hiddenRow = new Set();
+        this.captureFan = [];
         this.anims = new Set();
         this.cancelSlide = null;
         this.batch = 0;
@@ -70,6 +76,7 @@ export class CaptureGame {
         this.bannerText = '';
         this.cancelBanner = null;
         this.cancelGameOver = null;
+        this.cancelCapturePause = null;
         this.disposed = false;
         this.initialHandDealt = false;
     }
@@ -428,6 +435,11 @@ export class CaptureGame {
         this.action = selected.action;
         this.phase = 'capture';
         this.focus = this.action === 'yield' ? 'hand' : 'row';
+        if (this.action === 'capture') {
+            const capturable = capturableRowIndices(this.state);
+            if (capturable.length) this.rowCursor = capturable[0];
+            this.ensureCaptureHandCursor();
+        }
         this.selection.clear();
         this.status = '';
         this.draw();
@@ -518,25 +530,48 @@ export class CaptureGame {
         const targetCard = this.state.enemyRow[this.rowCursor];
         if (targetCard.rank === 1 || targetCard.rank >= 11)
             this.capturedTargets.add(targetCardKey(targetCard));
-        const moves = [{
-            card: targetCard, index: this.rowCursor,
-            from: enemyPosition(this.rowCursor), to: PERSONAL_DISCARD,
-        }, ...indices.map(index => ({
+        const targetIndex = this.rowCursor;
+        const targetPosition = enemyPosition(targetIndex);
+        const approachMoves = indices.map((index, slot) => ({
             card: this.state.hand[index], index,
-            from: handPosition(index), to: PERSONAL_DISCARD,
-            options: { faceUp: true },
-        }))];
+            from: handPosition(index),
+            to: {
+                x: targetPosition.x + CAPTURE_CONTACT_OFFSETS[slot].x,
+                y: targetPosition.y + CAPTURE_CONTACT_OFFSETS[slot].y,
+            },
+            options: { faceUp: true, duration: 220 },
+        }));
         this.visualState = copyState(this.state);
         this.hiddenHand.clear();
         this.hiddenRow.clear();
+        this.captureFan.length = 0;
         this.status = '捕捉牌移動中…';
-        this.runFlights(moves, {
-            onStart: move => {
-                if (move.from.y === 4) this.hiddenRow.add(move.index);
-                else this.hiddenHand.add(move.index);
+        this.runFlights(approachMoves, {
+            onStart: move => this.hiddenHand.add(move.index),
+            onLand: move => {
+                this.captureFan.push({ card: move.card, index: move.index, ...move.to });
             },
-            onLand: move => { this.visualState.personalDiscard.push(move.card); },
-            done: () => this.finishAction(next),
+            done: () => this.pauseCaptureFan(() => {
+                const contactPositions = new Map(this.captureFan.map(({ index, x, y }) =>
+                    [index, { x, y }]));
+                const discardMoves = [{
+                    card: targetCard, index: targetIndex,
+                    from: targetPosition, to: PERSONAL_DISCARD,
+                    options: { faceUp: true, duration: 260 },
+                }, ...indices.map(index => ({
+                    card: this.state.hand[index], index,
+                    from: contactPositions.get(index), to: PERSONAL_DISCARD,
+                    options: { faceUp: true, duration: 260 },
+                }))];
+                this.hiddenRow.add(targetIndex);
+                this.captureFan.length = 0;
+                this.draw();
+                this.runFlights(discardMoves, {
+                    simultaneous: true,
+                    onLand: move => { this.visualState.personalDiscard.push(move.card); },
+                    done: () => this.finishAction(next),
+                });
+            }),
         });
     }
 
@@ -626,7 +661,9 @@ export class CaptureGame {
         this.animateBanner('敵方階段', () => this.startEnemyPhase());
     }
 
-    runFlights(moves, { onStart = () => {}, onLand = () => {}, done = () => {} }) {
+    runFlights(moves, {
+        onStart = () => {}, onLand = () => {}, done = () => {}, simultaneous = false,
+    }) {
         const batch = this.batch;
         const active = () => !this.disposed && batch === this.batch;
         this.animating = moves.length > 0;
@@ -636,32 +673,57 @@ export class CaptureGame {
             return;
         }
 
-        staggerFlights(this.anims, {
-            count: moves.length,
-            isActive: active,
-            start: (index, { onStep, onLand: landed }) => {
-                const move = moves[index];
-                onStart(move, index);
-                this.draw();
-                const cancel = dealCard(
-                    this.cmd, move.card, move.from, typeof move.to === 'function' ? move.to(index) : move.to,
-                    { ...move.options, onStep },
-                    () => { if (active()) landed(); },
-                );
-                return cancel;
-            },
-            land: index => {
-                if (!active()) return;
-                onLand(moves[index], index);
-                this.draw();
-            },
-            done: () => {
-                if (!active()) return;
-                this.animating = false;
-                this.draw();
-                done();
-            },
-        });
+        const finishFlight = (move, index) => {
+            if (!active()) return;
+            onLand(move, index);
+            this.draw();
+        };
+        const finish = () => {
+            if (!active()) return;
+            this.animating = false;
+            this.draw();
+            done();
+        };
+        if (!simultaneous) {
+            staggerFlights(this.anims, {
+                count: moves.length,
+                isActive: active,
+                start: (index, { onStep, onLand: landed }) => {
+                    const move = moves[index];
+                    onStart(move, index);
+                    this.draw();
+                    return dealCard(
+                        this.cmd, move.card, move.from,
+                        typeof move.to === 'function' ? move.to(index) : move.to,
+                        { ...move.options, onStep },
+                        () => { if (active()) landed(); },
+                    );
+                },
+                land: index => finishFlight(moves[index], index),
+                done: finish,
+            });
+            return;
+        }
+
+        let landed = 0;
+        for (let index = 0; index < moves.length; index++) {
+            let cancel;
+            const move = moves[index];
+            onStart(move, index);
+            this.draw();
+            cancel = dealCard(
+                this.cmd, move.card, move.from,
+                typeof move.to === 'function' ? move.to(index) : move.to,
+                move.options,
+                () => {
+                    if (!active()) return;
+                    this.anims.delete(cancel);
+                    finishFlight(move, index);
+                    if (++landed === moves.length) finish();
+                },
+            );
+            this.anims.add(cancel);
+        }
     }
 
     animateSlide(moves, area, done) {
@@ -681,12 +743,40 @@ export class CaptureGame {
         });
     }
 
+    pauseCaptureFan(done) {
+        const batch = this.batch;
+        const active = () => !this.disposed && batch === this.batch;
+        let start = null, complete = false, cancel;
+        const manager = startBufferAnimation(this.cmd, () => null, timestamp => {
+            if (start === null) start = timestamp;
+            if (timestamp - start < CAPTURE_CONTACT_HOLD) return false;
+            complete = true;
+            return true;
+        }, {
+            x: 0, y: 0, w: 1, h: 1,
+            hideCursor: false, holdBusy: false,
+            onCleanup: () => {
+                if (this.cancelCapturePause === cancel) this.cancelCapturePause = null;
+                if (!complete || !active()) return;
+                this.animating = false;
+                this.draw();
+                done();
+            },
+        });
+        cancel = () => manager.stop();
+        this.cancelCapturePause = cancel;
+        this.animating = true;
+        this.draw();
+    }
+
     stopAnimations() {
         this.batch++;
         this.cancelBanner?.();
         this.cancelBanner = null;
         this.cancelGameOver?.();
         this.cancelGameOver = null;
+        this.cancelCapturePause?.();
+        this.cancelCapturePause = null;
         for (const cancel of this.anims) cancel();
         this.anims.clear();
         this.cancelSlide?.();
@@ -695,6 +785,7 @@ export class CaptureGame {
         this.visualState = null;
         this.hiddenHand.clear();
         this.hiddenRow.clear();
+        this.captureFan.length = 0;
     }
 
     key(data) {
@@ -770,15 +861,20 @@ export class CaptureGame {
 
         if (key === '\t') {
             this.focus = this.focus === 'row' ? 'hand' : 'row';
+            if (this.focus === 'hand' && this.action === 'capture')
+                this.ensureCaptureHandCursor();
             this.draw();
             return;
         }
         if (key === ' ' && this.focus === 'row') {
             this.focus = 'hand';
+            if (this.action === 'capture') this.ensureCaptureHandCursor();
             this.draw();
             return;
         }
         if (key === ' ' && this.focus === 'hand' && this.clampHandCursor()) {
+            if (this.action === 'capture' &&
+                !canSelectCaptureCard(this.state, this.handCursor, this.rowCursor)) return;
             if (this.selection.has(this.handCursor)) this.selection.delete(this.handCursor);
             else this.selection.add(this.handCursor);
             this.draw();
@@ -787,6 +883,7 @@ export class CaptureGame {
         if (key === '\r' || key === '\n') {
             if (this.focus === 'row') {
                 this.focus = 'hand';
+                if (this.action === 'capture') this.ensureCaptureHandCursor();
                 this.draw();
             } else if (this.action === 'capture') this.performCapture();
             else if (this.action === 'sacrifice') this.performSacrifice();
@@ -794,6 +891,8 @@ export class CaptureGame {
         }
         if (key === 'ArrowUp' || key === 'ArrowDown') {
             this.focus = this.focus === 'row' ? 'hand' : 'row';
+            if (this.focus === 'hand' && this.action === 'capture')
+                this.ensureCaptureHandCursor();
             this.draw();
             return;
         }
@@ -803,6 +902,19 @@ export class CaptureGame {
 
     moveHand(key) {
         if (!this.state.hand.length) return;
+        if (this.phase === 'capture' && this.action === 'capture' && this.focus === 'hand') {
+            const direction = key === 'ArrowLeft' || key === 'h' ? -1 :
+                key === 'ArrowRight' || key === 'l' ? 1 : 0;
+            if (!direction) return;
+            let next = this.handCursor + direction;
+            while (next >= 0 && next < this.state.hand.length &&
+                !canSelectCaptureCard(this.state, next, this.rowCursor)) next += direction;
+            if (next >= 0 && next < this.state.hand.length) {
+                this.handCursor = next;
+                this.draw();
+            }
+            return;
+        }
         const lastIndex = this.state.hand.length - 1;
         if (key === 'ArrowLeft' || key === 'h') this.handCursor = Math.max(0, Math.min(lastIndex, this.handCursor - 1));
         else if (key === 'ArrowRight' || key === 'l') this.handCursor = Math.min(lastIndex, this.handCursor + 1);
@@ -816,7 +928,32 @@ export class CaptureGame {
         return true;
     }
 
+    ensureCaptureHandCursor() {
+        if (!this.state.hand.length || canSelectCaptureCard(this.state, this.handCursor, this.rowCursor)) return;
+        const index = this.state.hand.findIndex((_, i) => canSelectCaptureCard(this.state, i, this.rowCursor));
+        if (index >= 0) this.handCursor = index;
+    }
+
     moveRow(key) {
+        if (this.action === 'capture') {
+            const direction = key === 'ArrowLeft' || key === 'h' ? 1 :
+                key === 'ArrowRight' || key === 'l' ? -1 : 0;
+            if (!direction) return;
+            const capturable = new Set(capturableRowIndices(this.state));
+            const length = this.state.enemyRow.length;
+            for (let offset = 1; offset <= length; offset++) {
+                const next = ((this.rowCursor + direction * offset) % length + length) % length;
+                if (capturable.has(next)) {
+                    this.rowCursor = next;
+                    for (const index of this.selection)
+                        if (!canSelectCaptureCard(this.state, index, next)) this.selection.delete(index);
+                    this.ensureCaptureHandCursor();
+                    this.draw();
+                    return;
+                }
+            }
+            return;
+        }
         if (key === 'ArrowLeft' || key === 'h') this.rowCursor = (this.rowCursor + 1) % 4;
         else if (key === 'ArrowRight' || key === 'l') this.rowCursor = (this.rowCursor + 3) % 4;
         else return;

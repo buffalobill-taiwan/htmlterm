@@ -152,6 +152,31 @@ export function capture(state, rowIndex, handIndices) {
     return true;
 }
 
+export function capturableRowIndices(state) {
+    const indices = [];
+    for (let rowIndex = 0; rowIndex < state.enemyRow.length; rowIndex++) {
+        const target = state.enemyRow[rowIndex];
+        if (!target) continue;
+        for (let mask = 1; mask < (1 << state.hand.length); mask++) {
+            const handIndices = [];
+            for (let i = 0; i < state.hand.length; i++)
+                if (mask & (1 << i)) handIndices.push(i);
+            const value = captureValue(state, handIndices, target);
+            if (value !== null && value >= valueOf(target.rank)) {
+                indices.push(rowIndex);
+                break;
+            }
+        }
+    }
+    return indices;
+}
+
+export function canSelectCaptureCard(state, handIndex, rowIndex) {
+    const card = state.hand[handIndex];
+    const target = state.enemyRow[rowIndex];
+    return !!card && !!target && (card.rank === 0 || card.suit === target.suit);
+}
+
 export function yieldToEnemy(state, handIndex) {
     const target = state.enemyRow[0];
     if (!target || !Number.isInteger(handIndex) || handIndex < 0 || handIndex >= state.hand.length) return false;
@@ -178,23 +203,8 @@ export function sacrifice(state, rowIndex, handIndices) {
 }
 
 export function actionAvailability(state) {
-    let captureAvailable = false;
-    for (let rowIndex = 0; rowIndex < state.enemyRow.length && !captureAvailable; rowIndex++) {
-        const target = state.enemyRow[rowIndex];
-        if (!target) continue;
-        for (let mask = 1; mask < (1 << state.hand.length); mask++) {
-            const indices = [];
-            for (let i = 0; i < state.hand.length; i++) if (mask & (1 << i)) indices.push(i);
-            const value = captureValue(state, indices, target);
-            if (value !== null && value >= valueOf(target.rank)) {
-                captureAvailable = true;
-                break;
-            }
-        }
-    }
-
     return {
-        capture: captureAvailable,
+        capture: capturableRowIndices(state).length > 0,
         sacrifice: state.hand.filter(isSafeCost).length >= 2 && state.enemyRow.some(Boolean),
         yield: !!state.enemyRow[0] && !isCombatant(state.enemyRow[0]) &&
             state.hand.some(card => !isCombatant(card)),

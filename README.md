@@ -234,8 +234,13 @@ captured targets turn white for spades/clubs and red for hearts/diamonds.
 During the discard phase, arrows select cards, Space marks discards, and Enter
 continues. At the start of the action phase, Left/Right selects 捕獲, 犧牲, or
 投降; unavailable actions are dark red and skipped by selection. Enter confirms.
-Then choose the required cards with the arrows and Space. Escape returns to the
-action choices. If no action is available, all options darken before the ×4
+During capture, only enemies that can be captured with the current hand show
+`[ ]`; other enemies are gray and Left/Right skips them. While selecting hand
+cards, off-suit non-jokers are gray and cannot be marked. Confirm with Enter.
+Captured hand cards first fly into contact below, left, right, then above the
+enemy card as needed; they pause together for 0.3 seconds, then fly to the
+personal discard pile. Escape returns to the action choices.
+If no action is available, all options darken before the ×4
 GAME OVER message; Enter starts a new game. At the game-over prompt, N returns
 to the menu and Q exits.
 After a win, a Regicide-style settlement screen shows rounds played, capture,

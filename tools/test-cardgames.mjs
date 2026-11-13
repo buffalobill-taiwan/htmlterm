@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import { score, natural, outcome, shuffledDeck } from '../js/cmd/cardgames/blackjack.js';
 import { cardBuffer, cardFlipFrames } from '../js/cmd/cardgames/cards.js';
 import { createGame, dealInitialEnemyRow, returnInitialCombatants, compactEnemyRow, refillEnemyRow,
-    beginRound, discardFromHand, drawToFour, captureValue, capture, yieldToEnemy, sacrifice,
+    beginRound, discardFromHand, drawToFour, captureValue, capture, capturableRowIndices,
+    canSelectCaptureCard, yieldToEnemy, sacrifice,
     outcome as captureOutcome, hasSafeAction, actionAvailability, playerCardZones } from '../js/cmd/cardgames/capture/rules.js';
 import { CaptureGame } from '../js/cmd/cardgames/capture/CaptureGame.js';
 import { CaptureView, ENEMY_DECK, ENEMY_CAPTURE, PERSONAL_DECK, PERSONAL_DISCARD,
@@ -124,10 +125,11 @@ const markerView = new CaptureView();
 const markerGame = {
     state: {
         round: 1, enemyDeck: [], enemyCapture: [], personalDeck: [], personalDiscard: [],
-        enemyRow: [5, 6, 7, 8].map(rank => ({ suit: 0, rank })),
+        enemyRow: [5, 6, 7, 13].map(rank => ({ suit: 0, rank })),
         hand: [2, 3, 4, 2].map(rank => ({ suit: 0, rank })),
     },
-    hiddenRow: new Set(), hiddenHand: new Set(), marked: new Set([1]), selection: new Set(),
+    hiddenRow: new Set(), hiddenHand: new Set(), captureFan: [],
+    marked: new Set([1]), selection: new Set(),
     capturedTargets: new Set(),
     actionAvailability: { capture: true, sacrifice: false, yield: true },
     phase: 'discard', focus: 'hand', action: 'capture', handCursor: 0, rowCursor: 0, animating: false,
@@ -229,7 +231,13 @@ markerGame.rowCursor = 1;
 markerView.draw(markerGame);
 assert.equal(markerText(7, 52), ' [ ] ');
 assert.equal(markerText(7, 39), '>[ ] ');
+assert.equal(markerText(7, 13), '     ');
+assert.equal(renderedView.getCell(5, 13).bg, 8);
 assert.notEqual(renderedView.getCell(5, 40).bg, 3);
+markerGame.captureFan.push({ card: { suit: 0, rank: 3 }, x: 8, y: 4 });
+markerView.draw(markerGame);
+assert.equal(renderedView.getCell(4, 8).ch, cardBuffer({ suit: 0, rank: 3 }).getCell(0, 0).ch);
+markerGame.captureFan.length = 0;
 markerGame.focus = 'hand';
 markerView.draw(markerGame);
 assert.equal(renderedView.getCell(5, 40).bg, 3);
@@ -241,6 +249,22 @@ markerGame.action = 'yield';
 markerView.draw(markerGame);
 assert.equal(renderedView.getCell(5, 53).bg, 3);
 assert.notEqual(renderedView.getCell(5, 40).bg, 3);
+const captureHandView = new CaptureView();
+captureHandView.draw({
+    ...markerGame,
+    state: {
+        ...markerGame.state,
+        enemyRow: [{ suit: 0, rank: 5 }, null, null, null],
+        hand: [{ suit: 0, rank: 2 }, { suit: 1, rank: 3 }, { suit: -1, rank: 0 }],
+    },
+    phase: 'capture', action: 'capture', focus: 'hand',
+    rowCursor: 0, handCursor: 1, selection: new Set(),
+});
+assert.notEqual(renderedView.getCell(15, 15).bg, 8);
+assert.equal(renderedView.getCell(15, 28).bg, 8);
+assert.equal(markerText(17, 13), ' [ ] ');
+assert.equal(markerText(17, 26), '     ');
+assert.equal(markerText(17, 39), ' [ ] ');
 markerGame.phase = 'actionOptions';
 markerView.draw(markerGame);
 assert.notEqual(renderedView.getCell(5, 53).bg, 3);
@@ -372,6 +396,54 @@ assert.equal(gameOverController.phase, 'gameOverPrompt');
 gameOverController.key('\r');
 assert.equal(gameOverController.phase, 'transition');
 gameOverController.dispose();
+rafCallbacks.length = 0;
+const simultaneousController = new CaptureGame({
+    executionGuard: () => () => true,
+    addCleanup: () => () => {},
+});
+simultaneousController.view.draw = () => {};
+let simultaneousLandings = 0;
+let simultaneousDone = false;
+simultaneousController.runFlights([
+    { card: { suit: 0, rank: 2 }, from: { x: 10, y: 2 }, to: { x: 70, y: 12 },
+        options: { faceUp: true, duration: 260 } },
+    { card: { suit: 0, rank: 3 }, from: { x: 20, y: 2 }, to: { x: 70, y: 12 },
+        options: { faceUp: true, duration: 260 } },
+], {
+    simultaneous: true,
+    onLand: () => simultaneousLandings++,
+    done: () => { simultaneousDone = true; },
+});
+assert.equal(bannerOverlays.size, 2);
+const advanceAllFlights = timestamp => {
+    const callbacks = rafCallbacks.splice(0);
+    assert.ok(callbacks.length);
+    callbacks.forEach(callback => callback(timestamp));
+};
+for (let timestamp = 0; timestamp <= 320 && !simultaneousDone; timestamp += 16)
+    advanceAllFlights(timestamp);
+assert.equal(simultaneousDone, true);
+assert.equal(simultaneousLandings, 2);
+assert.equal(simultaneousController.animating, false);
+assert.equal(bannerOverlays.size, 0);
+simultaneousController.dispose();
+const pauseController = new CaptureGame({
+    executionGuard: () => () => true,
+    addCleanup: () => () => {},
+});
+pauseController.view.draw = () => {};
+let pauseCompleted = false;
+pauseController.pauseCaptureFan(() => { pauseCompleted = true; });
+assert.equal(pauseController.animating, true);
+advanceFrame(0);
+advanceFrame(16);
+advanceFrame(300);
+assert.equal(pauseCompleted, false);
+advanceFrame(316);
+assert.equal(pauseCompleted, true);
+assert.equal(pauseController.animating, false);
+assert.equal(bannerOverlays.size, 0);
+pauseController.dispose();
 if (originalRequestAnimationFrame === undefined) delete globalThis.requestAnimationFrame;
 else globalThis.requestAnimationFrame = originalRequestAnimationFrame;
 if (originalCancelAnimationFrame === undefined) delete globalThis.cancelAnimationFrame;
@@ -512,6 +584,13 @@ assert.deepEqual(actionAvailability({
     hand: [{ suit: -1, rank: 0 }],
     enemyRow: [{ suit: 0, rank: 11 }, null, null, null],
 }), { capture: false, sacrifice: false, yield: false });
+assert.deepEqual(capturableRowIndices({
+    hand: [{ suit: 0, rank: 3 }],
+    enemyRow: [
+        { suit: 0, rank: 3 }, { suit: 0, rank: 5 },
+        { suit: 0, rank: 2 }, { suit: 1, rank: 3 },
+    ],
+}), [0, 2]);
 assert.equal(captureOutcome({ enemyDeck: [], enemyRow: [null, null, null, null], enemyCapture: [] }), 'win');
 assert.equal(captureOutcome({ enemyDeck: [], enemyRow: [null, null, null, null], enemyCapture: [{ suit: 2, rank: 1 }] }), 'loss');
 const refillOne = { suit: 2, rank: 7 }, refillTwo = { suit: 3, rank: 8 };
@@ -550,6 +629,7 @@ const fakeCommand = { _quit() {}, _menu() {} };
 const captureController = new CaptureGame(fakeCommand);
 captureController.view.draw = () => {};
 const flightBatches = [];
+const flightSettings = [];
 const slideBatches = [];
 const bannerTransitions = [];
 captureController.animateBanner = (text, done, holdMs = 0) => {
@@ -558,8 +638,10 @@ captureController.animateBanner = (text, done, holdMs = 0) => {
     captureController.animating = false;
     done();
 };
-captureController.runFlights = (moves, { onStart, onLand, done }) => {
+captureController.pauseCaptureFan = done => done();
+captureController.runFlights = (moves, { onStart = () => {}, onLand = () => {}, done, ...settings }) => {
     flightBatches.push(moves);
+    flightSettings.push(settings);
     moves.forEach((move, index) => {
         onStart(move, index);
         onLand(move, index);
@@ -580,13 +662,8 @@ assert.deepEqual(bannerTransitions, [
     { text: '敵方階段', holdMs: 500 },
     { text: '抽棄階段', holdMs: 0 },
 ]);
-captureController.phase = 'capture';
-captureController.focus = 'row';
-captureController.key('\x1b[D');
-assert.equal(captureController.rowCursor, 1);
-captureController.key('\x1b[C');
-assert.equal(captureController.rowCursor, 0);
 flightBatches.length = 0;
+flightSettings.length = 0;
 slideBatches.length = 0;
 captureController.state = {
     round: 1, personalDeck: [{ suit: 0, rank: 4 }], personalDiscard: [],
@@ -654,7 +731,12 @@ assert.equal(captureController.result, 'win');
 assert.equal(captureController.phase, 'winSummary');
 assert.deepEqual(captureController.actionCounts, { captures: 1, sacrifices: 0, yields: 0 });
 assert.equal(captureController.capturedTargets.size, 0);
-assert.equal(flightBatches[3].length, 2);
+assert.equal(flightBatches[3].length, 1);
+assert.deepEqual(flightBatches[3][0].to, { x: 52, y: 7 });
+assert.equal(flightBatches[4].length, 2);
+assert.deepEqual(flightBatches[4].map(move => move.from), [{ x: 52, y: 4 }, { x: 52, y: 7 }]);
+assert.ok(flightBatches[4].every(move => move.to === PERSONAL_DISCARD));
+assert.equal(flightSettings[4].simultaneous, true);
 captureController.key('\r');
 assert.equal(captureController.phase, 'discard');
 assert.deepEqual(captureController.actionCounts, { captures: 0, sacrifices: 0, yields: 0 });
@@ -697,6 +779,49 @@ assert.deepEqual(captureController.actionCounts, { captures: 1, sacrifices: 1, y
 captureController.dispose();
 console.log('Card Capture action selector and keyboard flow passed');
 
+const targetController = new CaptureGame(fakeCommand);
+targetController.view.draw = () => {};
+targetController.state = {
+    round: 1, personalDeck: [], personalDiscard: [],
+    hand: [{ suit: 0, rank: 3 }], enemyDeck: [],
+    enemyRow: [
+        { suit: 0, rank: 3 }, { suit: 0, rank: 5 },
+        { suit: 0, rank: 2 }, { suit: 1, rank: 3 },
+    ],
+    enemyCapture: [],
+};
+targetController.enterActionPhase(targetController.state);
+targetController.selectAction();
+assert.equal(targetController.rowCursor, 0);
+targetController.key('\x1b[C');
+assert.equal(targetController.rowCursor, 2);
+targetController.key('\x1b[C');
+assert.equal(targetController.rowCursor, 0);
+targetController.key('\x1b[D');
+assert.equal(targetController.rowCursor, 2);
+targetController.dispose();
+
+const handController = new CaptureGame(fakeCommand);
+handController.view.draw = () => {};
+handController.state = {
+    round: 1, personalDeck: [], personalDiscard: [],
+    hand: [{ suit: 0, rank: 3 }, { suit: 1, rank: 3 }, { suit: -1, rank: 0 }],
+    enemyDeck: [], enemyRow: [{ suit: 0, rank: 3 }, null, null, null], enemyCapture: [],
+};
+handController.enterActionPhase(handController.state);
+handController.selectAction();
+assert.equal(canSelectCaptureCard(handController.state, 0, 0), true);
+assert.equal(canSelectCaptureCard(handController.state, 1, 0), false);
+assert.equal(canSelectCaptureCard(handController.state, 2, 0), true);
+handController.key('\t');
+handController.key('\x1b[C');
+assert.equal(handController.handCursor, 2);
+handController.key(' ');
+handController.handCursor = 1;
+handController.key(' ');
+assert.deepEqual([...handController.selection], [2]);
+handController.dispose();
+
 const rosterController = new CaptureGame(fakeCommand);
 rosterController.view.draw = () => {};
 rosterController.state = {
@@ -707,7 +832,12 @@ rosterController.state = {
 rosterController.phase = 'capture';
 rosterController.action = 'capture';
 rosterController.selection = new Set([0, 1, 2, 3]);
-rosterController.runFlights = (moves, { onStart, onLand, done }) => {
+rosterController.pauseCaptureFan = done => done();
+const captureFlights = [];
+const captureFlightSettings = [];
+rosterController.runFlights = (moves, { onStart = () => {}, onLand = () => {}, done, ...settings }) => {
+    captureFlights.push(moves);
+    captureFlightSettings.push(settings);
     moves.forEach((move, index) => {
         onStart(move, index);
         onLand(move, index);
@@ -716,6 +846,13 @@ rosterController.runFlights = (moves, { onStart, onLand, done }) => {
 };
 rosterController.performCapture();
 assert.deepEqual([...rosterController.capturedTargets], ['0:11']);
+assert.deepEqual(captureFlights[0].map(move => move.to), [
+    { x: 52, y: 7 }, { x: 47, y: 4 }, { x: 57, y: 4 }, { x: 52, y: 1 },
+]);
+assert.deepEqual(captureFlights[1].map(move => move.from), [
+    { x: 52, y: 4 }, { x: 52, y: 7 }, { x: 47, y: 4 }, { x: 57, y: 4 }, { x: 52, y: 1 },
+]);
+assert.equal(captureFlightSettings[1].simultaneous, true);
 rosterController.stopAnimations = () => {};
 rosterController.startEnemyPhase = () => {};
 rosterController.animateBanner = (_text, done) => done();
