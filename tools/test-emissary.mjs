@@ -604,7 +604,7 @@ assert.equal(rendered.height, 24);
 assert.equal(rendered.getCell(2, KINGDOM_X[0]).ch, '┌');
 assert.equal(rendered.getCell(17, 2).ch, '┌');
 assert.equal(rendered.getCell(10, 2).ch, '牌');
-assert.equal(rendered.getCell(15, 7).ch, '顧', 'support header moved up');
+assert.equal(Array.from({ length: 80 }, (_, x) => rendered.getCell(15, x).ch).join(''), '─'.repeat(80));
 assert.equal(rendered.getCell(16, 2).ch, ' ', 'cursor row is free of header text');
 assert.equal(rendered.getCell(12, 7).bg, 8, 'Jacks are grey while not usable');
 // Both face-up piles must preserve white-backed artwork for every suit.
@@ -665,6 +665,43 @@ for (const pile of [DISCARD, SCORING]) {
     assert.equal(rendered.getCell(pile.y, pile.x).ch, '┌');
     assert.equal(rendered.getCell(pile.y + 1, pile.x + 1).ch, ' ');
 }
+// The separator describes the selected action only during support selection.
+const separatorText = () => Array.from({ length: 80 }, (_, x) => rendered.getCell(15, x))
+    .filter(cell => cell.width !== 0).map(cell => cell.ch).join('');
+const checkHint = hint => {
+    view.draw(viewGame);
+    const text = separatorText();
+    assert.ok(text.startsWith('──' + hint));
+    assert.ok(/^─+$/.test(text.slice(2 + hint.length)), 'shorter hints leave only separator lines');
+};
+viewGame.phase = 'between';
+viewGame.supportCursor = 0;
+checkHint('直接翻開話題牌');
+const hints = ['♠ 政治：交換統治者', '♥ 外交：棄掉所有王牌',
+    '♦ 商業：抽 2 棄 2', '♣ 軍事：每張梅花抽 1 張'];
+viewGame.state.advisors.forEach((entry, index) => {
+    viewGame.supportCursor = index + 1;
+    checkHint(hints[entry.card.suit]);
+});
+viewGame.state.allies = [{ card: card(0, 12), spent: false }];
+viewGame.supportCursor = 5;
+checkHint(hints[0]);
+viewGame.supportCursor = 0;
+checkHint('直接翻開話題牌');
+for (const phase of ['selectKingdom', 'debate', 'swap', 'discardTwo', 'transition']) {
+    viewGame.phase = phase;
+    viewGame.discardMarked = new Set();
+    view.draw(viewGame);
+    assert.equal(separatorText(), '─'.repeat(80));
+}
+viewGame.phase = 'between';
+for (const flag of ['dealing', 'animating']) {
+    viewGame[flag] = true;
+    view.draw(viewGame);
+    assert.equal(separatorText(), '─'.repeat(80));
+    viewGame[flag] = false;
+}
+viewGame.state.allies = [];
 viewGame.phase = 'between';
 view.draw(viewGame);
 assert.notEqual(rendered.getCell(12, 7).bg, 8, 'usable Jacks are not grey');

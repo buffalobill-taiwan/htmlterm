@@ -9,17 +9,10 @@ import {
 } from './rules.js';
 import {
     EmissaryView, DECK, DISCARD, SCORING, TOPIC, kingdomPosition, allyPosition,
-    handPosition, VISIBLE_HAND,
+    handPosition, VISIBLE_HAND, ABILITY_LABEL,
 } from './view.js';
 
 const cardName = card => card ? `${SUITS[card.suit]}${RANKS[card.rank]}` : '—';
-
-const ABILITY_LABEL = {
-    hearts: '外交：棄掉所有王牌',
-    clubs: '軍事：每張梅花抽 1 張',
-    spades: '政治：交換統治者',
-    diamonds: '商業：抽 2 棄 2',
-};
 
 function normalizeKey(data) {
     if (typeof data !== 'string') return null;

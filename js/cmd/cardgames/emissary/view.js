@@ -3,7 +3,14 @@ import { displayWidth } from '../../../util/display-width.js';
 import { VirtualBuffer } from '../../../util/VirtualBuffer.js';
 import { cardBuffer, cardBufferVariant, mutedCardBuffer, stampCard } from '../cards.js';
 import { RANKS, SUITS } from '../deck.js';
-import { legalIndices } from './rules.js';
+import { legalIndices, abilityForSuit } from './rules.js';
+
+export const ABILITY_LABEL = {
+    hearts: '外交：棄掉所有王牌',
+    clubs: '軍事：每張梅花抽 1 張',
+    spades: '政治：交換統治者',
+    diamonds: '商業：抽 2 棄 2',
+};
 
 export const KINGDOM_X = [4, 13, 22, 31, 40, 49, 58, 67];
 export const KINGDOM_Y = 2;
@@ -137,9 +144,14 @@ function drawHand(vb, game) {
     const end = Math.min(state.hand.length, start + VISIBLE_HAND);
 
     vb.writeStr(15, 0, '\x1B[90m' + '─'.repeat(80) + '\x1B[0m');
-    vb.writeStr(15, 1, '翻牌');
-    vb.writeStr(15, 7, '\x1B[1m顧問\x1B[0m');
-    vb.writeStr(15, 31, '\x1B[1m盟友\x1B[0m');
+    if (game.phase === 'between' && !game.animating && !game.dealing && !state.topic) {
+        const cursor = game.supportCursor ?? 0;
+        const entry = cursor >= 5 ? state.allies[cursor - 5] : state.advisors[cursor - 1];
+        const available = entry && !(cursor >= 5 ? entry.spent : entry.used);
+        const hint = cursor === 0 ? '直接翻開話題牌' : available
+            ? `${SUITS[entry.card.suit]} ${ABILITY_LABEL[abilityForSuit(entry.card.suit)]}` : '';
+        if (hint && displayWidth(hint) <= vb.width - 4) vb.writeStr(15, 2, hint);
+    }
 
     for (let index = start; index < end; index++) {
         const { x } = handPosition(index, start);
