@@ -1,3 +1,4 @@
+import { sortHandAnimation } from './sort-animation.js';
 import { dealCard, staggerFlights } from '../animation.js';
 import { mulberry32, SEED_MAX } from '../../../util/random.js';
 import { SelectDialog } from '../../../dialog/SelectDialog.js';
@@ -38,6 +39,7 @@ export class EmissaryGame {
         this.state = null;
         this.seed = 0;
         this.rng = Math.random;
+        this.sortBySuit = false;
         this.phase = 'idle';
         this.supportCursor = 0;
         this.kingdomCursor = 0;
@@ -64,6 +66,7 @@ export class EmissaryGame {
     start(seed) {
         if (this.disposed) return;
         this.stopAnimations();
+        this.sortBySuit = false;
         this.seed = seed == null ? Math.floor(Math.random() * (SEED_MAX + 1)) : seed;
         this.rng = mulberry32(this.seed);
         this.state = createGame(this.rng);
@@ -139,6 +142,8 @@ export class EmissaryGame {
             if (key === 'q' || key === 'Q' || key === 'Escape') return this.cmd._confirmQuit();
             return;
         }
+        if ((key === 's' || key === 'S') && !this.dialog &&
+            ['selectKingdom', 'between', 'debate', 'discardTwo'].includes(this.phase)) return this.sortHand();
         if (this.phase === 'won' || this.phase === 'lost') {
             if (key === '\r' || key === '\n') return this.start(this.seed);
             if (key === 'n' || key === 'N') return this.cmd._menu();
@@ -174,6 +179,35 @@ export class EmissaryGame {
         if (key === 'Home') return this.moveKingdomToEdge(false);
         if (key === 'End') return this.moveKingdomToEdge(true);
         if (key === '\r' || key === '\n') return this.chooseKingdom();
+    }
+
+    sortHand() {
+        const old = this.state.hand;
+        const sorted = [...old].sort(this.sortBySuit
+            ? (a, b) => a.suit - b.suit || a.rank - b.rank
+            : (a, b) => a.rank - b.rank || a.suit - b.suit);
+        this.sortBySuit = !this.sortBySuit;
+        if (sorted.every((card, i) => card === old[i])) return;
+        const cursor = Math.max(0, sorted.indexOf(old[this.handCursor]));
+        const marked = new Set([...this.discardMarked].map(i => old[i]));
+        let scroll = this.handScroll;
+        if (['debate', 'discardTwo'].includes(this.phase))
+            scroll = Math.min(cursor, Math.max(scroll, cursor - VISIBLE_HAND + 1));
+        scroll = Math.max(0, Math.min(scroll, Math.max(0, sorted.length - VISIBLE_HAND)));
+        const batch = this.batch;
+        this.animating = true;
+        this.draw();
+        const cancel = sortHandAnimation(this, sorted, scroll, () => {
+            if (this.disposed || batch !== this.batch) return;
+            this.anims.delete(cancel);
+            this.state.hand = sorted;
+            this.handCursor = cursor;
+            this.handScroll = scroll;
+            this.discardMarked = new Set(sorted.flatMap((card, i) => marked.has(card) ? [i] : []));
+            this.animating = false;
+            this.draw();
+        });
+        this.anims.add(cancel);
     }
 
     keyBetween(key) {
@@ -739,6 +773,7 @@ export class EmissaryGame {
             '八國全部征服即勝利。得分 = 征服王國數 + 未使用的盟友數，最高 16。',
             '',
             '翻話題前：方向鍵選翻牌／顧問／盟友，Enter 執行；A 開能力選單。',
+            'S 排序：交替依點數／花色排序，保留選取與棄牌標記。',
             '手牌超過一排時，可用 PgUp/PgDn 瀏覽；翻話題後才選出牌。',
             '牌堆耗盡時會洗回棄牌堆；能力只能在翻開下一張話題牌之前使用。',
             '',

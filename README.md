@@ -315,7 +315,9 @@ eight kingdoms; score is kingdoms won plus unused allies, out of 16. Arrows
 select cards or kingdoms, Enter confirms, Space marks the two cards for ♦, A
 opens the ability list before revealing a topic. Before each topic, arrows select
 the blank reveal card, an available advisor, or an ally; Enter activates it.
-PgUp/PgDn browse hands longer than one row without selecting a card. The right panel previews the
+PgUp/PgDn browse hands longer than one row without selecting a card. S alternates
+rank-first and suit-first hand sorting with an animation, preserving the selected
+card and discard marks. The right panel previews the
 selected kingdom and shows its trump, exact-win target, wins and remaining hand.
 Phase hints explain follow-suit requirements and show the marked discard count;
 Escape clears discard marks or cancels a ruler swap. H shows rules, R offers a

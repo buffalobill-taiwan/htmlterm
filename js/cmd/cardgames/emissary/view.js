@@ -277,7 +277,7 @@ export class EmissaryView {
         vb.centerRow(21, game.status || '');
         vb.centerRow(22, instructions(game));
         vb.centerRow(23, game.dealing || game.animating ? 'Q／Esc 離開'
-            : `H 規則　R 重玩　N 選單　${['swap', 'discardTwo'].includes(game.phase) ? 'Q 離開' : 'Q／Esc 離開'}`);
+            : `${['selectKingdom', 'between', 'debate', 'discardTwo'].includes(game.phase) ? 'S 排序　' : ''}H 規則　R 重玩　N 選單　${['swap', 'discardTwo'].includes(game.phase) ? 'Q 離開' : 'Q／Esc 離開'}`);
         term.writeVB(vb);
     }
 }
