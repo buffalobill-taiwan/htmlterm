@@ -48,7 +48,7 @@ function drawPile(vb, count, x, y, face = null) {
         drawEmpty(vb, x, y);
         return;
     }
-    stampCard(vb, face ? tint(cardBuffer(face), 'emissary-pile-face', 0) : cardBuffer(null), x, y);
+    stampCard(vb, cardBuffer(face), x, y);
 }
 
 function drawKingdom(vb, game, kingdom, index) {
@@ -78,8 +78,14 @@ function drawKingdom(vb, game, kingdom, index) {
 function drawPiles(vb, game) {
     const state = game.state;
     const hiddenTopic = game.hiddenTopic;
-    const discardCount = Math.max(0, state.discard.length - (hiddenTopic ? 1 : 0));
-    const topic = !hiddenTopic ? (state.topic || game.topicDisplay) : null;
+    // Rules put the topic in discard immediately, but it remains visually
+    // separate until its reveal/debate presentation has finished.
+    const presentedTopic = state.topic || game.topicDisplay;
+    const topicIndex = presentedTopic ? state.discard.lastIndexOf(presentedTopic) : -1;
+    const discardCount = state.discard.length - (topicIndex >= 0 ? 1 : 0);
+    let topIndex = state.discard.length - 1;
+    if (topIndex === topicIndex) topIndex--;
+    const topic = !hiddenTopic ? presentedTopic : null;
 
     drawPile(vb, state.deck.length, DECK.x, DECK.y);
     vb.writeStr(10, DECK.x, `牌堆 ${state.deck.length}`);
@@ -87,7 +93,7 @@ function drawPiles(vb, game) {
     else drawEmpty(vb, TOPIC.x, TOPIC.y);
     vb.writeStr(10, TOPIC.x, topic ? `話題 ${SUITS[topic.suit]}` : '話題');
     drawPile(vb, discardCount, DISCARD.x, DISCARD.y,
-        discardCount ? state.discard[discardCount - 1] : null);
+        discardCount ? state.discard[topIndex] : null);
     vb.writeStr(10, DISCARD.x, `棄牌 ${discardCount}`);
     drawPile(vb, state.scoring.length, SCORING.x, SCORING.y,
         state.scoring.length ? state.scoring[state.scoring.length - 1] : null);

@@ -318,7 +318,8 @@ the blank reveal card, an available advisor, or an ally; Enter activates it.
 PgUp/PgDn browse hands longer than one row without selecting a card. The right panel previews the
 selected kingdom and shows its trump, exact-win target, wins and remaining hand.
 Phase hints explain follow-suit requirements and show the marked discard count;
-Escape clears discard marks or cancels a ruler swap. H shows rules, R restarts the same seed, N returns to
+Escape clears discard marks or cancels a ruler swap. H shows rules, R offers a
+restart with the same seed or a new random seed, N returns to
 the menu, and Q/Escape exits. A seeded deal viewer is available with
 `node tools/emissary-generate.mjs <seed> [--json] [--batch N]`.
 

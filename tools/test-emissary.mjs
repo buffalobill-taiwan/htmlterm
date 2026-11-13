@@ -12,6 +12,8 @@ import {
 import { EmissaryView, ALLY_X, KINGDOM_X, handPosition, VISIBLE_HAND } from '../js/cmd/cardgames/emissary/view.js';
 import { EmissaryGame } from '../js/cmd/cardgames/emissary/EmissaryGame.js';
 import { CardgamesCmd } from '../js/cmd/cardgames/CardgamesCmd.js';
+import { cardBuffer } from '../js/cmd/cardgames/cards.js';
+import { DISCARD, SCORING } from '../js/cmd/cardgames/emissary/view.js';
 
 const card = (suit, rank) => ({ suit, rank });
 const key = card => `${card.suit}:${card.rank}`;
@@ -414,6 +416,36 @@ randomStart.draw = () => {};
 randomStart.dealHand = done => { randomStart.dealing = false; done(); };
 randomStart.start();
 assert.ok(randomStart.seed >= 0 && randomStart.seed <= SEED_MAX);
+randomStart.start(4242);
+const originalDeal = JSON.stringify(randomStart.state);
+randomStart.key('r');
+assert.deepEqual(dialogs.at(-1).options.options, ['相同種子', '新隨機種子', '取消']);
+dialogs.at(-1).options.onSelect(0);
+assert.equal(randomStart.seed, 4242);
+assert.equal(JSON.stringify(randomStart.state), originalDeal);
+const savedRandom = Math.random;
+try {
+    Math.random = () => 0.5;
+    randomStart.key('r');
+    dialogs.at(-1).options.onSelect(1);
+    assert.equal(randomStart.seed, Math.floor(0.5 * (SEED_MAX + 1)));
+    assert.equal(randomStart.phase, 'selectKingdom');
+    assert.notEqual(JSON.stringify(randomStart.state), originalDeal);
+} finally {
+    Math.random = savedRandom;
+}
+const retainedState = randomStart.state;
+const retainedSeed = randomStart.seed;
+for (const cancel of [options => options.onSelect(2), options => options.onCancel()]) {
+    randomStart.key('r');
+    cancel(dialogs.at(-1).options);
+    assert.equal(randomStart.state, retainedState);
+    assert.equal(randomStart.seed, retainedSeed);
+    assert.equal(randomStart.dialog, null);
+}
+randomStart.phase = 'lost';
+randomStart.key('\r');
+assert.equal(randomStart.seed, retainedSeed, 'Enter after game over retains seed');
 randomStart.dispose();
 
 // --- Topic reveal, debate resolution, and settlement flow ------------------
@@ -575,6 +607,64 @@ assert.equal(rendered.getCell(10, 2).ch, '牌');
 assert.equal(rendered.getCell(15, 7).ch, '顧', 'support header moved up');
 assert.equal(rendered.getCell(16, 2).ch, ' ', 'cursor row is free of header text');
 assert.equal(rendered.getCell(12, 7).bg, 8, 'Jacks are grey while not usable');
+// Both face-up piles must preserve white-backed artwork for every suit.
+for (let suit = 0; suit < 4; suit++) {
+    const top = card(suit, 8);
+    viewGame.state.discard = [card((suit + 1) % 4, 1), top];
+    viewGame.state.scoring = [card((suit + 1) % 4, 2), top];
+    view.draw(viewGame);
+    const expected = cardBuffer(top);
+    for (const pile of [DISCARD, SCORING]) {
+        for (let y = 0; y < 3; y++) for (let x = 0; x < 5; x++) {
+            assert.deepEqual(rendered.getCell(pile.y + y, pile.x + x), expected.getCell(y, x),
+                `pile at ${pile.x}, suit ${suit}, cell ${x},${y}`);
+        }
+        assert.equal(rendered.getCell(pile.y, pile.x).bg, 7);
+        assert.equal(rendered.getCell(pile.y, pile.x).fg, 0);
+    }
+}
+// A presented topic is excluded by identity, even when a losing response
+// has already been appended above it during the outgoing-card animation.
+const priorDiscard = card(0, 3);
+const presentedTopic = card(1, 6);
+const losingResponse = card(1, 2);
+function assertDiscardPresentation(expectedTop, count) {
+    view.draw(viewGame);
+    if (expectedTop) {
+        const expected = cardBuffer(expectedTop);
+        for (let y = 0; y < 3; y++) for (let x = 0; x < 5; x++)
+            assert.deepEqual(rendered.getCell(DISCARD.y + y, DISCARD.x + x), expected.getCell(y, x));
+    } else assert.equal(rendered.getCell(DISCARD.y + 1, DISCARD.x + 1).ch, ' ');
+    const label = Array.from({ length: 10 }, (_, x) => rendered.getCell(10, DISCARD.x + x))
+        .filter(cell => cell.width !== 0).map(cell => cell.ch).join('').trim();
+    assert.equal(label, `棄牌 ${count}`);
+}
+viewGame.state.topic = presentedTopic;
+viewGame.state.discard = [presentedTopic];
+viewGame.hiddenTopic = true;
+assertDiscardPresentation(null, 0);
+viewGame.hiddenTopic = false;
+assertDiscardPresentation(null, 0);
+viewGame.state.discard = [priorDiscard, presentedTopic];
+assertDiscardPresentation(priorDiscard, 1);
+viewGame.state.topic = null;
+viewGame.topicDisplay = presentedTopic;
+assertDiscardPresentation(priorDiscard, 1);
+viewGame.topicDisplay = null;
+assertDiscardPresentation(presentedTopic, 2);
+viewGame.topicDisplay = presentedTopic;
+viewGame.state.discard.push(losingResponse);
+assertDiscardPresentation(losingResponse, 2);
+assert.deepEqual(viewGame.state.discard, [priorDiscard, presentedTopic, losingResponse]);
+viewGame.topicDisplay = null;
+assertDiscardPresentation(losingResponse, 3);
+viewGame.state.discard = [];
+viewGame.state.scoring = [];
+view.draw(viewGame);
+for (const pile of [DISCARD, SCORING]) {
+    assert.equal(rendered.getCell(pile.y, pile.x).ch, '┌');
+    assert.equal(rendered.getCell(pile.y + 1, pile.x + 1).ch, ' ');
+}
 viewGame.phase = 'between';
 view.draw(viewGame);
 assert.notEqual(rendered.getCell(12, 7).bg, 8, 'usable Jacks are not grey');

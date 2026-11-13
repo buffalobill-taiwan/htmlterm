@@ -763,13 +763,14 @@ export class EmissaryGame {
 
     confirmRestart() {
         this.dialog = this.cmd.openDialog(SelectDialog, 'emissary-restart', {
-            title: '以同一個種子重玩？',
+            title: '選擇重玩方式',
             width: 40,
-            options: ['重玩', '取消'],
+            options: ['相同種子', '新隨機種子', '取消'],
             selectedIndex: 0,
             onSelect: index => {
                 this.dialog = null;
                 if (index === 0) this.start(this.seed);
+                else if (index === 1) this.start();
                 else this.draw();
             },
             onCancel: () => { this.dialog = null; this.draw(); },
