@@ -50,6 +50,7 @@ node tools/import-check.mjs # dynamic import: paths, syntax, module side effects
 node tools/test-headless.mjs # Parser/Screen, VirtualBuffer, seeds, seed args, lazy commands
 node tools/test-system.mjs  # frame stack: prompts, input replay, busy, dialogs, lazy, errors
 node tools/test-cardgames.mjs # Blackjack rules, deck, card widths and cached flip frames
+node tools/test-emissary.mjs  # The Emissary deck split, trick rules, abilities and controller flow
 node tools/test-holdem.mjs    # Hold’em ranks, betting, side pots, chip conservation and AI
 node tools/test-maze.mjs     # Maze scoring fixtures, tree topology, branch distribution
 node tools/test-cchess-mahjong.mjs # Chinese chess / Japanese mahjong tile and rule checks
@@ -341,6 +342,25 @@ Try Delete/Insert/Home/End/PageUp/PageDown: none may exit the game. Leave with
 N, Q/Escape and Ctrl+C during AI computation, between streets, and inside a
 dialog. Check that no worker response or overlay survives, then reopen the game
 and verify Blackjack and FreeCell still work. If the worker fails, Enter retries.
+
+## Emissary validation
+
+Run `node tools/test-emissary.mjs` for the 32/8/4/8 deck split, seeded
+determinism, follow-suit legality, A-low comparison, trump versus non-trump
+topics, exact-win and failed settlement, all four suit abilities, spades
+cancellation, recycling, ally one-time use, Jack resets, final score, controller
+phases and disposal, and the 80×24 view geometry.
+
+Compare the deal with `node tools/emissary-generate.mjs <seed>`; add `--json` or
+`--batch N` for machine-readable output and consecutive seeds. In the browser,
+open the menu entry and `cardgames emissary <seed>` and confirm the same rulers
+and opening hand. Visit an early and a late kingdom, follow suit, let a topic be
+non-trump, and check that a trump response wins while a same-suit lower card
+loses. Force exact wins and one too many. Exercise all four Jacks, cancel a ♠
+swap, mark two cards for ♦, use a won K/Q ally once, and confirm Jacks refresh
+at the next kingdom while spent allies stay spent. Verify the end screen score,
+Enter restarting the same seed, N returning to the menu, and Q/Escape leaving
+without a stranded overlay or animation.
 
 ## Regicide validation
 

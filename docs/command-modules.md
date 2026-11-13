@@ -47,7 +47,7 @@ contains shared dimensions, difficulty settings, and other fixed configuration.
 
 | Directory | Command class | Additional modules |
 |---|---|---|
-| [cardgames](../js/cmd/cardgames/index.js) | `CardgamesCmd` | `holdem/`: controller, betting/side-pot rules, hand evaluator, row-based view and Monte Carlo AI worker; `regicide/`: controller, rules, renderer and presentation/effect split; `capture/`: staged solitaire rules, animated controller, view and row/hand slide overlays; `blackjack.js`: scoring; `deck.js`: shared card ids, suits, ranks and deck construction; `cards.js`: cached 5×3 faces, backs and flip frames plus shared card-buffer helpers; `animation.js`: cancellable RAF reveal overlays and staggered flight sequencing; `freecell/`: controller, view/hit testing, transactional rules, shared reverse generator/verifier and worker |
+| [cardgames](../js/cmd/cardgames/index.js) | `CardgamesCmd` | `holdem/`: controller, betting/side-pot rules, hand evaluator, row-based view and Monte Carlo AI worker; `regicide/`: controller, rules, renderer and presentation/effect split; `capture/`: staged solitaire rules, animated controller, view and row/hand slide overlays; `emissary/`: seeded solo trick-taking rules, animated controller, kingdom/hand view and deal viewer; `blackjack.js`: scoring; `deck.js`: shared card ids, suits, ranks and deck construction; `cards.js`: cached 5×3 faces, backs and flip frames plus shared card-buffer helpers; `animation.js`: cancellable RAF reveal overlays and staggered flight sequencing; `freecell/`: controller, view/hit testing, transactional rules, shared reverse generator/verifier and worker |
 | [game2048](../js/cmd/game2048/index.js) | `Game2048Cmd` | `board.js`: sliding, merging, spawning, and move availability |
 | [gweled](../js/cmd/gweled/index.js) | `GweledCmd` | `board.js`: matches, gravity, legal swaps, and chain scores |
 | [klotski](../js/cmd/klotski/index.js) | `KlotskiCmd` | Level chooser configures shared `SelectDialog`; level data and solutions stay in `js/data/` |
@@ -195,3 +195,17 @@ changed rows, and clears old card locations when starting a new hand. Shared
 InputDialog, SelectDialog and ShowDialog own editing, rebuys and settlement
 presentation. No additional command is registered: `cardgames holdem` and the
 Card Games menu enter the same controller.
+
+## The Emissary
+
+`cardgames/emissary/rules.js` is DOM-free and implements the deck split, seeded
+shuffle, follow-suit legality, A-low trick comparison, trump handling, advisor
+abilities, ruler swaps, settlement, recycling and final score. `createGame()`
+takes an RNG (`mulberry32` for seeds) so the controller, tests and
+`tools/emissary-generate.mjs` share one deal. `EmissaryGame.js` owns the phase
+machine (`selectKingdom` → `between` → `debate`, plus `swap`/`discardTwo`
+sub-phases), staged flights, dialogs and disposal; `view.js` owns the 80×24
+kingdom row, piles, advisors/allies and scrollable hand. Actions use the shared
+`dealCard`/`staggerFlights` helpers and `SelectDialog`/`ShowDialog`. The
+controller validates the optional seed through `cardgames emissary [seed]`; no
+extra command is registered.

@@ -136,7 +136,7 @@ more than once.
 | `help` | Show command list; `help <cmd>` for details and usage |
 | `klotski` | Play Klotski 華容道 sliding-block puzzle (11 fayaa layouts) |
 | `jpmj` | Play Japanese Mahjong (14-tile riichi style, 6 AI personalities, riichi/dora/honba) |
-| `cardgames` | Play Blackjack, FreeCell, Texas Hold’em, Regicide, or Card Capture |
+| `cardgames` | Play Blackjack, FreeCell, Texas Hold’em, Regicide, Card Capture, or The Emissary |
 | `memory` | Play a card-matching Memory game (flip to find matching pairs, three difficulty levels) |
 | `menu` | Open command menu dialog |
 | `mbti` | MBTI personality test (interactive) |
@@ -208,7 +208,7 @@ one-based `(x,y)` coordinates. See [Maze reproduction](docs/development.md#maze-
 
 ### Card games
 
-Run `cardgames` to choose Blackjack, FreeCell, Texas Hold’em, Regicide, or Card Capture. In Blackjack, arrows select Hit/Stand; Enter confirms or
+Run `cardgames` to choose Blackjack, FreeCell, Texas Hold’em, Regicide, Card Capture, or The Emissary. In Blackjack, arrows select Hit/Stand; Enter confirms or
 starts the next round. N returns to the game menu; Q/Escape or Ctrl+C quits. Each round
 uses a freshly shuffled 52-card deck. Aces count as 1 or 11; the dealer stands
 on all 17s, including soft 17. Two-card Blackjack beats other 21s. There is no
@@ -292,6 +292,35 @@ confirmation; Ctrl+C exits immediately. Home/End selects the first/last card;
 PageUp/PageDown navigates long columns. Scroll arrows beside each column are
 clickable; dragging near the top/bottom scrolls that column. Covered cards retain
 their suit and rank in a one-row header. A win remains available for undo/replay.
+
+The Emissary 使節 is a solo trick-taking game from Wil Su’s *Isaludo* (Beta 1.11,
+pp. 47–52). Open it from the menu or with `cardgames emissary [seed]`; seeds are
+integers 0–2147483647. Eight K/Q rulers sit in a line, each with a required win
+count equal to its position, and its suit is trump for that kingdom. The 32
+debate cards are A–8. Each kingdom deals eight cards, then reveals a topic card
+before every response; you must follow the topic suit when able. A higher
+same-suit card wins, and any trump beats a non-trump topic. Aces are low. Win
+exactly the required number of debates from the whole hand, or the run ends.
+Won cards go to a per-kingdom scoring pile; lost cards and topics go to the
+discard. When the draw pile empties, the discard is shuffled back, but scoring
+cards return only after the kingdom is settled.
+
+The four Jacks are once-per-kingdom abilities: ♥ discards every trump-suit card
+in hand, ♣ draws one card per club in hand, ♠ swaps the current ruler with an
+unvisited kingdom (a no-op in the final kingdom), and ♦ draws two cards then
+discards two. Abilities may be used only before revealing the next topic. A
+conquered kingdom’s ruler becomes a one-time ally usable in later kingdoms;
+Jacks reset at each new kingdom, and spent allies no longer score. Clear all
+eight kingdoms; score is kingdoms won plus unused allies, out of 16. Arrows
+select cards or kingdoms, Enter confirms, Space marks the two cards for ♦, A
+opens the ability list before revealing a topic. Before each topic, arrows select
+the blank reveal card, an available advisor, or an ally; Enter activates it.
+PgUp/PgDn browse hands longer than one row without selecting a card. The right panel previews the
+selected kingdom and shows its trump, exact-win target, wins and remaining hand.
+Phase hints explain follow-suit requirements and show the marked discard count;
+Escape clears discard marks or cancels a ruler swap. H shows rules, R restarts the same seed, N returns to
+the menu, and Q/Escape exits. A seeded deal viewer is available with
+`node tools/emissary-generate.mjs <seed> [--json] [--batch N]`.
 
 ### Keyboard shortcuts
 
