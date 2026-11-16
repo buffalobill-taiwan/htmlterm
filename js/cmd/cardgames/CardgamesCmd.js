@@ -26,6 +26,7 @@ export class CardgamesCmd extends CmdBase {
             (p.rest[0] === 'emissary' && p.rest.length <= 2 && (p.rest.length === 1 || parseSeed(p.rest[1]) !== null));
         if (args.some(a => a.startsWith('-')) || !valid) return this.error('Usage: cardgames [capture | regicide | holdem | freecell [seed] | emissary [seed]]');
         this.open();
+        this._game = null;
         this._stats = { win: 0, loss: 0, draw: 0 };
         this._anims = new Set();
         this._vb = new VirtualBuffer(80, 23);
@@ -41,38 +42,23 @@ export class CardgamesCmd extends CmdBase {
         else if (p.rest.length) this._startFreeCell(p.rest.length === 2 ? Number(p.rest[1]) : undefined);
         else this._menu();
     }
-    _startRegicide() { this._regicide = new RegicideGame(this); this._regicide.start(); }
-    _startCapture() {
-        this._stopAnims();
-        this._disposeGames();
-        this._capture = new CaptureGame(this);
-        this._capture.start();
+    _startGame(GameClass, { disposeSelf = false, stopAnims = true, seed } = {}) {
+        if (stopAnims) this._stopAnims();
+        if (disposeSelf) this._game?.dispose();
+        else this._disposeGames();
+        this._game = new GameClass(this);
+        this._game.start(seed);
     }
-    _startHoldem() {
-        this._stopAnims();
-        this._disposeGames();
-        this._holdem = new HoldemGame(this);
-        this._holdem.start();
-    }
-    _startFreeCell(seed) {
-        this._freecell?.dispose();
-        this._freecell = new FreeCellGame(this);
-        this._freecell.start(seed);
-    }
-    _startEmissary(seed) {
-        this._stopAnims();
-        this._disposeGames();
-        this._emissary = new EmissaryGame(this);
-        this._emissary.start(seed);
-    }
+    _startRegicide() { this._startGame(RegicideGame, { stopAnims: false }); }
+    _startCapture() { this._startGame(CaptureGame); }
+    _startHoldem() { this._startGame(HoldemGame); }
+    _startFreeCell(seed) { this._startGame(FreeCellGame, { disposeSelf: true, stopAnims: false, seed }); }
+    _startEmissary(seed) { this._startGame(EmissaryGame, { seed }); }
     _disposeGames() {
-        this._regicide?.dispose(); this._regicide = null;
-        this._holdem?.dispose(); this._holdem = null;
-        this._freecell?.dispose(); this._freecell = null;
-        this._capture?.dispose(); this._capture = null;
-        this._emissary?.dispose(); this._emissary = null;
+        this._game?.dispose();
+        this._game = null;
     }
-    handleMouse(type, info) { return this._freecell?.handleMouse(type, info) || false; }
+    handleMouse(type, info) { return this._game?.handleMouse?.(type, info) || false; }
     _menu() {
         this._disposeGames();
         term.write('\x1B[2J');
@@ -221,11 +207,7 @@ export class CardgamesCmd extends CmdBase {
         term.writeVB(vb);
     }
     _onKey(data) {
-        if (this._capture) return this._capture.key(data);
-        if (this._regicide) return this._regicide.key(data);
-        if (this._holdem) return this._holdem.key(data);
-        if (this._emissary) return this._emissary.key(data);
-        if (this._freecell) return this._freecell.key(data);
+        if (this._game) return this._game.key(data);
         if (data === '\x1B' || /^[qQ]$/.test(data)) return this._confirmQuit();
         if (this._phase === 'result') {
             if (data === '\r' || data === '\n') this._deal();

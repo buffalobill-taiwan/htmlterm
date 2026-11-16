@@ -113,3 +113,77 @@ export function dealCard(cmd, card, from, to, { faceDown = false, faceUp = false
     }, finish);
     return cancel;
 }
+
+// Run a batch of dealCard flights for a game object ({ cmd, anims, batch, disposed,
+// animating, draw }). `moves` items carry { card, from, to, options, onLand }.
+// `to` may be a position or (index) => position. Calls onStart/onLand (or move.onLand)
+// and draw() around each step, respects batch/disposed invalidation, and clears
+// game.animating on completion. `simultaneous` launches every flight at once.
+export function runFlights(game, moves, {
+    onStart, onLand, done = () => {}, simultaneous = false,
+} = {}) {
+    const batch = game.batch;
+    const active = () => !game.disposed && batch === game.batch;
+    const draw = () => game.draw();
+    const landFn = onLand || ((move, index) => move.onLand?.(move, index));
+    game.animating = moves.length > 0;
+    draw();
+    if (!moves.length) {
+        game.animating = false;
+        done();
+        return;
+    }
+
+    const finishFlight = (move, index) => {
+        if (!active()) return;
+        landFn(move, index);
+        draw();
+    };
+    const finish = () => {
+        if (!active()) return;
+        game.animating = false;
+        draw();
+        done();
+    };
+
+    if (!simultaneous) {
+        staggerFlights(game.anims, {
+            count: moves.length,
+            isActive: active,
+            start: (index, { onStep, onLand: landed }) => {
+                const move = moves[index];
+                onStart?.(move, index);
+                draw();
+                return dealCard(
+                    game.cmd, move.card, move.from,
+                    typeof move.to === 'function' ? move.to(index) : move.to,
+                    { ...move.options, onStep },
+                    () => { if (active()) landed(); },
+                );
+            },
+            land: index => finishFlight(moves[index], index),
+            done: finish,
+        });
+        return;
+    }
+
+    let landed = 0;
+    for (let index = 0; index < moves.length; index++) {
+        let cancel;
+        const move = moves[index];
+        onStart?.(move, index);
+        draw();
+        cancel = dealCard(
+            game.cmd, move.card, move.from,
+            typeof move.to === 'function' ? move.to(index) : move.to,
+            move.options,
+            () => {
+                if (!active()) return;
+                game.anims.delete(cancel);
+                finishFlight(move, index);
+                if (++landed === moves.length) finish();
+            },
+        );
+        game.anims.add(cancel);
+    }
+}

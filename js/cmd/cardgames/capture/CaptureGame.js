@@ -1,4 +1,4 @@
-import { dealCard, staggerFlights } from '../animation.js';
+import { dealCard, runFlights as runCardFlights } from '../animation.js';
 import { slideCards } from './animation.js';
 import { startBufferAnimation } from '../../../system/RAFAnimationHelper.js';
 import { term } from '../../../system/sys.js';
@@ -661,69 +661,8 @@ export class CaptureGame {
         this.animateBanner('敵方階段', () => this.startEnemyPhase());
     }
 
-    runFlights(moves, {
-        onStart = () => {}, onLand = () => {}, done = () => {}, simultaneous = false,
-    }) {
-        const batch = this.batch;
-        const active = () => !this.disposed && batch === this.batch;
-        this.animating = moves.length > 0;
-        this.draw();
-        if (!moves.length) {
-            done();
-            return;
-        }
-
-        const finishFlight = (move, index) => {
-            if (!active()) return;
-            onLand(move, index);
-            this.draw();
-        };
-        const finish = () => {
-            if (!active()) return;
-            this.animating = false;
-            this.draw();
-            done();
-        };
-        if (!simultaneous) {
-            staggerFlights(this.anims, {
-                count: moves.length,
-                isActive: active,
-                start: (index, { onStep, onLand: landed }) => {
-                    const move = moves[index];
-                    onStart(move, index);
-                    this.draw();
-                    return dealCard(
-                        this.cmd, move.card, move.from,
-                        typeof move.to === 'function' ? move.to(index) : move.to,
-                        { ...move.options, onStep },
-                        () => { if (active()) landed(); },
-                    );
-                },
-                land: index => finishFlight(moves[index], index),
-                done: finish,
-            });
-            return;
-        }
-
-        let landed = 0;
-        for (let index = 0; index < moves.length; index++) {
-            let cancel;
-            const move = moves[index];
-            onStart(move, index);
-            this.draw();
-            cancel = dealCard(
-                this.cmd, move.card, move.from,
-                typeof move.to === 'function' ? move.to(index) : move.to,
-                move.options,
-                () => {
-                    if (!active()) return;
-                    this.anims.delete(cancel);
-                    finishFlight(move, index);
-                    if (++landed === moves.length) finish();
-                },
-            );
-            this.anims.add(cancel);
-        }
+    runFlights(moves, opts) {
+        return runCardFlights(this, moves, opts);
     }
 
     animateSlide(moves, area, done) {

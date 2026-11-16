@@ -1,5 +1,5 @@
 import { sortHandAnimation } from './sort-animation.js';
-import { dealCard, staggerFlights } from '../animation.js';
+import { dealCard, runFlights as runCardFlights } from '../animation.js';
 import { mulberry32, SEED_MAX } from '../../../util/random.js';
 import { SelectDialog } from '../../../dialog/SelectDialog.js';
 import { ShowDialog } from '../../../dialog/ShowDialog.js';
@@ -708,54 +708,8 @@ export class EmissaryGame {
         });
     }
 
-    runFlights(moves, { done = () => {}, simultaneous = false } = {}) {
-        const batch = this.batch;
-        const active = () => !this.disposed && batch === this.batch;
-        this.animating = moves.length > 0;
-        this.draw();
-        if (!moves.length) {
-            this.animating = false;
-            done();
-            return;
-        }
-        const finish = () => {
-            if (!active()) return;
-            this.animating = false;
-            this.draw();
-            done();
-        };
-        if (simultaneous) {
-            let landed = 0;
-            for (const move of moves) {
-                let cancel;
-                cancel = dealCard(
-                    this.cmd, move.card, move.from, move.to, { ...move.options },
-                    () => {
-                        if (!active()) return;
-                        this.anims.delete(cancel);
-                        move.onLand?.();
-                        this.draw();
-                        if (++landed === moves.length) finish();
-                    },
-                );
-                this.anims.add(cancel);
-            }
-            return;
-        }
-        staggerFlights(this.anims, {
-            count: moves.length,
-            isActive: active,
-            start: (index, { onStep, onLand }) => dealCard(
-                this.cmd, moves[index].card, moves[index].from, moves[index].to,
-                { ...moves[index].options, onStep },
-                () => { if (active()) onLand(); },
-            ),
-            land: index => {
-                moves[index].onLand?.();
-                this.draw();
-            },
-            done: finish,
-        });
+    runFlights(moves, opts) {
+        return runCardFlights(this, moves, opts);
     }
 
     showRules() {
