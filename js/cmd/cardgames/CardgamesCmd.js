@@ -7,7 +7,7 @@ import { SelectDialog } from '../../dialog/SelectDialog.js';
 import { GAME_META } from '../game-meta.js';
 import { cardBuffer, drawCardStack, stampCard } from './cards.js';
 import { flipCard, dealCard } from './animation.js';
-import { score, natural, outcome, shuffledDeck } from './blackjack.js';
+import { score, natural, fiveCard, outcome, shuffledDeck } from './blackjack.js';
 import { FreeCellGame } from './freecell/FreeCellGame.js';
 import { HoldemGame } from './holdem/HoldemGame.js';
 import { CaptureGame } from './capture/CaptureGame.js';
@@ -209,11 +209,15 @@ export class CardgamesCmd extends CmdBase {
                 vb.centerRow(20, '←→ 選擇  Enter 確認');
             } else {
                 const label = { win: '你贏了！', loss: '莊家獲勝', draw: '平手' }[this._result];
-                vb.centerRow(18, label + (natural(this._player) ? '  Blackjack!' : score(this._player) > 21 ? '  爆牌' : ''));
+                const suffix = natural(this._player) ? '  Blackjack!'
+                    : score(this._player) > 21 ? '  爆牌'
+                        : fiveCard(this._player) ? '  過五關！'
+                            : fiveCard(this._dealer) ? '  莊家過五關' : '';
+                vb.centerRow(18, label + suffix);
                 vb.centerRow(20, 'Enter 下一局（重新洗牌）');
             }
         }
-        vb.centerRow(22, 'Q / Esc 離開（可選回選單）   莊家 17 點停牌（含軟 17）');
+        vb.centerRow(22, 'Q / Esc 離開（可選回選單）   莊家 17 點停牌（含軟 17）   五張未爆過五關');
         term.writeVB(vb);
     }
     _onKey(data) {
@@ -235,6 +239,7 @@ export class CardgamesCmd extends CmdBase {
             this._dealCard(this._player, 13, false, () => {
                 if (score(this._player) > 21) this._finish();
                 else if (score(this._player) === 21) this._stand();
+                else if (fiveCard(this._player)) this._stand();
                 else { this._phase = 'player'; this._draw(); }
             });
         }

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { score, natural, outcome, shuffledDeck } from '../js/cmd/cardgames/blackjack.js';
+import { score, natural, fiveCard, outcome, shuffledDeck } from '../js/cmd/cardgames/blackjack.js';
 import { cardBuffer, cardFlipFrames } from '../js/cmd/cardgames/cards.js';
 import { createGame, dealInitialEnemyRow, returnInitialCombatants, compactEnemyRow, refillEnemyRow,
     beginRound, discardFromHand, drawToFour, captureValue, capture, capturableRowIndices,
@@ -460,6 +460,14 @@ assert.equal(outcome(hand([1, 13]), hand([1, 10])), 'draw');
 assert.equal(outcome(hand([10, 10, 2]), hand([10, 10, 3])), 'loss');
 assert.equal(outcome(hand([10, 8]), hand([10, 7])), 'win');
 assert.equal(outcome(hand([10, 6]), hand([10, 7])), 'loss');
+assert.equal(fiveCard(hand([2, 2, 2, 2, 2])), true);
+assert.equal(fiveCard(hand([2, 2, 2, 2])), false);
+assert.equal(fiveCard(hand([10, 10, 2, 2, 2])), false);
+assert.equal(outcome(hand([2, 2, 2, 2, 2]), hand([10, 8])), 'win');
+assert.equal(outcome(hand([2, 2, 2, 2, 2]), hand([1, 13])), 'loss');
+assert.equal(outcome(hand([10, 8]), hand([2, 2, 2, 2, 2])), 'loss');
+assert.equal(outcome(hand([2, 2, 2, 2, 3]), hand([2, 2, 2, 2, 2])), 'win');
+assert.equal(outcome(hand([2, 2, 2, 2, 2]), hand([2, 2, 2, 2, 2])), 'win');
 const deck = shuffledDeck();
 assert.equal(new Set(deck.map(c => `${c.suit}:${c.rank}`)).size, 52);
 for (const c of [...deck, null, { suit: 1, rank: 0 }]) {
