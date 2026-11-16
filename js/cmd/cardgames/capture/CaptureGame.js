@@ -32,7 +32,7 @@ const BLACK_CELL = Object.freeze({
     crossedOut: false, width: 1,
 });
 const CAPTURE_CONTACT_OFFSETS = [
-    { x: 0, y: 3 }, { x: -5, y: 0 }, { x: 5, y: 0 }, { x: 0, y: -3 },
+    { x: -5, y: 0 }, { x: 5, y: 0 }, { x: 0, y: -3 }, { x: 0, y: 3 },
 ];
 
 function copyState(state) {

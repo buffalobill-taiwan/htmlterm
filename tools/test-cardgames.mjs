@@ -732,9 +732,9 @@ assert.equal(captureController.phase, 'winSummary');
 assert.deepEqual(captureController.actionCounts, { captures: 1, sacrifices: 0, yields: 0 });
 assert.equal(captureController.capturedTargets.size, 0);
 assert.equal(flightBatches[3].length, 1);
-assert.deepEqual(flightBatches[3][0].to, { x: 52, y: 7 });
+assert.deepEqual(flightBatches[3][0].to, { x: 47, y: 4 });
 assert.equal(flightBatches[4].length, 2);
-assert.deepEqual(flightBatches[4].map(move => move.from), [{ x: 52, y: 4 }, { x: 52, y: 7 }]);
+assert.deepEqual(flightBatches[4].map(move => move.from), [{ x: 52, y: 4 }, { x: 47, y: 4 }]);
 assert.ok(flightBatches[4].every(move => move.to === PERSONAL_DISCARD));
 assert.equal(flightSettings[4].simultaneous, true);
 captureController.key('\r');
@@ -847,10 +847,10 @@ rosterController.runFlights = (moves, { onStart = () => {}, onLand = () => {}, d
 rosterController.performCapture();
 assert.deepEqual([...rosterController.capturedTargets], ['0:11']);
 assert.deepEqual(captureFlights[0].map(move => move.to), [
-    { x: 52, y: 7 }, { x: 47, y: 4 }, { x: 57, y: 4 }, { x: 52, y: 1 },
+    { x: 47, y: 4 }, { x: 57, y: 4 }, { x: 52, y: 1 }, { x: 52, y: 7 },
 ]);
 assert.deepEqual(captureFlights[1].map(move => move.from), [
-    { x: 52, y: 4 }, { x: 52, y: 7 }, { x: 47, y: 4 }, { x: 57, y: 4 }, { x: 52, y: 1 },
+    { x: 52, y: 4 }, { x: 47, y: 4 }, { x: 57, y: 4 }, { x: 52, y: 1 }, { x: 52, y: 7 },
 ]);
 assert.equal(captureFlightSettings[1].simultaneous, true);
 rosterController.stopAnimations = () => {};
