@@ -1,5 +1,5 @@
 import { sortHandAnimation } from './sort-animation.js';
-import { dealCard, runFlights as runCardFlights } from '../animation.js';
+import { dealCard, runFlights as runCardFlights, staggerFlights } from '../animation.js';
 import { mulberry32, SEED_MAX } from '../../../util/random.js';
 import { SelectDialog } from '../../../dialog/SelectDialog.js';
 import { ShowDialog } from '../../../dialog/ShowDialog.js';

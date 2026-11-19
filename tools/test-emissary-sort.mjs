@@ -22,6 +22,19 @@ const cmd = {
     addCleanup: fn => { cleanups.add(fn); return () => cleanups.delete(fn); },
 };
 
+const opening = new EmissaryGame(cmd);
+opening.start(4242);
+assert.equal(opening.phase, 'dealing');
+assert.equal(opening.hiddenHand.size, 8);
+for (let time = 0; frames.size && time <= 10000; time += 20) tick(time);
+assert.equal(opening.phase, 'selectKingdom');
+assert.equal(opening.state.hand.length, 8);
+assert.equal(opening.hiddenHand.size, 0);
+assert.equal(opening.dealing, false);
+assert.equal(overlays.size, 0);
+assert.equal(frames.size, 0);
+opening.dispose();
+
 const a = { rank: 3, suit: 2 }, b = { rank: 1, suit: 0 }, c = { rank: 2, suit: 1 };
 function fixture(hand, phase = 'discardTwo') {
     const game = new EmissaryGame(cmd);
@@ -66,4 +79,4 @@ for (const phase of ['swap', 'won', 'lost']) {
     assert.equal(blocked.sortBySuit, false);
 }
 setSystem(null);
-console.log('Emissary sorting: ordering, selection, lanes, scrolling, gating and cancellation passed');
+console.log('Emissary animation: opening deal, sorting, scrolling, gating and cancellation passed');
