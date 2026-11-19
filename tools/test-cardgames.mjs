@@ -17,6 +17,8 @@ import { SelectDialog } from '../js/dialog/SelectDialog.js';
 import { getSystem, setSystem } from '../js/system/sys.js';
 assert.ok(CardgamesCmd.usage.includes('capture'));
 assert.ok(CardgamesCmd.help.includes('Card Capture'));
+assert.ok(CardgamesCmd.usage.includes('scoundrel'));
+assert.ok(CardgamesCmd.help.includes('Scoundrel'));
 assert.equal(ENEMY_DECK.y, 2);
 assert.equal(ENEMY_CAPTURE.y, 2);
 assert.equal(PERSONAL_DECK.y, 12);
@@ -868,4 +870,20 @@ rosterController.capturedTargets.add('1:12');
 rosterController.start();
 assert.equal(rosterController.capturedTargets.size, 0);
 rosterController.dispose();
+
+setSystem({ term: { cols: 80, rows: 25, write() {}, writeVB() {}, markRowDirty() {} } });
+let scoundrelMenu = null, scoundrelStarts = 0;
+const scoundrelMenuCmd = {
+    _flipping: null, _phase: '',
+    _disposeGames() {}, _stopAnims() {}, _draw() {},
+    openDialog(Class, key, options) { scoundrelMenu = options; return {}; },
+    _startScoundrel() { scoundrelStarts++; },
+    _quit() {},
+};
+CardgamesCmd.prototype._menu.call(scoundrelMenuCmd);
+assert.equal(scoundrelMenu.options.length, 7);
+assert.equal(scoundrelMenu.options[6].label, 'Scoundrel');
+scoundrelMenu.onSelect(6);
+assert.equal(scoundrelStarts, 1);
+setSystem(null);
 console.log('Card Capture target roster tracking passed');

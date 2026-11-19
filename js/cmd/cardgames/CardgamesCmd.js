@@ -12,6 +12,7 @@ import { FreeCellGame } from './freecell/FreeCellGame.js';
 import { HoldemGame } from './holdem/HoldemGame.js';
 import { CaptureGame } from './capture/CaptureGame.js';
 import { EmissaryGame } from './emissary/EmissaryGame.js';
+import { ScoundrelGame } from './scoundrel/ScoundrelGame.js';
 import { parseSeed } from '../../util/random.js';
 const META = GAME_META.cardgames;
 const DECK = { x: 53, y: 8 };
@@ -23,8 +24,9 @@ export class CardgamesCmd extends CmdBase {
         const valid = !p.rest.length || (p.rest[0] === 'capture' && p.rest.length === 1) ||
             (p.rest[0] === 'regicide' && p.rest.length === 1) || (p.rest[0] === 'holdem' && p.rest.length === 1) ||
             (p.rest[0] === 'freecell' && p.rest.length <= 2 && (p.rest.length === 1 || parseSeed(p.rest[1]) !== null)) ||
-            (p.rest[0] === 'emissary' && p.rest.length <= 2 && (p.rest.length === 1 || parseSeed(p.rest[1]) !== null));
-        if (args.some(a => a.startsWith('-')) || !valid) return this.error('Usage: cardgames [capture | regicide | holdem | freecell [seed] | emissary [seed]]');
+            (p.rest[0] === 'emissary' && p.rest.length <= 2 && (p.rest.length === 1 || parseSeed(p.rest[1]) !== null)) ||
+            (p.rest[0] === 'scoundrel' && p.rest.length === 1);
+        if (args.some(a => a.startsWith('-')) || !valid) return this.error('Usage: cardgames [capture | regicide | holdem | freecell [seed] | emissary [seed] | scoundrel]');
         this.open();
         this._game = null;
         this._stats = { win: 0, loss: 0, draw: 0 };
@@ -39,6 +41,7 @@ export class CardgamesCmd extends CmdBase {
         else if (p.rest[0] === 'regicide') this._startRegicide();
         else if (p.rest[0] === 'holdem') this._startHoldem();
         else if (p.rest[0] === 'emissary') this._startEmissary(p.rest.length === 2 ? Number(p.rest[1]) : undefined);
+        else if (p.rest[0] === 'scoundrel') this._startScoundrel();
         else if (p.rest.length) this._startFreeCell(p.rest.length === 2 ? Number(p.rest[1]) : undefined);
         else this._menu();
     }
@@ -54,6 +57,7 @@ export class CardgamesCmd extends CmdBase {
     _startHoldem() { this._startGame(HoldemGame); }
     _startFreeCell(seed) { this._startGame(FreeCellGame, { disposeSelf: true, stopAnims: false, seed }); }
     _startEmissary(seed) { this._startGame(EmissaryGame, { seed }); }
+    _startScoundrel() { this._startGame(ScoundrelGame); }
     _disposeGames() {
         this._game?.dispose();
         this._game = null;
@@ -75,10 +79,12 @@ export class CardgamesCmd extends CmdBase {
                 { label: 'Regicide', description: '弒君者' },
                 { label: 'Card Capture', description: '牌張捕獲' },
                 { label: 'The Emissary', description: '使節－單人吃墩' },
+                { label: 'Scoundrel', description: '地城單人冒險' },
             ],
             onSelect: index => {
                 this._dialog = null;
-                if (index === 5) this._startEmissary();
+                if (index === 6) this._startScoundrel();
+                else if (index === 5) this._startEmissary();
                 else if (index === 4) this._startCapture();
                 else if (index === 3) this._startRegicide();
                 else if (index === 2) this._startHoldem();

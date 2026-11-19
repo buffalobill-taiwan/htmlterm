@@ -136,7 +136,7 @@ more than once.
 | `help` | Show command list; `help <cmd>` for details and usage |
 | `klotski` | Play Klotski 華容道 sliding-block puzzle (11 fayaa layouts) |
 | `jpmj` | Play Japanese Mahjong (14-tile riichi style, 6 AI personalities, riichi/dora/honba) |
-| `cardgames` | Play Blackjack, FreeCell, Texas Hold’em, Regicide, Card Capture, or The Emissary |
+| `cardgames` | Play Blackjack, FreeCell, Texas Hold’em, Regicide, Card Capture, The Emissary, or Scoundrel |
 | `memory` | Play a card-matching Memory game (flip to find matching pairs, three difficulty levels) |
 | `menu` | Open command menu dialog |
 | `mbti` | MBTI personality test (interactive) |
@@ -208,7 +208,7 @@ one-based `(x,y)` coordinates. See [Maze reproduction](docs/development.md#maze-
 
 ### Card games
 
-Run `cardgames` to choose Blackjack, FreeCell, Texas Hold’em, Regicide, Card Capture, or The Emissary. In Blackjack, arrows select Hit/Stand; Enter confirms or
+Run `cardgames` to choose Blackjack, FreeCell, Texas Hold’em, Regicide, Card Capture, The Emissary, or Scoundrel. In Blackjack, arrows select Hit/Stand; Enter confirms or
 starts the next round. N returns to the game menu; Q/Escape or Ctrl+C quits. Each round
 uses a freshly shuffled 52-card deck. Aces count as 1 or 11; the dealer stands
 on all 17s, including soft 17. Two-card Blackjack beats other 21s. There is no
@@ -324,6 +324,28 @@ Escape clears discard marks or cancels a ruler swap. H shows rules, R offers a
 restart with the same seed or a new random seed, N returns to
 the menu, and Q/Escape exits. A seeded deal viewer is available with
 `node tools/emissary-generate.mjs <seed> [--json] [--batch N]`.
+
+Scoundrel is a solo dungeon crawl using a 44-card deck: all 26 black monsters
+(♠♣), ♦2–10 weapons and ♥2–10 potions. Open it from the menu or with
+`cardgames scoundrel`. Ranks 2–10 count at face value, J/Q/K are 11/12/13 and
+Aces are 14. Start at 20 HP (also the maximum). Each room deals four cards;
+resolve any three, and the fourth carries into the next room with three fresh
+cards. When a room's four cards are all untouched and the previous room was not
+fled, a Flee box appears to the right of the fourth card: choosing it returns
+those four cards to the bottom of the dungeon and deals four fresh ones; two
+rooms cannot be fled in a row. When the dungeon runs out, play the remaining
+cards. Hearts heal their value up to 20, but only the first heart in a room works.
+Equipping a diamond replaces the current weapon and discards its trophies; a
+weapon reduces a monster's damage by its value, and after a kill it only works on
+monsters no stronger than the last one slain. Fight barehanded for full damage
+whenever the weapon cannot or should not be used. Clear the dungeon alive to win
+with your remaining HP as the score; at zero HP you lose with score 0 and the
+remaining monster total shown for reference only. Arrows select a room card and
+Enter resolves it; when both fighting options are legal, a dialog shows each
+option's damage. Deals, resolutions and room refills are animated, and a brief
+bordered box reports every result. On the settlement screen Enter opens a
+dialog to start a new game or return to the menu; H shows rules, N returns to the
+menu and Q/Escape exits.
 
 ### Keyboard shortcuts
 
